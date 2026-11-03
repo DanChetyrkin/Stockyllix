@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: stockyllix-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm ci --include=dev && npm run import:ecb && npm run build && npm prune --omit=dev
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeployTrigger: off
+    envVars:
+      - key: NODE_VERSION
+        value: 26.13.0
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: FIREBASE_PROJECT_ID
+        value: stockyllix
+      - key: CORS_ORIGINS
+        sync: false
+      - key: ADMIN_UIDS
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false
+      - key: DATASET_SEED
+        sync: false

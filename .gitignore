@@ -147,3 +147,17 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# private market data and credentials
+**/serverKey/
+server/data/*.json
+!server/data/.gitkeep
+**/*service-account*.json
+**/*serviceAccount*.json
+**/*firebase-adminsdk*.json
+server/data/*.tmp
+**/emulator-data/
+*-debug.log
+artifacts/
+
+node_modules/
