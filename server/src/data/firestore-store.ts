@@ -1,5 +1,5 @@
 import { FieldPath, type Firestore, type Query } from 'firebase-admin/firestore';
-import type { DocumentStore, ListOptions } from './store.js';
+import type { DocumentStore, ListOptions, Transaction } from './store.js';
 
 export class FirestoreStore implements DocumentStore {
   constructor(private readonly firestore: Firestore) {}
@@ -23,7 +23,7 @@ export class FirestoreStore implements DocumentStore {
     return snapshot.docs.map((document) => ({ id: document.id, data: document.data() as T }));
   }
 
-  transaction<T>(work: Parameters<DocumentStore['transaction']>[0]): Promise<T> {
+  transaction<T>(work: (transaction: Transaction) => Promise<T>): Promise<T> {
     return this.firestore.runTransaction(async (transaction) => work({
       get: async <V>(path: string) => {
         const document = await transaction.get(this.firestore.doc(path));
@@ -32,6 +32,6 @@ export class FirestoreStore implements DocumentStore {
       set: (path, value) => {
         transaction.set(this.firestore.doc(path), value as Record<string, unknown>);
       },
-    })) as Promise<T>;
+    }));
   }
 }

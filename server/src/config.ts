@@ -13,12 +13,18 @@ const schema = z.object({
 
 export function readConfig(environment: NodeJS.ProcessEnv = process.env) {
   const value = schema.parse(environment);
+  if (Boolean(environment.FIRESTORE_EMULATOR_HOST) !== Boolean(environment.FIREBASE_AUTH_EMULATOR_HOST)) {
+    throw new Error('configure both auth and firestore emulators, or neither');
+  }
   if (value.NODE_ENV === 'production') {
     if (environment.FIRESTORE_EMULATOR_HOST || environment.FIREBASE_AUTH_EMULATOR_HOST) {
       throw new Error('emulator settings are forbidden in production');
     }
-    if (!environment.CORS_ORIGINS || !environment.ADMIN_UIDS) {
+    if (!environment.CORS_ORIGINS?.trim() || !environment.ADMIN_UIDS?.split(',').some((uid) => uid.trim())) {
       throw new Error('production requires CORS_ORIGINS and ADMIN_UIDS');
+    }
+    if (!value.CORS_ORIGINS.split(',').every((origin) => origin.trim().startsWith('https://'))) {
+      throw new Error('production cors origins must use https');
     }
   }
   return {

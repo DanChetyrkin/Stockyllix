@@ -1,15 +1,15 @@
-import Decimal from 'decimal.js';
+import { Decimal } from 'decimal.js';
 import { GameError } from './errors.js';
 import type { Dataset, Order, OrderInput, Portfolio, WorldEvent } from './model.js';
-import { decimal, instrumentPriceILS, portfolioValue } from './valuation.js';
+import { canonicalValueILS, decimal, instrumentPriceILS, portfolioValue } from './valuation.js';
 
 const MAX_PENDING_ORDERS = 20;
-const UNIT_DECIMALS = 12;
+const UNIT_DECIMALS = 18;
 
 export function parseAmount(amountILS: string): number {
   if (!/^\d{1,10}(\.\d{1,2})?$/.test(amountILS)) throw new GameError('INVALID_AMOUNT', 'Enter a positive ILS amount with at most two decimals.', 400);
   const amount = decimal(amountILS).mul(100);
-  if (!amount.isPositive() || !amount.isInteger() || amount.gt(Number.MAX_SAFE_INTEGER)) throw new GameError('INVALID_AMOUNT', 'Invalid order amount.', 400);
+  if (amount.lte(0) || !amount.isInteger() || amount.gt(Number.MAX_SAFE_INTEGER)) throw new GameError('INVALID_AMOUNT', 'Invalid order amount.', 400);
   return amount.toNumber();
 }
 
@@ -23,12 +23,12 @@ export function reserveOrder(dataset: Dataset, portfolio: Portfolio, order: Orde
     if (order.amountAgorot > next.cashAgorot - next.reservedCashAgorot) throw new GameError('INSUFFICIENT_CASH', 'Not enough available cash.');
     const pending = next.pendingBuyAgorot[order.instrumentId] ?? 0;
     const exposure = decimal(holding.units).mul(priceILS).add(decimal(pending + order.amountAgorot).div(100));
-    if (exposure.gt(portfolioValue(dataset, snapshot, next).mul('0.2'))) throw new GameError('CONCENTRATION_LIMIT', 'This purchase would exceed the 20% instrument limit, including pending buys.');
+    if (canonicalValueILS(exposure).gt(canonicalValueILS(portfolioValue(dataset, snapshot, next)).mul('0.2'))) throw new GameError('CONCENTRATION_LIMIT', 'This purchase would exceed the 20% instrument limit, including pending buys.');
     next.reservedCashAgorot += order.amountAgorot;
     next.pendingBuyAgorot[order.instrumentId] = pending + order.amountAgorot;
   } else {
-    if (decimal(holding.reservedUnits).isPositive()) throw new GameError('SELL_ALREADY_PENDING', 'Only one sell order may be pending for this instrument.');
-    if (!decimal(holding.units).isPositive() || decimal(order.amountAgorot).div(100).gt(decimal(holding.units).mul(priceILS))) throw new GameError('INSUFFICIENT_UNITS', 'The sell amount exceeds the current holding value.');
+    if (decimal(holding.reservedUnits).gt(0)) throw new GameError('SELL_ALREADY_PENDING', 'Only one sell order may be pending for this instrument.');
+    if (decimal(holding.units).lte(0) || decimal(order.amountAgorot).div(100).gt(decimal(holding.units).mul(priceILS))) throw new GameError('INSUFFICIENT_UNITS', 'The sell amount exceeds the current holding value.');
     order.reservedUnits = holding.units;
     next.holdings[order.instrumentId] = { ...holding, reservedUnits: holding.units };
   }
@@ -55,7 +55,7 @@ export function executeOrder(dataset: Dataset, portfolio: Portfolio, pending: Or
     if (remaining > 0) next.pendingBuyAgorot[order.instrumentId] = remaining;
     else delete next.pendingBuyAgorot[order.instrumentId];
     if (order.amountAgorot > next.cashAgorot - next.reservedCashAgorot) rejection = { code: 'INSUFFICIENT_CASH', message: 'The available cash is no longer sufficient.' };
-    else if (decimal(holding.units).mul(priceILS).add(amountILS).gt(portfolioValue(dataset, event.snapshot, next).mul('0.2'))) rejection = { code: 'CONCENTRATION_LIMIT', message: 'The purchase would exceed 20% at the execution price.' };
+    else if (canonicalValueILS(decimal(holding.units).mul(priceILS).add(amountILS)).gt(canonicalValueILS(portfolioValue(dataset, event.snapshot, next)).mul('0.2'))) rejection = { code: 'CONCENTRATION_LIMIT', message: 'The purchase would exceed 20% at the execution price.' };
     else if (units.isZero()) rejection = { code: 'AMOUNT_TOO_SMALL', message: 'The amount is too small for the supported unit precision.' };
     if (!rejection) {
       next.cashAgorot -= order.amountAgorot;

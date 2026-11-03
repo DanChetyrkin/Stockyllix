@@ -54,6 +54,7 @@ export interface WeekStats {
   peakValueILS: string;
   mddRatio: string;
   eligible: boolean;
+  finalValueILS?: string;
 }
 
 export interface Holding {

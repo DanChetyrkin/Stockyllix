@@ -2,7 +2,7 @@ import { Decimal } from 'decimal.js';
 import { DateTime } from 'luxon';
 import { validateFxRows, WORLD_ZONE, type FxRow } from './index.js';
 
-export const ECB_SOURCE_URL = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml';
+export const ECB_SOURCE_URL = 'https://data-api.ecb.europa.eu/service/data/EXR/D.USD+ILS.EUR.SP00.A?startPeriod=2026-10-02&endPeriod=2026-11-02&format=csvdata';
 export const ECB_ATTRIBUTION = 'Source: European Central Bank euro foreign exchange reference rates. USD/ILS is calculated as ILS per EUR divided by USD per EUR.';
 
 export interface FxFile {
@@ -12,6 +12,69 @@ export interface FxFile {
   importedAt: string;
   availabilityPolicy: string;
   rows: FxRow[];
+}
+
+function observation(date: string, usd: string, ils: string): FxRow {
+  if (!/^\d+(\.\d+)?$/.test(usd) || !/^\d+(\.\d+)?$/.test(ils)
+    || !new Decimal(usd).gt(0) || !new Decimal(ils).gt(0)) throw new Error(`Invalid ECB rate for ${date}`);
+  const availableAt = DateTime.fromISO(date, { zone: WORLD_ZONE }).plus({ days: 1 }).startOf('day')
+    .toUTC().toISO({ suppressMilliseconds: true });
+  if (!availableAt) throw new Error(`Invalid ECB date: ${date}`);
+  return { date, rate: new Decimal(ils).div(usd).toFixed(10), availableAt, source: 'ecb' };
+}
+
+// this small csv reader handles quoted metadata and escaped quotes in the official feed
+export function csvRows(csv: string): string[][] {
+  const result: string[][] = [];
+  let row: string[] = [];
+  let value = '';
+  let quoted = false;
+  for (let index = 0; index < csv.length; index++) {
+    const character = csv[index]!;
+    if (character === '"') {
+      if (quoted && csv[index + 1] === '"') { value += '"'; index++; }
+      else quoted = !quoted;
+    } else if (character === ',' && !quoted) {
+      row.push(value); value = '';
+    } else if (character === '\n' && !quoted) {
+      row.push(value.replace(/\r$/, ''));
+      if (row.some((item) => item.trim())) result.push(row);
+      row = []; value = '';
+    } else value += character;
+  }
+  if (quoted) throw new Error('Unclosed quoted ECB CSV field');
+  if (row.length || value) { row.push(value.replace(/\r$/, '')); result.push(row); }
+  return result;
+}
+
+export function parseEcbCsv(csv: string, from = '2026-10-02', to = '2026-11-02'): FxRow[] {
+  if (csv.length > 1_000_000) throw new Error('ECB document exceeds the size limit');
+  const records = csvRows(csv.replace(/^\uFEFF/, ''));
+  const header = records.shift();
+  const required = ['FREQ', 'CURRENCY', 'CURRENCY_DENOM', 'EXR_TYPE', 'EXR_SUFFIX', 'TIME_PERIOD', 'OBS_VALUE'];
+  if (!header || required.some((column) => !header.includes(column))) throw new Error('Unexpected ECB CSV columns');
+  if (!DateTime.fromISO(from).isValid || !DateTime.fromISO(to).isValid || from > to) throw new Error('Invalid ECB date range');
+  const rates = new Map<string, { USD?: string; ILS?: string }>();
+  for (const record of records) {
+    const field = (column: string) => record[header.indexOf(column)] ?? '';
+    const date = field('TIME_PERIOD');
+    if (date < from || date > to) continue;
+    const currency = field('CURRENCY');
+    if (!['USD', 'ILS'].includes(currency) || field('FREQ') !== 'D' || field('CURRENCY_DENOM') !== 'EUR'
+      || field('EXR_TYPE') !== 'SP00' || field('EXR_SUFFIX') !== 'A') throw new Error('Unexpected ECB exchange rate series');
+    const pair = rates.get(date) ?? {};
+    const key = currency as 'USD' | 'ILS';
+    if (pair[key] !== undefined) throw new Error(`Duplicate ECB ${currency} observation for ${date}`);
+    pair[key] = field('OBS_VALUE');
+    rates.set(date, pair);
+  }
+  const rows = [...rates].map(([date, pair]) => {
+    if (!pair.USD || !pair.ILS) throw new Error(`ECB document lacks valid USD and ILS rates for ${date}`);
+    return observation(date, pair.USD, pair.ILS);
+  });
+  const valid = validateFxRows(rows);
+  if (!valid.some((row) => row.date === from)) throw new Error(`ECB document lacks the required baseline date ${from}`);
+  return valid;
 }
 
 // parse only the documented small ecb cube format, never execute imported content
@@ -30,12 +93,10 @@ export function parseEcbXml(xml: string, from = '2026-10-02', to = '2026-11-02')
       const rate = /\brate=['"]([\d.]+)['"]/.exec(quote[1]!)?.[1];
       if (currency && rate) rates[currency] = rate;
     }
-    if (!rates.USD || !rates.ILS || !new Decimal(rates.USD).isPositive() || !new Decimal(rates.ILS).isPositive()) {
+    if (!rates.USD || !rates.ILS || !new Decimal(rates.USD).gt(0) || !new Decimal(rates.ILS).gt(0)) {
       throw new Error(`ECB document lacks valid USD and ILS rates for ${date}`);
     }
-    const availableAt = DateTime.fromISO(date, { zone: WORLD_ZONE }).plus({ days: 1 }).startOf('day')
-      .toUTC().toISO({ suppressMilliseconds: true })!;
-    rows.push({ date, rate: new Decimal(rates.ILS).div(rates.USD).toFixed(10), availableAt, source: 'ecb' });
+    rows.push(observation(date, rates.USD, rates.ILS));
   }
   const valid = validateFxRows(rows);
   if (!valid.some((row) => row.date === from)) throw new Error(`ECB document lacks the required baseline date ${from}`);
@@ -43,31 +104,33 @@ export function parseEcbXml(xml: string, from = '2026-10-02', to = '2026-11-02')
 }
 
 export async function fetchEcbRows(from = '2026-10-02', to = '2026-11-02'): Promise<FxFile> {
-  const response = await fetch(ECB_SOURCE_URL, {
+  const url = new URL('https://data-api.ecb.europa.eu/service/data/EXR/D.USD+ILS.EUR.SP00.A');
+  url.search = new URLSearchParams({ startPeriod: from, endPeriod: to, format: 'csvdata' }).toString();
+  const response = await fetch(url, {
     signal: AbortSignal.timeout(20_000),
-    headers: { accept: 'application/xml,text/xml', 'user-agent': 'Stockyllix educational demo data importer' },
+    headers: { accept: 'text/csv', 'user-agent': 'Stockyllix educational demo data importer' },
   });
   if (!response.ok || !response.body) throw new Error(`ECB download failed: HTTP ${response.status}`);
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let size = 0;
-  let xml = '';
+  let csv = '';
   try {
     while (true) {
       const chunk = await reader.read();
       if (chunk.done) break;
       size += chunk.value.byteLength;
       if (size > 1_000_000) throw new Error('ECB response exceeds the size limit');
-      xml += decoder.decode(chunk.value, { stream: true });
+      csv += decoder.decode(chunk.value, { stream: true });
     }
-    xml += decoder.decode();
+    csv += decoder.decode();
   } finally {
     await reader.cancel();
   }
   return {
-    source: 'ecb', attribution: ECB_ATTRIBUTION, sourceUrl: ECB_SOURCE_URL,
+    source: 'ecb', attribution: ECB_ATTRIBUTION, sourceUrl: url.toString(),
     importedAt: new Date().toISOString(),
     availabilityPolicy: 'Each reference rate becomes available at 00:00 Asia/Jerusalem on the following calendar day. This conservative replay policy avoids using a daily observation before its publication.',
-    rows: parseEcbXml(xml, from, to),
+    rows: parseEcbCsv(csv, from, to),
   };
 }

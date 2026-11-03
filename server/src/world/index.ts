@@ -8,7 +8,7 @@ export interface FxRow {
   date: string;
   rate: string;
   availableAt: string;
-  source: 'ecb' | 'simulated';
+  source: 'ecb' | 'boi' | 'simulated';
 }
 
 export const WORLD_ZONE = 'Asia/Jerusalem';
@@ -93,11 +93,15 @@ export function validateFxRows(rows: FxRow[]): FxRow[] {
   const result = rows.map((row) => {
     if (typeof row !== 'object' || row === null || !/^\d{4}-\d{2}-\d{2}$/.test(row.date)
       || !DateTime.fromISO(row.date).isValid || typeof row.rate !== 'string'
-      || !/^\d+(\.\d+)?$/.test(row.rate) || !new Decimal(row.rate).isPositive()
-      || !['ecb', 'simulated'].includes(row.source)) throw new Error('Invalid FX observation');
+      || !/^\d+(\.\d+)?$/.test(row.rate) || !new Decimal(row.rate).gt(0)
+      || !['ecb', 'boi', 'simulated'].includes(row.source)) throw new Error('Invalid FX observation');
     const available = parseInstant(row.availableAt);
-    if (available.toMillis() < DateTime.fromISO(row.date, { zone: WORLD_ZONE }).startOf('day').toMillis()) {
+    const observationDay = DateTime.fromISO(row.date, { zone: WORLD_ZONE }).startOf('day');
+    if (available.toMillis() < observationDay.toMillis()) {
       throw new Error('FX observation is available before its observation date');
+    }
+    if (['ecb', 'boi'].includes(row.source) && available.toMillis() < observationDay.plus({ days: 1 }).toMillis()) {
+      throw new Error('Reference FX availability must follow the conservative next-day policy');
     }
     if (dates.has(row.date)) throw new Error(`Duplicate FX date: ${row.date}`);
     dates.add(row.date);
@@ -184,8 +188,8 @@ export function createDataset(seed: string, suppliedFxRows?: FxRow[]): Dataset {
       ...(draft.market ? { market: draft.market } : {}), snapshot,
     };
   });
-  const fxSource = rows.every((row) => row.source === 'ecb') ? 'real historical ECB reference FX; available from the following Israel calendar day'
-    : 'simulated FX, not market exchange rates';
+  const fxSource = rows.every((row) => row.source === 'boi') ? 'real historical Bank of Israel representative USD/ILS rates; available from the following Israel calendar day'
+    : rows.every((row) => row.source === 'ecb') ? 'real historical ECB reference FX; available from the following Israel calendar day' : 'simulated FX, not market exchange rates';
   const contentHash = createHash('sha256').update(JSON.stringify({ initialSnapshot, events })).digest('hex').slice(0, 12);
   const dataset: Dataset = {
     id: `demo-oct2026-${contentHash}`, startsAt, endsAt, source: 'simulated',
@@ -217,13 +221,16 @@ export function validateDataset(value: unknown): Dataset {
   if (!data.instruments.some((item) => item.market === 'TA') || !data.instruments.some((item) => item.market === 'US')) throw new Error('Both markets are required');
   const validateSnapshot = (snapshot: MarketSnapshot, at: string) => {
     if (!snapshot || snapshot.at !== at || !snapshot.prices || typeof snapshot.fx !== 'string'
-      || !/^\d+(\.\d+)?$/.test(snapshot.fx) || !new Decimal(snapshot.fx).isPositive()
+      || !/^\d+(\.\d+)?$/.test(snapshot.fx) || !new Decimal(snapshot.fx).gt(0)
       || !/^\d{4}-\d{2}-\d{2}$/.test(snapshot.fxAsOf) || !DateTime.fromISO(snapshot.fxAsOf).isValid
       || snapshot.fxAsOf > parseInstant(at).setZone(WORLD_ZONE).toISODate()!) throw new Error('Invalid snapshot or future FX date');
+    const fxAgeDays = parseInstant(at).setZone(WORLD_ZONE).startOf('day')
+      .diff(DateTime.fromISO(snapshot.fxAsOf, { zone: WORLD_ZONE }), 'days').days;
+    if (fxAgeDays > 7) throw new Error('FX observation is more than seven calendar days old');
     if (Object.keys(snapshot.prices).length !== ids.size) throw new Error('Incomplete snapshot prices');
     for (const id of ids) {
       const price = snapshot.prices[id];
-      if (typeof price !== 'string' || !/^\d+(\.\d+)?$/.test(price) || !new Decimal(price).isPositive()) throw new Error(`Invalid price for ${id}`);
+      if (typeof price !== 'string' || !/^\d+(\.\d+)?$/.test(price) || !new Decimal(price).gt(0)) throw new Error(`Invalid price for ${id}`);
     }
   };
   validateSnapshot(data.initialSnapshot, data.startsAt);
@@ -231,10 +238,27 @@ export function validateDataset(value: unknown): Dataset {
   let previous: WorldEvent | undefined;
   for (const event of data.events) {
     const time = parseInstant(event.at).toMillis();
-    if (!event.id || eventIds.has(event.id) || !(event.kind in EVENT_ORDER) || time < start || time > end
+    if (!event.id || eventIds.has(event.id) || !Object.hasOwn(EVENT_ORDER, event.kind) || time < start || time > end
       || event.weekId !== getWeekId(event.at) || (previous && compareEvents(previous, event) > 0)) throw new Error('Invalid, duplicate, or unordered world event');
     if (event.kind.startsWith('MARKET_') && !['TA', 'US'].includes(event.market!)) throw new Error('Market event needs a market');
     validateSnapshot(event.snapshot, event.at);
+    const priorSnapshot = previous?.snapshot ?? data.initialSnapshot;
+    for (const instrument of data.instruments) {
+      if (event.snapshot.prices[instrument.id] !== priorSnapshot.prices[instrument.id]
+        && !(event.kind.startsWith('MARKET_') && event.market === instrument.market)) {
+        throw new Error('A price changes outside its market event');
+      }
+    }
+    if ((event.snapshot.fx !== priorSnapshot.fx || event.snapshot.fxAsOf !== priorSnapshot.fxAsOf) && event.kind !== 'FX') {
+      throw new Error('An FX rate changes outside its publication event');
+    }
+    if (event.kind === 'WEEK_START' || event.kind === 'WEEK_END') {
+      const local = parseInstant(event.at).setZone(WORLD_ZONE);
+      if (local.weekday !== (event.kind === 'WEEK_START' ? 1 : 6)
+        || local.hour !== 0 || local.minute !== 0 || local.second !== 0 || local.millisecond !== 0) {
+        throw new Error('Invalid competition week boundary');
+      }
+    }
     eventIds.add(event.id);
     previous = event;
   }
@@ -253,5 +277,34 @@ export function validateDataset(value: unknown): Dataset {
     sessionIds.add(session.id);
   }
   if (sessionIds.size === 0) throw new Error('Dataset needs trading sessions');
+  for (const event of data.events.filter((item) => item.kind.startsWith('MARKET_'))) {
+    if (!data.sessions.some((session) => session.market === event.market
+      && (event.kind === 'MARKET_OPEN' ? session.opensAt : session.closesAt) === event.at)) {
+      throw new Error('Market event does not belong to a trading session');
+    }
+  }
+  let boundaryDate = parseInstant(data.startsAt).setZone(WORLD_ZONE).startOf('day');
+  while (boundaryDate.toMillis() <= end) {
+    if (boundaryDate.toMillis() >= start && [1, 6].includes(boundaryDate.weekday)) {
+      const kind: EventKind = boundaryDate.weekday === 1 ? 'WEEK_START' : 'WEEK_END';
+      if (data.events.filter((event) => event.kind === kind && event.at === utc(boundaryDate)).length !== 1) {
+        throw new Error('Dataset is missing a competition week boundary');
+      }
+    }
+    boundaryDate = boundaryDate.plus({ days: 1 });
+  }
+  // simulated worlds have complete weekday sessions; imported history may omit exchange holidays
+  if (data.source === 'simulated') {
+    let date = parseInstant(data.startsAt).setZone(WORLD_ZONE).startOf('day');
+    const last = parseInstant(data.endsAt).setZone(WORLD_ZONE).toISODate()!;
+    while (date.toISODate()! <= last) {
+      for (const market of ['TA', 'US'] as const) {
+        const expected = buildSession(date.toISODate()!, market);
+        if (expected && Date.parse(expected.opensAt) >= start && Date.parse(expected.closesAt) <= end
+          && !sessionIds.has(expected.id)) throw new Error('Simulated dataset has a missing weekday session');
+      }
+      date = date.plus({ days: 1 });
+    }
+  }
   return data;
 }
