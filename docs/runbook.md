@@ -126,6 +126,17 @@ The service already exists. Keep repository `DanChetyrkin/Stockyllix`, branch `c
 
 Build: `npm ci --include=dev && npm run import:ecb && npm run build && npm prune --omit=dev`; start: `npm start`; health: `/health`. The ECB file keeps legacy simulated worlds readable; installed historical replay uses its own BOI observations. A historical file in Secret Files is deployment configuration, not ephemeral runtime storage. Ordinary trades do not fetch provider prices.
 
+### Bounded ECB build preparation
+
+The Render build command and environment stay unchanged. Standalone ECB preparation is for **legacy-world compatibility**; it does not supply or replace the real historical replay's embedded BOI execution rates.
+
+1. If `DATASET_PATH` names a complete valid default dataset, validate it and skip standalone FX preparation. Otherwise, validate any existing local FX file: the original **22 observations**, pinned canonical SHA-256 and full legacy coverage, including the initial rate and maximum age. A valid local file uses no network.
+2. If that file is absent, read the private immutable Firestore cache at `referenceData/ecb-2026-10-02_2026-11-02-v1` with the **existing** server Firebase credentials. Validate its schema and the same rows/hash/coverage before restoring the ignored local FX file. Each cache worker has a hard **8-second** deadline that also bounds SDK retry/cleanup behavior; this is not another hosted service.
+3. If the file is absent and the cache is absent or unreachable, try the official CSV endpoint twice, then the official XML endpoint once. Each attempt is bounded to **12 seconds**, with **500ms** and **1,000ms** delays between attempts. Validate exact immutable observations before writing the local file or creating the private cache. Cache-write failure is reported but does not reject an already validated local file.
+4. An invalid present file/cache or changed official observations **fails closed**. Do not overwrite it, rotate `DATASET_SEED`, switch datasets, enable generated fallback or change prices to make the build succeed. Restore the original validated private material, or retry the bounded official preparation when access recovers.
+
+No raw rates are committed, no new Render variable/secret is needed, and only the private reference-data cache is used; game worlds, users, money and prices are untouched. The cache is immutable rather than a latest-rate feed. For an intentional source consistency check only, run `npm run import:ecb -- --refresh`: it bypasses reuse to verify those **same** observations and still refuses a changed replay. Routine builds should use the normal command. Deployed verification of this recovery path must be recorded from actual runs, not assumed from these instructions.
+
 Do not recreate service credentials for a routine deploy. If setup is missing on a fresh environment, the owner creates a dedicated least-privilege server credential and enters it privately in Render. Firebase CLI login is separate; it is already configured for the owner's existing Hosting workflow. Check `stockyllix` in `npx firebase projects:list` before deploying.
 
 ### Release procedure

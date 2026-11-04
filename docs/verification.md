@@ -10,6 +10,7 @@ This release is being prepared. Its new controls, receipt recovery and dated tes
 | --- | --- |
 | Exact source commit and three CI jobs | Pending final release run |
 | Local date/DST, next-order/event, new-game and receipt tests | Passed: server suites and 43 client checks; TypeScript/lint/build passed |
+| Complete clean Render build command and original ECB restoration | Passed on Windows: all four build stages, private Firestore cache, no local FX/env file and no ECB download; actual Render rebuild pending |
 | Test-only 28-day simulation, restart rehydration and shared-world isolation | Passed actual local HTTP + Auth/Firestore emulators + stopped/recreated API process |
 | Render health version/release/exact SHA | Pending 1.4.0 publication |
 | Hosting exact-file comparison and public UI walkthrough | Pending 1.4.0 publication |
@@ -25,6 +26,17 @@ The [release checklist](finish-release.md) and [reviewer flow](reviewer-demo.md)
 - A legacy generator byte-hash regression matched the committed 1.3 build, so existing dataset identifiers and prices were not shifted by the optional simulation range.
 - Manual local browser testing advanced directly to the pending AAPL execution, showed the no-pending state afterwards, and refreshed during a Resume request. On reload the UI checked the saved server receipt, displayed that it had already completed and unlocked controls without resubmitting. The currently deployed 1.3 shared admin page had no leftover unconfirmed request at the read-only inspection.
 - Main header content scrolled out of the viewport on desktop and at 390px width; the phone document width remained 390. Native browser Date/Time controls and the explicit new-game/test-simulation confirmation were visible. Public 1.4 acceptance remains pending.
+
+### ECB build reliability correction
+
+The owner reported that deploying `07d3863` failed at `npm run import:ecb` with an ECB timeout. That importer always downloaded the fixed historical period with a single 20-second attempt. Loading the server's registry still requires the original ECB file for legacy worlds, even though the shared real historical replay carries its own BOI FX; skipping the import or substituting rates would therefore be unsafe.
+
+The corrected preparation first validates an existing original FX file, then restores the same immutable observations from the private `referenceData/ecb-2026-10-02_2026-11-02-v1` document using existing Firebase credentials. Only absent/unreachable inputs trigger bounded official downloads. Invalid present inputs and changed observations fail closed. No raw rates, private keys or new environment settings were committed, and the existing Render build command was retained.
+
+- The private cache was created/read back using the existing dedicated credential: **22 original ECB rows**, canonical SHA-256 `dd8937b9ac7fd1a3f0da18d88525dcbf722897ec5acf93571403d9883114d9d3`, complete baseline/legacy-world coverage validated. This operation touched only reference data, not game documents.
+- In an ignored isolated copy with no `.env` or FX file, the exact command `npm ci --include=dev && npm run import:ecb && npm run build && npm prune --omit=dev` exited **0** in about **308 seconds**. The real `tsx` child-process adapter restored the private cache; no ECB download was needed. Normal source/development dependencies were not pruned.
+- After pruning, the built runtime loaded both existing datasets and matched their complete content hashes: legacy `demo-oct2026-8b445066b3e2` and real historical `historical-8c9e717c12d59090`. The original local FX file was unchanged.
+- The full server suite passed **266 tests**, with three emulator-only tests skipped in that run; TypeScript and ESLint passed. New regressions cover cache restoration, corrupted inputs, immutable-rate rejection, bounded retries, sanitized failure messages, request/body deadlines and oversized responses. These tests do not establish successful deployment on Render; exact-commit cloud acceptance remains pending.
 
 ## Latest completed release evidence: 1.3.0
 

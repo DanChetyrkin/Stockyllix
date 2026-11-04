@@ -1,9 +1,11 @@
 import { Decimal } from 'decimal.js';
 import { DateTime } from 'luxon';
 import { validateFxRows, WORLD_ZONE, type FxRow } from './index.js';
+import { readResponseText } from './http.js';
 
 export const ECB_SOURCE_URL = 'https://data-api.ecb.europa.eu/service/data/EXR/D.USD+ILS.EUR.SP00.A?startPeriod=2026-10-02&endPeriod=2026-11-02&format=csvdata';
 export const ECB_ATTRIBUTION = 'Source: European Central Bank euro foreign exchange reference rates. USD/ILS is calculated as ILS per EUR divided by USD per EUR.';
+export const ECB_XML_URL = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml';
 
 export interface FxFile {
   source: 'ecb';
@@ -103,34 +105,23 @@ export function parseEcbXml(xml: string, from = '2026-10-02', to = '2026-11-02')
   return valid;
 }
 
-export async function fetchEcbRows(from = '2026-10-02', to = '2026-11-02'): Promise<FxFile> {
+export async function fetchEcbRows(from = '2026-10-02', to = '2026-11-02', options: { fetcher?: typeof fetch; timeoutMs?: number; source?: 'csv' | 'xml' } = {}): Promise<FxFile> {
   const url = new URL('https://data-api.ecb.europa.eu/service/data/EXR/D.USD+ILS.EUR.SP00.A');
   url.search = new URLSearchParams({ startPeriod: from, endPeriod: to, format: 'csvdata' }).toString();
-  const response = await fetch(url, {
-    signal: AbortSignal.timeout(20_000),
-    headers: { accept: 'text/csv', 'user-agent': 'Stockyllix educational demo data importer' },
+  const sourceUrl = options.source === 'xml' ? ECB_XML_URL : url.toString();
+  const response = await (options.fetcher ?? fetch)(sourceUrl, {
+    signal: AbortSignal.timeout(options.timeoutMs ?? 12_000),
+    headers: { accept: options.source === 'xml' ? 'application/xml' : 'text/csv', 'user-agent': 'Stockyllix educational demo data importer' },
   });
-  if (!response.ok || !response.body) throw new Error(`ECB download failed: HTTP ${response.status}`);
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let size = 0;
-  let csv = '';
-  try {
-    while (true) {
-      const chunk = await reader.read();
-      if (chunk.done) break;
-      size += chunk.value.byteLength;
-      if (size > 1_000_000) throw new Error('ECB response exceeds the size limit');
-      csv += decoder.decode(chunk.value, { stream: true });
-    }
-    csv += decoder.decode();
-  } finally {
-    await reader.cancel();
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new Error(`ECB download failed: HTTP ${response.status}`);
   }
+  const text = await readResponseText(response, 1_000_000);
   return {
-    source: 'ecb', attribution: ECB_ATTRIBUTION, sourceUrl: url.toString(),
+    source: 'ecb', attribution: ECB_ATTRIBUTION, sourceUrl,
     importedAt: new Date().toISOString(),
     availabilityPolicy: 'Each reference rate becomes available at 00:00 Asia/Jerusalem on the following calendar day. This conservative replay policy avoids using a daily observation before its publication.',
-    rows: parseEcbCsv(csv, from, to),
+    rows: options.source === 'xml' ? parseEcbXml(text, from, to) : parseEcbCsv(text, from, to),
   };
 }
