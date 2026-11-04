@@ -27,6 +27,11 @@ export function israelDateTime(value: string): IsraelDateTime {
   return { date: `${part('year')}-${part('month')}-${part('day')}`, time: `${part('hour')}:${part('minute')}` };
 }
 
+export function suggestedGameTime(gameAt: string, endsAt: string): IsraelDateTime {
+  const target = Math.min(Date.parse(gameAt) + 60_000, Date.parse(endsAt));
+  return israelDateTime(new Date(target).toISOString());
+}
+
 export function parseClockRequest(value: string | null): ClockRequest | null {
   if (value === null) return null;
   const request: unknown = JSON.parse(value);

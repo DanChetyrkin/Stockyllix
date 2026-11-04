@@ -11,7 +11,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { useGame } from '@/context/GameContext';
 import { dateTime, number } from '@/utils/format';
-import { clockActionLabels, israelDateTime, parseClockRequest, validCalendarDate, validIsraelDateTime, type ClockAction, type ClockRequest, type IsraelDateTime } from '@/utils/admin-clock';
+import { clockActionLabels, israelDateTime, parseClockRequest, suggestedGameTime, validCalendarDate, validIsraelDateTime, type ClockAction, type ClockRequest, type IsraelDateTime } from '@/utils/admin-clock';
 import { useApi } from '@/hooks/use-api';
 
 interface ReplayChoice { id: string; source: 'simulated' | 'historical'; sourceDescription: string; startsAt: string; endsAt: string }
@@ -80,7 +80,7 @@ export default function AdminScreen() {
       setStorageFailed(false);
       setLoadedStorageKey(storageKey);
       const current = worldRef.current;
-      setCustom(current ? israelDateTime(new Date(Date.parse(current.clock?.targetNow || current.now) + 60_000).toISOString()) : { date: '', time: '' });
+      setCustom(current ? suggestedGameTime(current.clock?.targetNow || current.now, current.endsAt) : { date: '', time: '' });
       setConfirmation(''); setDatasetId(null); setNewGameMode('historical'); setSimulationDate('2027-03-01');
       setError(null); setMessage(null); setAdvanced(false); setShowNewGame(!!pendingGame); setSuggestTestWorld(false);
       if (!request) return;
@@ -164,7 +164,7 @@ export default function AdminScreen() {
       await AsyncStorage.removeItem(scope);
       if (!isCurrent(scope)) return;
       setSaved(null);
-      setCustom(israelDateTime(new Date(Date.parse(result.world.clock?.targetNow || result.world.now) + 60_000).toISOString()));
+      setCustom(suggestedGameTime(result.world.clock?.targetNow || result.world.now, result.world.endsAt));
       await refreshWorld();
       if (result.world.job) await processJob(result.world.job.id, true, scope);
       else setMessage(request.action === 'pause' ? 'Game clock paused. Pending orders remain saved.' : ['set', 'next', 'next_order'].includes(request.action) ? 'Game time applied. All reached events were processed and the clock is paused.' : 'Game clock running at one game second per server second.');
