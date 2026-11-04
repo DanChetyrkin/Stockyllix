@@ -20,7 +20,8 @@ export function AppShell({ children }: PropsWithChildren) {
   const { width } = useWindowDimensions();
   const pathname = usePathname();
   const compact = width < 900;
-  const canUseWithoutPortfolio = pathname === '/help' || (pathname === '/admin' && game.isAdmin);
+  const independentPage = ['/help', '/current-market', '/news'].includes(pathname);
+  const canUseWithoutPortfolio = independentPage || (pathname === '/admin' && game.isAdmin);
   if (auth.loading) return <View style={styles.fullLoading}><ActivityIndicator color={palette.green} /><Copy muted>Restoring your session…</Copy></View>;
   if (!auth.user) return <Redirect href="/auth" />;
 
@@ -42,7 +43,7 @@ export function AppShell({ children }: PropsWithChildren) {
         {auth.initializing && <Notice>Preparing your portfolio securely… This may take a moment while the server wakes up.</Notice>}
         {auth.error && <Notice tone="error" action={<Button compact loading={auth.initializing} variant="secondary" onPress={() => void auth.retryInitialization()}>Try again</Button>}>{auth.error}</Notice>}
         {game.error && <Notice tone="error" action={<Button compact loading={game.refreshing} variant="secondary" onPress={() => void game.refreshWorld()}>Reconnect</Button>}>{game.error}</Notice>}
-        {(pathname === '/help' || (game.world && (auth.initialized || canUseWithoutPortfolio))) ? children : !auth.error && !game.error && !auth.initializing && <Notice>Connecting to your portfolio…</Notice>}
+        {(independentPage || (game.world && (auth.initialized || canUseWithoutPortfolio))) ? children : !auth.error && !game.error && !auth.initializing && <Notice>Connecting to your portfolio…</Notice>}
         <View style={styles.footer}><Text style={styles.footerCopy}>STOCKYLLIX · HOUSE OF FINANCE HOME ASSIGNMENT</Text><Link href="/help" style={[styles.footerCopy, { color: palette.green }]}>How to play</Link><Text style={styles.footerCopy}>Virtual money. Educational play.</Text></View>
       </View>
     </ScrollView>

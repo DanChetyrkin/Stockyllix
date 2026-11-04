@@ -19,6 +19,8 @@ export interface World {
   status: 'idle' | 'advancing';
   source: 'simulated' | 'historical';
   sourceDescription: string;
+  datasetId?: string;
+  finished?: boolean;
   startsAt: string;
   endsAt: string;
   weekId: string;

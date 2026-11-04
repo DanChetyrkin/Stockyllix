@@ -3,6 +3,7 @@ import { GameError } from '../domain/errors.js';
 import type { Dataset, Order, Portfolio, World } from '../domain/model.js';
 import { decimal, formatDecimal, instrumentPriceILS, portfolioValue } from '../domain/valuation.js';
 import { snapshotAt } from '../world/index.js';
+import { DatasetRegistry, datasetRegistry } from '../world/registry.js';
 
 // weighted average cost is measured in ils, including the execution exchange rate.
 export function calculateCosts(orders: Order[]) {
@@ -28,13 +29,17 @@ export function calculateCosts(orders: Order[]) {
 }
 
 export class PerformanceService {
-  constructor(private readonly store: DocumentStore, private readonly dataset: Dataset) {}
+  private readonly datasets: DatasetRegistry;
+  constructor(private readonly store: DocumentStore, dataset: Dataset | DatasetRegistry) {
+    this.datasets = datasetRegistry(dataset);
+  }
 
   async get(uid: string) {
     const pointer = await this.store.get<{ worldId: string }>('system/current');
     if (!pointer) throw new GameError('WORLD_NOT_FOUND', 'The world is not available.', 503, true);
     const world = await this.store.get<World>(`worlds/${pointer.worldId}`);
-    if (!world || world.datasetId !== this.dataset.id) throw new GameError('DATASET_MISMATCH', 'The world data is not available.', 503);
+    if (!world) throw new GameError('WORLD_NOT_FOUND', 'The world data is not available.', 503);
+    const dataset = this.datasets.get(world.datasetId);
     if (world.status !== 'idle') throw new GameError('WORLD_ADVANCING', 'Wait for the shared world to finish advancing.', 423, true);
     const playerPath = `worlds/${world.id}/players/${uid}`;
     const portfolio = await this.store.get<Portfolio>(playerPath);
@@ -55,18 +60,18 @@ export class PerformanceService {
     const holdings = Object.entries(portfolio.holdings).map(([instrumentId, holding]) => {
       const cost = costs.positions[instrumentId] ?? { units: '0', costILS: '0' };
       if (!decimal(cost.units).eq(holding.units)) throw new GameError('INCOMPLETE_LEDGER', 'Performance cannot be calculated from this order history.', 503);
-      const value = decimal(holding.units).mul(instrumentPriceILS(this.dataset, world.snapshot, instrumentId));
+      const value = decimal(holding.units).mul(instrumentPriceILS(dataset, world.snapshot, instrumentId));
       const gain = value.sub(cost.costILS);
       unrealized = unrealized.add(gain);
       return { instrumentId, costILS: formatDecimal(cost.costILS, 2), unrealizedILS: formatDecimal(gain, 2) };
     });
-    const value = portfolioValue(this.dataset, world.snapshot, portfolio);
+    const value = portfolioValue(dataset, world.snapshot, portfolio);
     const periodReturn = value.div(1_000_000).sub(1).mul(100);
-    const start = snapshotAt(this.dataset, portfolio.joinedAt);
-    const benchmark = this.dataset.instruments.some(instrument => instrument.id === 'SPY')
-      ? instrumentPriceILS(this.dataset, world.snapshot, 'SPY').div(instrumentPriceILS(this.dataset, start, 'SPY')).sub(1).mul(100) : null;
+    const start = snapshotAt(dataset, portfolio.joinedAt);
+    const benchmark = dataset.instruments.some(instrument => instrument.id === 'SPY')
+      ? instrumentPriceILS(dataset, world.snapshot, 'SPY').div(instrumentPriceILS(dataset, start, 'SPY')).sub(1).mul(100) : null;
     return {
-      worldId: world.id, revision: world.revision, from: portfolio.joinedAt, asOf: world.now, dataMode: this.dataset.source,
+      worldId: world.id, revision: world.revision, from: portfolio.joinedAt, asOf: world.now, dataMode: dataset.source,
       realizedILS: formatDecimal(costs.realizedILS, 2), unrealizedILS: formatDecimal(unrealized, 2), totalProfitILS: formatDecimal(value.sub(1_000_000), 2),
       periodReturnPct: formatDecimal(periodReturn, 4), benchmarkReturnPct: benchmark ? formatDecimal(benchmark, 4) : null, excessReturnPct: benchmark ? formatDecimal(periodReturn.sub(benchmark), 4) : null,
       holdings, method: 'weighted average cost in ILS; SPY buy-and-hold over the same world period, including USD/ILS; not annualized',

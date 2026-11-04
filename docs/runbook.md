@@ -98,6 +98,12 @@ HTTP JSON logs include request ID, path, status and duration; clock logs include
 
 ## Import staging
 
+The market-data release adds administrator previews `/api/market/current` and `/api/news`, plus `/api/admin/datasets`. Quote/news source reads are independent of the game clock, and their Firestore cache is private. Default access is `admin`; `public` additionally requires the corresponding explicit source-rights confirmation. No flag grants a licence. Read [finish-release](finish-release.md) before deployment or historical activation.
+
+Quotes have a ten-minute shared refresh and bounded provider work, with persisted last-good state/lease/fencing and process-local single flight. A restart resumes from Firestore rather than trusting ephemeral disk. Alpha Vantage News has a six-hour shared cache, a persistent UTC-day request budget and long backoff for Premium denial. Changing its key changes its private cache scope. Neither endpoint accepts arbitrary provider URLs or client-set prices.
+
+`npm run import:yahoo` consumes an ignored Python report, BOI history and a reviewed holiday file to create `server/data/yahoo-world.json`. Set `YAHOO_REPORT_PATH`, `YAHOO_CALENDAR_PATH` and `YAHOO_OUTPUT_PATH` only for this staging command. The registry keeps immutable datasets by ID, and reset can select a verified available dataset only for a new world. Back up every exact dataset still referenced by a world; removing the current world's data intentionally prevents startup.
+
 `import:boi` stages a separate private history file; the verified local import contains 21 observations. The active replay continues to use its existing ECB dataset. `import:market` is a prepared Twelve Data/BOI historical pipeline, not an exercised real-stock connection: no key/access was available. See [data sources](data-sources.md) for environment settings and the coverage/rights gate. Never overwrite the active file or switch an existing world to a different dataset. Preserve the exact current data and plan any approved activation as a new world.
 
 ## Capacity and free-tier limits

@@ -2,6 +2,29 @@
 
 Provider research and local import status were checked on 2026-11-04. The company prefers real, current data and explicitly permits a sensible simulation if real data becomes too difficult. These checks do not claim a working paid account or a licence that was not granted.
 
+## Current-market implementation
+
+The custom Node service now fetches current regular-session Yahoo chart observations for the existing twenty listings. A real local run returned twenty valid quotes; a recreated service using the same store reused them with no extra provider calls. This is separate from the daily-history experiment. Public display permission remains unverified, so `/api/market/current` defaults to a server-authorized administrator preview. It is not used by the trading engine.
+
+The shared cache persists last good observations, refresh eligibility, lease and fencing version in Firestore. An in-process single flight and short L1 cache reduce duplicate work/reads. Refreshes occur within bounded HTTP requests, at most once every ten minutes, with limited concurrency, timeout and provider backoff. No always-on worker or local disk is required. Each quote retains its own `priceAt` and `fetchedAt`; a failed partial refresh preserves the old quote and marks it stale. The previous session close comes from dated bars, not a five-day baseline incorrectly labelled yesterday. Unknown delay remains unknown; extended sessions are not included.
+
+For public display the browser uses the [official free TradingView widgets](https://www.tradingview.com/widget/) with attribution intact. Their [market list](https://www.tradingview.com/widget-docs/markets/mea/) includes delayed TASE stocks. The widget is an independent hosted display, not a source we may scrape into our API. TradingView explicitly [does not offer widget data export/API access](https://www.tradingview.com/widget-docs/faq/data/). Its quotes are not copied into Firestore or used for game fills. Browser rendering and exact twenty-symbol availability must still be checked after publication.
+
+Other requested candidates were screened without adding services:
+
+| Candidate | Material finding |
+| --- | --- |
+| [OpenBB](https://docs.openbb.co/odp/python/faqs/data_providers) | An integration layer dependent on provider access; it is not an independent data licence or feed. Adds no benefit to this Node deployment. |
+| [Massive](https://massive.com/knowledge-base/article/which-plan-do-i-need-to-show-massive-data-in-my-app) | Free individual EOD access is not public application display rights; even externally reachable demos require a business arrangement. TASE coverage was not established. |
+| [Marketstack](https://marketstack.com/product) | Free EOD quota is 100 requests/month, with symbol-based consumption. Five full twenty-symbol refreshes/month cannot support this market view. |
+| [Interactive Brokers](https://www.interactivebrokers.com/campus/ibkr-api-page/twsapi-doc/) | TWS/IB Gateway needs an authenticated broker session and running desktop/gateway software. Delayed-data availability depends on exchange/account/entity; it is not a stand-alone free Render feed. |
+
+## Current news
+
+The supplied Alpha Vantage free key was exercised once without logging it. `NEWS_SENTIMENT` returned HTTP 200 with a Premium requirement and zero articles, matching the [current endpoint documentation](https://www.alphavantage.co/documentation/#news-sentiment). The implemented adapter stores only title, source, publication time, related catalog IDs and HTTPS article URL. It strips bodies/images/sentiment, uses a six-hour shared cache and persistent request budget, and reports entitlement/quota failures without leaking provider URLs or secrets.
+
+[EODHD News](https://eodhd.com/financial-apis/stock-market-financial-news-api) offers a free allowance, but its [personal-use terms](https://eodhd.com/financial-apis/terms-conditions) do not permit displaying the data to others. No second news API was connected. Reddit requires approved/OAuth access and represents community posts, while new StockTwits API registration is currently closed; neither is presented as verified news. The public News page instead embeds the official TradingView feed. It follows real publication time, independently of demo time.
+
 | Source | Verified capability | Why it is not the default stock feed |
 | --- | --- | --- |
 | [Twelve Data](https://twelvedata.com/pricing) | Basic is free without a card, 8 credits/minute and 800/day; US equities are included. [XTAE](https://twelvedata.com/exchanges/xtae) is end-of-day in a paid tier. | Basic is internal non-display. [External display and redistribution](https://twelvedata.com/terms) require appropriate rights. A trial symbol does not establish access to twenty instruments or public-display rights. |
@@ -55,6 +78,16 @@ A broad redistribution/storage licence was not established by the earlier resear
 If the real FX file is unavailable, server startup fails. Only the explicit `ALLOW_SIMULATED_FX=true` setting permits a labelled simulated FX fallback. It never silently labels generated numbers as ECB observations.
 
 ## Private imports and future data
+
+### Yahoo/yfinance: successful local experiment, not activated
+
+On November 4, 2026, a private two-symbol experiment with yfinance 1.8.0 downloaded October daily history for AAPL and LUMI.TA. A subsequent run covered all twenty existing catalog symbols: 420 daily observations, with twenty per TASE symbol and twenty-two per US symbol. All TASE listings reported ILA and were normalized to ILS by dividing by 100. Original quotes remain in the ignored local report. No invalid OHLC, duplicate dates or missing dates relative to same-market peers were found.
+
+All TASE listings omitted October 2 and October 27. This is an observation, not an exchange-calendar verification; dates missing for every peer cannot be detected by peer comparison alone. The provider returned dividend events for ESLT.TA and JPM during the period. Corporate-action handling must be decided before using this period for portfolio scoring.
+
+The separate [Python probe](../tools/README.md) runs locally and writes only ignored artifacts. It is not a Python server or a Render dependency. `auto_adjust=False`, `back_adjust=False` and `repair=False` prevent additional automatic adjustments/repairs by the library. Yahoo OHLC can still be split-adjusted and is not guaranteed as-traded history. See the [parameter documentation](https://ranaroussi.github.io/yfinance/reference/api/yfinance.download.html) and [maintainer explanation](https://github.com/ranaroussi/yfinance/discussions/1682).
+
+The [library notice](https://pypi.org/project/yfinance/) says it is unofficial, intended for research/education, and directs users to Yahoo's data terms. Its open-source license is not a data licence. Yahoo's [terms](https://legal.yahoo.com/us/en/yahoo/terms/otos/index.html) do not establish permission for this public game's data storage/display; that permission remains unverified. Download success does not resolve it. No Yahoo data was committed, uploaded or activated, and the public game still uses simulated stocks and historical ECB FX.
 
 ### Twelve Data importer: prepared, not a working stock connection
 

@@ -9,7 +9,12 @@ export default function HelpScreen() {
   const { isAdmin } = useGame();
   return <AppShell>
     <PageTitle title="Make your first move." subtitle="A friendly guide to your account, your portfolio and the weekly league." />
-    <View style={[ui.row, { flexWrap: 'wrap', gap: 8 }]}><GuideLink href="/">Portfolio</GuideLink><GuideLink href="/market">Discover markets</GuideLink><GuideLink href="/orders">Orders</GuideLink><GuideLink href="/daily-review">Daily review & quiz</GuideLink><GuideLink href="/leaderboard">The league</GuideLink></View>
+    <View style={[ui.row, { flexWrap: 'wrap', gap: 8 }]}><GuideLink href="/">Portfolio</GuideLink><GuideLink href={'/current-market' as Href}>Current market</GuideLink><GuideLink href="/market">Demo trading</GuideLink><GuideLink href={'/news' as Href}>Market news</GuideLink><GuideLink href="/orders">Orders</GuideLink><GuideLink href="/daily-review">Daily review & quiz</GuideLink><GuideLink href="/leaderboard">The league</GuideLink></View>
+    <GuideCard title="Two market views, two different clocks">
+      <Copy>Current market shows the real-world source’s latest quotes. Prices can be delayed; when a market is closed, the last session quote may remain visible. News also follows real publication time.</Copy>
+      <Copy>Demo trading follows the shared game date shown above. Its price source is labelled as historical or simulated. Only those game prices and the game’s FX rate execute your orders. A current quote never changes a historical fill.</Copy>
+      <Copy muted>When the price period ends, the clock stops. An administrator can create a new world; previous worlds and their transactions remain preserved.</Copy>
+    </GuideCard>
     <GuideCard title="1. Join the league">
       <Copy>Choose a display name with 2–40 characters. Enter an email address with a name, @ and a domain, such as you@example.com.</Copy>
       <Copy>Use a password with at least 8 characters, including a letter and a number. Enter it again in Confirm password; both entries must match. Sign in later with the same email and password.</Copy>
@@ -22,7 +27,7 @@ export default function HelpScreen() {
       <GuideLink href="/">Open your portfolio  →</GuideLink>
     </GuideCard>
     <GuideCard title="3. Place your first order">
-      <Copy>Open Discover markets, choose an asset and select Buy or Sell. Enter the amount in shekels, using digits and an optional decimal point with up to two decimal places.</Copy>
+      <Copy>Open Demo trading, choose an asset and select Buy or Sell. Enter the amount in shekels, using digits and an optional decimal point with up to two decimal places.</Copy>
       <Copy>Choose Review, check the asset, amount and scheduled execution time, then Confirm & send. You can go back before sending. Once accepted, an order cannot be cancelled.</Copy>
       <Copy muted>There is no borrowing or short selling. A buy must keep the total position within 20% of the portfolio at execution. Earlier holdings and pending buys also count when you submit.</Copy>
       <GuideLink href="/market">Choose an asset  →</GuideLink>

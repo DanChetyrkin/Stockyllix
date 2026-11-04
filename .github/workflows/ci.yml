@@ -2,7 +2,7 @@ name: checks
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, codex/render-free-deploy]
 permissions:
   contents: read
 jobs:

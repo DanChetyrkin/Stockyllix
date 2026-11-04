@@ -4,6 +4,8 @@ The Blueprint is `render.yaml` at the repository root. It defines one Node web s
 
 Public API: `https://stockyllix-api.onrender.com/api`. Browser game: [stockyllix.web.app](https://stockyllix.web.app).
 
+The market-feed release identifies itself at `/health` with `version: 1.1.0` and `release: market-feeds-v1`. It adds owner-only current Yahoo quotes, a durable shared cache, a guarded Alpha Vantage News adapter and immutable historical dataset selection for new worlds. See the [release handoff](../docs/finish-release.md) for deployment, exact environment-variable names and the remaining cloud checks. Real-data public-use rights remain separate from technical access.
+
 ## Blueprint setup
 
 Choose branch `codex/render-free-deploy` and Blueprint Path `render.yaml`.

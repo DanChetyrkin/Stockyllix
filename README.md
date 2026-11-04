@@ -6,7 +6,7 @@ An educational portfolio league built with Expo, React Native, TypeScript, Expre
 
 **Reviewer administrator:** `admin@stockyllix.com`. Ask the project owner for the password. Administrators can advance the shared clock and reset the demonstration world; ordinary players cannot.
 
-**Data disclosure:** instrument names are real; stock prices are simulated. USD/ILS uses historical ECB reference rates downloaded separately. The shared world replays October 5–30, 2026, with November 2 as an execution buffer. It is not a live trading feed. No real money is involved.
+**Data disclosure:** the existing demo world's execution prices remain simulated, with historical ECB USD/ILS. The shared world runs October 5–30, 2026, with November 2 as an execution buffer. The separate **Current market** and **Market news** pages embed official TradingView panels; their real-world data can be delayed and never execute demo orders. No real money is involved.
 
 ## What works in the implementation
 
@@ -23,7 +23,9 @@ An educational portfolio league built with Expo, React Native, TypeScript, Expre
 
 The public Web app uses Firebase Authentication and the Render API at `https://stockyllix-api.onrender.com/api`. Hosting, static files, internal routes and administrator sign-in have been checked in the cloud. See [verification](docs/verification.md) for measured checks and remaining limits.
 
-The authenticated `/api/reference/fx` endpoint separately fetches the latest published Bank of Israel representative rate; it is not an intraday quote or the replay's execution rate. A historical stock importer is prepared for Twelve Data, but no provider key, full market coverage or public-display rights have been verified. The active game still uses simulated stocks and historical ECB FX.
+The authenticated `/api/reference/fx` endpoint separately fetches the latest published Bank of Israel representative rate. A new server quote service (`/api/market/current`) fetches Yahoo observations for all twenty instruments, retains their price/fetch timestamps and uses a shared Firestore cache. It defaults to an administrator-only preview because public-display permission has not been verified. The API was tested locally with real quotes; its new Render release still needs a cloud smoke test. A successful download is not a data licence.
+
+The historical Yahoo/BOI importer stages a separate immutable candidate and can select it only for a new world; existing worlds keep their exact dataset. Public activation remains gated on applicable data rights. Alpha Vantage News is implemented with a shared cache, but the owner's free key returned a Premium requirement, not articles. See [release handoff](docs/finish-release.md) for the exact remaining deployment and verification steps.
 
 ## Run locally on Windows
 
@@ -80,7 +82,7 @@ Orders submitted while their market is open execute at that session's close. Oth
 
 Weekly score is `0.85 × return percentile + 0.15 × stability percentile`. Stability uses sampled maximum drawdown. Assets and cash carry into the next week; competition statistics reset. Cash and reserved assets remain part of portfolio value.
 
-We intentionally omitted a second web client, push notifications, news, paid feeds, Cloud Functions, Docker, commissions, dividends and corporate-action processing. The daily review adds educational value without rewarding unnecessary trades. Actual return visits use server real dates, separately from simulation days; retention improvement has not been proven.
+We intentionally omitted a second web client, push notifications, paid feeds, Cloud Functions, Docker, commissions, dividends and corporate-action processing. The daily review adds educational value without rewarding unnecessary trades. Actual return visits use server real dates, separately from simulation days; retention improvement has not been proven.
 
 Charts reveal known observations only; price targets never place an order. Daily change needs a prior session close. Company fundamentals are omitted because a suitable public source was not verified. Performance and capacity limits are detailed in the [runbook](docs/runbook.md).
 

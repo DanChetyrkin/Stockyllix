@@ -5,7 +5,9 @@ import { useTheme } from '@/context/ThemeContext';
 
 const pages = [
   { href: '/', label: 'Portfolio', group: 'INVEST', detail: 'Cash and your holdings' },
-  { href: '/market', label: 'Discover markets', group: 'INVEST', detail: 'Explore the 20 instruments' },
+  { href: '/current-market', label: 'Current market', group: 'INVEST', detail: 'Real-world quotes · delayed data' },
+  { href: '/market', label: 'Demo trading', group: 'INVEST', detail: 'Trade within the shared game period' },
+  { href: '/news', label: 'Market news', group: 'LEARN & COMPETE', detail: 'Headlines from the real world' },
   { href: '/orders', label: 'Orders', group: 'INVEST', detail: 'Pending and completed orders' },
   { href: '/daily-review', label: 'Daily review', group: 'LEARN & COMPETE', detail: 'Your personal daily check-in' },
   { href: '/leaderboard', label: 'The league', group: 'LEARN & COMPETE', detail: 'Weekly return and stability' },

@@ -8,6 +8,7 @@ import { Instrument, MarketResponse, Order, OrderInput, PortfolioResponse, Side 
 import { AppShell } from '@/components/AppShell';
 import { InstrumentInsights } from '@/components/market/InstrumentInsights';
 import { WatchlistPanel } from '@/components/market/WatchlistPanel';
+import { MarketModes } from '@/components/market/MarketModes';
 import { Badge, Button, Card, CardTitle, Copy, DataState, Empty, Eyebrow, Field, Notice, PageTitle, useThemedStyles } from '@/components/ui/kit';
 import { useAuth } from '@/context/AuthContext';
 import { useGame } from '@/context/GameContext';
@@ -106,7 +107,10 @@ export default function MarketScreen() {
   }
 
   return <AppShell>
-    <PageTitle title="A world of opportunity." subtitle="Explore 20 assets across Tel Aviv and the US. Choose your investment in shekels." />
+    <MarketModes />
+    <PageTitle title="Your demo market." subtitle="Trade 20 assets using the shared game date. Current market quotes never set these execution prices." />
+    {world && <Badge>{world.source === 'historical' ? 'Real historical prices' : 'Simulated demo prices'} · {dateTime(world.now)} · Israel time</Badge>}
+    {world && !world.nextEvent && <Notice>The demo has reached the end of its price period. New orders need a future execution event. An administrator can start a new world from World controls.</Notice>}
     {market.data && <View style={[ui.row, { flexWrap: 'wrap', justifyContent: 'space-between' }]}><Copy muted style={{ fontSize: 12 }}>Prices as of {dateTime(market.data.asOf)} · Israel time</Copy><Copy muted style={{ fontSize: 11 }}>USD / ILS {number(market.data.fx, 6)} · Rate date: {observationDate(market.data.fxAsOf)}</Copy></View>}
     <DataState loading={market.loading} error={market.error} hasData={!!market.data} retry={() => void market.refresh()}>
       <View style={[ui.split, !wide && { flexDirection: 'column' }]}>

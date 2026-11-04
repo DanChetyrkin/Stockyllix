@@ -11,6 +11,8 @@ import type { MarketInsightsService } from '../services/market-insights.js';
 import type { DailyQuizService } from '../services/daily-quiz.js';
 import type { PerformanceService } from '../services/performance-service.js';
 import type { BankIsraelService } from '../services/bank-israel.js';
+import type { CurrentMarketService } from '../feeds/current-market.js';
+import type { NewsService } from '../feeds/news.js';
 
 interface AppOptions {
   game: GameService;
@@ -19,6 +21,10 @@ interface AppOptions {
   quiz?: DailyQuizService;
   performance?: PerformanceService;
   bankIsrael?: BankIsraelService;
+  currentMarket?: Pick<CurrentMarketService, 'get'>;
+  news?: Pick<NewsService, 'get'>;
+  currentMarketAccess?: 'disabled' | 'admin' | 'public';
+  newsAccess?: 'disabled' | 'admin' | 'public';
   verifyToken: (token: string) => Promise<{ uid: string }>;
   adminUids: Set<string>;
   corsOrigins: string[];
@@ -43,7 +49,7 @@ const instrumentIdInput = z.string().min(1).max(40).regex(/^[a-zA-Z0-9_.-]+$/);
 const watchInput = z.object({ instrumentId: instrumentIdInput, targetPrice: z.string().max(30), direction: z.enum(['at_or_below', 'at_or_above']) }).strict();
 const quizInput = z.object({ worldId: worldIdInput, date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), questionId: z.string().min(1).max(60), answerIndex: z.number().int().min(0).max(3) }).strict();
 const advanceInput = z.object({ worldId: worldIdInput, target: z.iso.datetime({ offset: true }) }).strict();
-const resetInput = z.object({ worldId: worldIdInput, confirmation: z.literal('RESET') }).strict();
+const resetInput = z.object({ worldId: worldIdInput, confirmation: z.literal('RESET'), datasetId: z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/).optional() }).strict();
 
 function requestKey(request: Request) {
   return z.string().uuid().parse(request.get('Idempotency-Key'));
@@ -83,7 +89,7 @@ export function createApp(options: AppOptions) {
   // a resized profile photo fits here without raising limits for trading routes.
   app.use('/api/me/profile', express.json({ limit: '64kb' }));
   app.use(express.json({ limit: '12kb' }));
-  app.get('/health', (_request, response) => response.json({ status: 'ok', version: '1.0.0' }));
+  app.get('/health', (_request, response) => response.json({ status: 'ok', version: '1.1.0', release: 'market-feeds-v1' }));
 
   const router = express.Router();
   if (options.rateLimitEnabled !== false) {
@@ -141,6 +147,18 @@ export function createApp(options: AppOptions) {
     response.json(await options.performance.get(uid(response)));
   });
   router.get('/market', async (_request, response) => response.json(await options.game.getMarket()));
+  router.get('/market/current', async (_request, response) => {
+    const access = options.currentMarketAccess ?? 'admin';
+    if (access === 'disabled' || !options.currentMarket) throw new GameError('CURRENT_MARKET_UNAVAILABLE', 'Current quote access is unavailable.', 503, true);
+    if (access === 'admin' && !response.locals.isAdmin) throw new GameError('FEED_ACCESS_RESTRICTED', 'This source is available only in the owner preview. Use the public market panel.', 403);
+    response.json({ ...await options.currentMarket.get(), access });
+  });
+  router.get('/news', async (_request, response) => {
+    const access = options.newsAccess ?? 'admin';
+    if (access === 'admin' && !response.locals.isAdmin) throw new GameError('FEED_ACCESS_RESTRICTED', 'This news source is available only in the owner preview. Use the public news panel.', 403);
+    if (access === 'disabled' || !options.news) throw new GameError('NEWS_NOT_CONFIGURED', 'The news API is not configured on this server.', 503);
+    response.json({ ...await options.news.get(), access });
+  });
   router.get('/reference/fx', async (_request, response) => {
     if (!options.bankIsrael) throw new GameError('REFERENCE_FX_UNAVAILABLE', 'The Bank of Israel reference rate is temporarily unavailable.', 503, true);
     response.json(await options.bankIsrael.get());
@@ -203,8 +221,9 @@ export function createApp(options: AppOptions) {
   });
   router.post('/admin/reset', async (request, response) => {
     const input = resetInput.parse(request.body);
-    response.status(201).json(await options.game.reset(requestKey(request), input.worldId));
+    response.status(201).json(await options.game.reset(requestKey(request), input.worldId, input.datasetId));
   });
+  router.get('/admin/datasets', (_request, response) => response.json({ datasets: options.game.listDatasets() }));
   app.use('/api', router);
   app.use((_request, _response) => { throw new GameError('NOT_FOUND', 'This endpoint does not exist.', 404); });
 

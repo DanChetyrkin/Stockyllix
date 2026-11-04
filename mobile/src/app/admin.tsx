@@ -9,8 +9,10 @@ import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { useGame } from '@/context/GameContext';
 import { dateTime, number } from '@/utils/format';
+import { useFeed } from '@/hooks/use-feed';
 
 interface AdvanceRequest { target: string; key: string; worldId: string }
+interface ReplayChoice { id: string; source: 'simulated' | 'historical'; sourceDescription: string; startsAt: string; endsAt: string }
 
 export default function AdminScreen() {
   const { palette } = useTheme();
@@ -19,6 +21,8 @@ export default function AdminScreen() {
   const { user, retryInitialization } = useAuth();
   const [target, setTarget] = useState('');
   const [resetText, setResetText] = useState('');
+  const [datasetId, setDatasetId] = useState<string | null>(null);
+  const choices = useFeed<{ datasets: ReplayChoice[] }>('/admin/datasets', isAdmin);
   const [busy, setBusy] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,9 +106,9 @@ export default function AdminScreen() {
     try {
       const resetKey = `${storageKey}.reset`;
       const stored = await AsyncStorage.getItem(resetKey);
-      const request = stored ? JSON.parse(stored) as { key: string; worldId: string } : { key: randomUUID(), worldId: world!.id };
+      const request = stored ? JSON.parse(stored) as { key: string; worldId: string; datasetId?: string } : { key: randomUUID(), worldId: world!.id, datasetId: datasetId || world!.datasetId };
       if (!stored) await AsyncStorage.setItem(resetKey, JSON.stringify(request));
-      await api('/admin/reset', { method: 'POST', body: { worldId: request.worldId, confirmation: 'RESET' }, requestKey: request.key });
+      await api('/admin/reset', { method: 'POST', body: { worldId: request.worldId, confirmation: 'RESET', ...(request.datasetId ? { datasetId: request.datasetId } : {}) }, requestKey: request.key });
       await AsyncStorage.removeItem(resetKey);
       await AsyncStorage.removeItem(storageKey);
       setSavedAdvance(null);
@@ -134,7 +138,11 @@ export default function AdminScreen() {
           {world.job ? <><Text style={{ color: palette.ink, fontSize: 30, fontWeight: '700' }}>{world.job.completedEvents} / {world.job.totalEvents} <Text style={{ fontSize: 13, color: palette.muted }}>events completed</Text></Text><View style={{ height: 7, backgroundColor: palette.soft, borderRadius: 6, overflow: 'hidden' }}><View style={{ height: '100%', backgroundColor: palette.green, width: `${world.job.totalEvents ? Math.min(100, world.job.completedEvents / world.job.totalEvents * 100) : 0}%` }} /></View><Copy muted>{number(world.job.processedPortfolios, 0)} portfolio updates · {stageLabel(world.job.stage)}</Copy>{world.job.lastError && <Notice tone="error">{world.job.lastError}</Notice>}{running ? <Button variant="secondary" onPress={() => { keepRunning.current = false; }}>Pause after current step</Button> : <><Button loading={busy} disabled={busy} onPress={() => void step(true)}>Resume & process</Button><Button variant="secondary" disabled={busy} onPress={() => void step(false)}>Process one step</Button></>}</> : <Copy muted>Nothing is waiting to process. Choose a future time to run market openings, closings, currency updates and weekly rankings.</Copy>}
         </Card>
       </View>
-      <Card style={{ gap: 17, borderColor: palette.errorBorder }}><Eyebrow>Reset demonstration</Eyebrow><CardTitle>Start a new world.</CardTitle><Copy muted>This starts the game again for every player, with a new virtual portfolio. It affects everyone, so use it only when you intend to restart the demonstration.</Copy><Field label="Type RESET to confirm" value={resetText} onChangeText={setResetText} editable={!busy && world.status === 'idle'} autoCapitalize="characters" /><Button variant="danger" disabled={resetText !== 'RESET' || busy || world.status !== 'idle'} loading={busy && !running} onPress={() => void reset()}>Reset the shared demonstration world</Button></Card>
+      <Card style={{ gap: 17, borderColor: palette.errorBorder }}><Eyebrow>New demonstration</Eyebrow><CardTitle>Start a new world.</CardTitle><Copy muted>This creates a new world and a fresh virtual portfolio for every player. Previous worlds and their transactions are preserved. Prices are never replaced inside an existing world.</Copy>
+        {world.finished && <Notice>This world has reached the end of its real or simulated price period. Start a new world to continue trading.</Notice>}
+        {choices.error && <Copy muted>{choices.error}</Copy>}
+        {choices.data?.datasets.map(choice => <View key={choice.id} style={{ gap: 5 }}><Button compact variant={(datasetId || world.datasetId) === choice.id ? 'primary' : 'secondary'} disabled={busy || world.status !== 'idle'} onPress={() => setDatasetId(choice.id)}>{choice.source === 'historical' ? 'Real historical replay' : 'Simulation'} · {dateTime(choice.startsAt)} – {dateTime(choice.endsAt)}</Button><Copy muted style={{ fontSize: 11 }}>{choice.sourceDescription}</Copy></View>)}
+        <Field label="Type RESET to confirm" value={resetText} onChangeText={setResetText} editable={!busy && world.status === 'idle'} autoCapitalize="characters" /><Button variant="danger" disabled={resetText !== 'RESET' || busy || world.status !== 'idle'} loading={busy && !running} onPress={() => void reset()}>Start the selected shared world</Button></Card>
     </>}
   </AppShell>;
 }
