@@ -1,4 +1,5 @@
 import { getApp, getApps, initializeApp } from 'firebase/app';
+import { apiConfigured } from './api-config';
 
 // public firebase settings identify the app; they are not server credentials.
 const useEmulator = process.env.EXPO_PUBLIC_USE_EMULATORS === 'true';
@@ -10,5 +11,5 @@ const config = {
 };
 
 export const firebaseConfigured = Object.values(config).every(Boolean);
-export const firebaseApp = firebaseConfigured ? (getApps().length ? getApp() : initializeApp(config)) : null;
+export const firebaseApp = firebaseConfigured && apiConfigured ? (getApps().length ? getApp() : initializeApp(config)) : null;
 export const authEmulatorUrl = useEmulator ? (process.env.EXPO_PUBLIC_AUTH_EMULATOR_URL || 'http://127.0.0.1:9099') : null;

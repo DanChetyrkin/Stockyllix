@@ -2,6 +2,8 @@
 
 The Blueprint is `render.yaml` at the repository root. It defines one Node web service with `plan: free` and `rootDir: server`. It creates no database or persistent disk. Automatic code deployment is disabled.
 
+Public API: `https://stockyllix-api.onrender.com/api`. Browser game: [stockyllix.web.app](https://stockyllix.web.app).
+
 ## Blueprint setup
 
 Choose branch `codex/render-free-deploy` and Blueprint Path `render.yaml`.
@@ -35,6 +37,6 @@ npm test
 npm run build
 ```
 
-Cloud deployment still needs actual Firebase credentials, IAM access and an authenticated smoke test. A successful build alone does not prove these. Once the API is deployed, its public HTTPS URL plus `/api` becomes the client's `EXPO_PUBLIC_API_URL` before Firebase Hosting deployment.
+A fresh cloud deployment needs Firebase credentials, IAM access and an authenticated smoke test. A successful build alone does not prove these. The production client uses `EXPO_PUBLIC_API_URL=https://stockyllix-api.onrender.com/api`.
 
 Never commit a service-account key, an actual `.env`, `node_modules`, private price files or emulator exports. `.env.example` contains placeholders only. The owner's `serverKey` directory stays outside this repository.

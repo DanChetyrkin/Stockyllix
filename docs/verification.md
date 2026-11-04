@@ -1,0 +1,70 @@
+# Verification record
+
+Updated on 2026-11-04. This record distinguishes dated local evidence from unverified cloud deployment. Final test totals and current browser results must be recorded from their actual runs.
+
+## November 4 changes and evidence
+
+- The quiz now uses the shared game's Israel day, with one current answer per player/world. Real review-return dates and appearance remain independent. The previous real-midnight quiz behaviour below describes the earlier baseline, not the current rule.
+- Advance clock now starts bounded processing automatically. Resume remains available for paused/interrupted work, with an explicit continuation message at the loop limit. Browser reload during an advancing world successfully opened How to play and World controls without the expected-paused-state red banner. The existing interrupted job was resumed to completion, without resetting the world.
+- How to play and compact status/source details replace repeated notices and ordinary technical-ID displays. Daily review no longer presents backend retention instrumentation as player metrics.
+- The real Bank of Israel latest representative-rate integration was verified locally through `/api/reference/fx`. `import:boi` staged 21 historical observations without replacing the active ECB file/world.
+- The Twelve Data historical importer is implemented preparation only. Its missing-key check stopped `import:market` before stock requests. No provider key/access was available; no actual twenty-stock import, current stock feed or public-display entitlement has been verified. The staging guard also handles Windows path casing.
+- The final server run passed 159 unit/API/scenario tests; the 3 emulator-only tests were skipped in that run and passed separately, 3/3 in 17.78 seconds. Server TypeScript, ESLint and compilation also passed. An earlier highly parallel run hit one HTTP-test timeout under local CPU contention; the complete suite passed with two workers, without relaxing its assertions or timeout.
+- Client TypeScript, ESLint, all 27 Node tests and the final production Web export passed. The export is compilation evidence, not a deployable release with a real API URL.
+- Fresh browser QA verified portfolio/name loading, compact navigation and How to play, the real BOI rate through the API, and an end-to-end virtual AAPL purchase of 1,000 ILS: pending at October 6 17:30, executed at the October 6 US close. Automatic advancement completed to October 7 00:00 Israel game time; the quiz changed from the ETF question to market capitalization without waiting for a real date change. A quiz answer showed its explanation and locked further answers.
+- The header/menu and quiz were checked at 390×844; the viewport override was reset. A later optional reload-persistence check could not finish because the browser-control page stopped responding and a fresh test webview could not attach. This later check is not claimed as passed; the local API health check still returned OK. Existing automated quiz persistence tests passed.
+- A subsequent authenticated local HTTP check returned 200 for world (119 ms), portfolio (264 ms) and quiz (77 ms): the world was idle at October 7 midnight Israel game time, cash was 889,000 ILS with no pending orders, and the October 7 correct answer remained saved. These are individual local observations, not a load or cloud-latency guarantee.
+- The production release check is blocked by blank `EXPO_PUBLIC_API_URL`. No public cloud deployment is claimed.
+
+### Follow-up: market sorting and provider comparison
+
+- Added ascending/descending name and daily-change sorting, keeping missing changes last and preserving the selected asset/order draft. No annual performance or external company ratings were invented.
+- Shared the prior-trading-session comparison between `/market` and individual history. Four new server checks cover baseline, market/time boundaries, closed days, twenty-asset consistency and unchanged database operation counts. All 14 targeted market/history tests passed; server TypeScript and ESLint passed.
+- All five new client sorting tests, client TypeScript/ESLint and the updated production Web export passed. The earlier complete-suite counts above precede this focused addition; no new full-suite total is inferred.
+- Authenticated local `/market` returned 200 with twenty finite daily changes. This used existing game data only, with no provider requests or game-state writes.
+- Browser control recovered after reconnecting. The saved quiz answer was visible, resolving the earlier UI persistence-observation gap. The new market controls were then exercised in both daily-change directions; list order changed correctly and LUMI remained selected. The controls and rows were also visually checked at 390×844 and the viewport was reset. Screenshots are ignored local artifacts.
+- Finnhub, Twelve Data and FMP were compared again against official pricing, coverage and display terms on November 4. No provider key/account was used; no stock feed was activated. See data-sources.md for the technical preference and remaining free/public-demo blockers.
+
+## Hosting release (November 4)
+
+- The owner reported successful Render deployment. Independently checked `/health`: 200 for both `https://stockyllix.web.app` and `https://stockyllix.firebaseapp.com` origins, with matching CORS headers. Preflight for authenticated API requests also passed.
+- Set the ignored production client configuration to `EXPO_PUBLIC_API_URL=https://stockyllix-api.onrender.com/api`. Production emulators remain disabled; local emulator configuration was preserved.
+- The release check, client TypeScript/ESLint, all 32 client tests and the production Web export passed. The 36-file export totals about 2.13MB before HTTP compression. Its script scan found the correct API/project and no server-key markers, private dataset seed, emulator endpoints or local demo credentials.
+- Before deployment both Hosting domains returned 404 Site Not Found. No existing game website was identified there.
+- The supplied server credential could not check Hosting's service status (403); billing and full Firestore-rules inspection also returned 403. An unauthenticated read of the actual world-pointer document was denied. No IAM or billing changes were attempted.
+- After owner CLI login, deployed only Firebase Hosting. The public game is `https://stockyllix.web.app`, with `https://stockyllix.firebaseapp.com` as its alternate domain.
+- The first full-file audit caught packaged Expo PNGs excluded by an overly broad `**/node_modules/**` Hosting rule. Narrowed it to `node_modules/**` relative to the export root. Also applied no-cache to SPA HTML requests, retaining immutable caching for hashed assets. The corrected release `7d720823f772c546` served all 36 exact local files; root, `/market`, `/help` and the alternate domain returned 200 with the expected index and no-cache headers.
+- A read-only owner-session billing check confirmed `billingEnabled=false` and no linked billing account. The deployed Firestore rules deny direct reads and writes. No billing, IAM or Firestore-rule changes were made.
+- Public Firebase Auth config authorizes both Hosting domains. Unauthenticated portfolio access returns 401 with the intended CORS origin. Browser invalid-login feedback worked, and the owner-supplied administrator account signed in, loaded its 1,000,000 ILS cash portfolio and displayed World controls. No cloud trade, clock advance or reset was performed in this check.
+- Added inline, independently controlled password/confirmation eye buttons, masked by default. Client TypeScript/ESLint and the five authentication checks passed; the new Web export was deployed as `1f62abc5fe1d40ee`. All 36 deployed files matched the export, and public SPA routes retained no-cache headers. The live password eye visibly revealed a dummy test value without changing it. The administrator password is intentionally absent from public documentation; only the owner-approved account email is documented.
+- An authenticated cloud data check returned 200 from `/reference/fx` with source BOI, rate 3.157, publication November 3 13:21 UTC, and `stale=false`. `/market` returned 20 assets with the existing historical ECB execution rate; `/world` explicitly identified simulated stock prices. The local Twelve Data key and display-rights confirmation remain absent, so no real stock API import is claimed.
+
+## Previously completed baseline (November 3)
+
+- 108 server unit/API/scenario tests passed, including concurrent orders, retries, fencing, rounding boundaries, weekly transitions, private profiles/watchlists, quiz midnight rules, performance-ledger consistency and rate limiting.
+- 3 Firestore/Auth emulator integration tests passed: actual transaction contention/rollback, concentration protection and denial of direct client access. Their data is isolated from the developer's local world.
+- 13 client tests passed: API configuration, authentication validation and real-Israel-time appearance. Missing production API settings cannot send a Firebase token to an implicit localhost fallback.
+- Server TypeScript, ESLint, compilation and the 108+3 tests passed with Firebase Admin 14.5.0. No dependency changes were made after these runs.
+- Client TypeScript and ESLint passed after the final UI fixes.
+- Production Web and Android/Hermes exports passed with the new features. Production settings explicitly disable emulators; the real API URL is still required. Bundling is not a physical-device test.
+- Actual local HTTP smoke passed with Auth/Firestore emulators: 20 instruments, two users, duplicate order prevention, execution, clock completion and ranking.
+- Browser QA passed: sign-in, session restoration after reload, market listing, 100,000 ILS LUMI order, pending/executed states, administrator advancement, leaderboard and daily review. Portfolio layout was also checked at 390×844 and the mobile navigation was compacted. Viewport was reset afterwards.
+- New browser QA passed: supplied logo, grouped menu and Escape, private image selection/resizing/save/reload/removal, invalid display name, target save/remove without an order, revealed simulation graph, performance report, quiz answer/explanation/locking, manual dark/light and persisted real-time Auto. Empty login, wrong password, weak signup password, mismatched confirmation, duplicate email and valid sign-in were exercised. No new cloud account was created. Mobile viewport was reset after checking the new header at 390×844.
+- A test of 1,000 players using serialized memory completed one opening event and ranking in 3643 ms and 42 clock steps. This is an engine smoke benchmark, not cloud capacity or a multiweek load test.
+- The expanded isolated memory run processed 1,000 players, 2,000 concurrent buy submissions (1,000 accepted, 1,000 rejected before acceptance), and a full first competition week. It passed settlement/ranking invariants in 84,899 ms over 1,068 clock steps, using 132,575 reads and 58,223 writes in the instrumented adapter. This does not measure actual Firestore billing, contention or Render throughput; such a one-day jump would exceed Spark's daily quotas.
+- HTTP rate-limit regression tests passed: 200 successful users behind a shared IP, per-user limit enforcement, 201 authorized clock-step requests without consuming the ordinary bucket, denial of non-admin/inexact clock routes, and unauthenticated flood protection. Rate counters remain process-local and are not a distributed capacity test.
+- ECB import downloaded 22 real USD/ILS observations. Private data and local environment files are ignored by Git.
+- Git diff whitespace check passed. No commit, push, cloud account creation or deployment was performed by this implementation run.
+
+## Remaining before submission
+
+- Firebase Web config and the real Render API URL are saved in the ignored production environment file. Hosting deployment and administrator sign-in passed. A complete trade/clock scenario in the cloud and a physical second-device test remain separate checks.
+- The owner has deployed Render and authenticated the CLI for Hosting publication. The separate server key was not expanded to grant Hosting access. No IAM or billing change was made.
+- Verify cold-start behaviour and a complete authenticated trade/clock scenario without changing existing demo portfolios unexpectedly.
+- Repeat live asset/routing/CORS checks after every new release; compilation alone is not deployment verification.
+- GitHub Actions configuration is prepared but has not run on GitHub. Repository publication/write access for rotemyavne7 still needs verification.
+- Physical mobile behaviour and a second-device cloud smoke test remain unverified. Retention instrumentation is tested; improved retention has not been established.
+
+Dependency audit: server runtime has 4 moderate advisories; the complete server development tree has 25 moderate. The client runtime-installed tree has 8 moderate advisories in Expo/build tooling. No high or critical findings appeared in these runs. No compatible transitive patch was available for the server chain, and suggested major-version overrides/downgrades were not applied. See the runbook for impact and follow-up.
+
+Do not describe a successful compile, browser-emulator session or memory benchmark as a production deployment.
