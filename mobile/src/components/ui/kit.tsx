@@ -66,7 +66,8 @@ export function Badge({ children, tone = 'neutral' }: PropsWithChildren<{ tone?:
 export function Notice({ children, tone = 'neutral', action }: PropsWithChildren<{ tone?: 'neutral' | 'warning' | 'error' | 'success'; action?: React.ReactNode }>) {
   const { palette } = useTheme();
   const ui = useThemedStyles();
-  return <View accessibilityRole={tone === 'error' ? 'alert' : undefined} style={[ui.notice, tone === 'error' && { backgroundColor: palette.redBg, borderColor: palette.errorBorder }, tone === 'warning' && { backgroundColor: palette.amberBg, borderColor: palette.warningBorder }, tone === 'success' && { backgroundColor: palette.mint }]}><Copy style={{ flex: 1 }}>{children}</Copy>{action}</View>;
+  const stacked = useWindowDimensions().width < 600 && !!action;
+  return <View accessibilityRole={tone === 'error' ? 'alert' : undefined} style={[ui.notice, stacked && { flexDirection: 'column', alignItems: 'stretch' }, tone === 'error' && { backgroundColor: palette.redBg, borderColor: palette.errorBorder }, tone === 'warning' && { backgroundColor: palette.amberBg, borderColor: palette.warningBorder }, tone === 'success' && { backgroundColor: palette.mint }]}><Copy style={stacked ? undefined : { flex: 1 }}>{children}</Copy>{action}</View>;
 }
 
 export function Metric({ label, value, detail, tone, dark = false }: { label: string; value: string; detail: string; tone?: 'positive' | 'negative'; dark?: boolean }) {
