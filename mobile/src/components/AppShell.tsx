@@ -25,7 +25,7 @@ export function AppShell({ children }: PropsWithChildren) {
   if (auth.loading) return <View style={styles.fullLoading}><ActivityIndicator color={palette.green} /><Copy muted>Restoring your session…</Copy></View>;
   if (!auth.user) return <Redirect href="/auth" />;
 
-  return <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+  const pageHeader = <>
     <View style={[styles.header, compact && { paddingHorizontal: 14, gap: 8 }]}>
       <Link href="/" asChild><Pressable accessibilityLabel="Stockyllix portfolio" style={{ flexShrink: 1 }}><BrandLogo width={compact ? Math.max(80, Math.min(160, width - 236)) : 230} framed /></Pressable></Link>
       <View style={[styles.headerActions, compact && { gap: 8 }]}><NavigationMenu isAdmin={game.isAdmin} compact={compact} /><ProfileMenu compact={compact} /></View>
@@ -38,13 +38,21 @@ export function AppShell({ children }: PropsWithChildren) {
       </View>
       <View style={{ gap: 10, alignItems: 'center' }}><WorldStatus /><ThemePicker /></View>
     </View>
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.content, compact && { padding: 20 }]} keyboardShouldPersistTaps="handled">
+  </>;
+
+  return <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+    {!compact && pageHeader}
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+      {/* the mobile header scrolls with the page instead of covering its content. */}
+      {compact && pageHeader}
+      <View style={[styles.content, compact && { padding: 20 }]}>
       <View style={styles.contentInner}>
         {auth.initializing && <Notice>Preparing your portfolio securely… This may take a moment while the server wakes up.</Notice>}
         {auth.error && <Notice tone="error" action={<Button compact loading={auth.initializing} variant="secondary" onPress={() => void auth.retryInitialization()}>Try again</Button>}>{auth.error}</Notice>}
         {game.error && <Notice tone="error" action={<Button compact loading={game.refreshing} variant="secondary" onPress={() => void game.refreshWorld()}>Reconnect</Button>}>{game.error}</Notice>}
         {(independentPage || (game.world && (auth.initialized || canUseWithoutPortfolio))) ? children : !auth.error && !game.error && !auth.initializing && <Notice>Connecting to your portfolio…</Notice>}
         <View style={styles.footer}><Text style={styles.footerCopy}>STOCKYLLIX · HOUSE OF FINANCE HOME ASSIGNMENT</Text><Link href="/help" style={[styles.footerCopy, { color: palette.green }]}>How to play</Link><Text style={styles.footerCopy}>Virtual money. Educational play.</Text></View>
+      </View>
       </View>
     </ScrollView>
   </SafeAreaView>;
