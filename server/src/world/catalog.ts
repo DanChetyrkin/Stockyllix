@@ -1,6 +1,6 @@
 import type { Instrument } from '../domain/model.js';
 
-// names are real; the game prices generated for them are simulated
+// real listings; the shared game uses their historical prices from the private snapshot.
 export const instruments: Instrument[] = [
   { id: 'LUMI.TA', symbol: 'LUMI', name: 'Bank Leumi', market: 'TA', currency: 'ILS', sector: 'Banking' },
   { id: 'POLI.TA', symbol: 'POLI', name: 'Bank Hapoalim', market: 'TA', currency: 'ILS', sector: 'Banking' },
@@ -24,7 +24,7 @@ export const instruments: Instrument[] = [
   { id: 'SPY', symbol: 'SPY', name: 'SPDR S&P 500 ETF Trust', market: 'US', currency: 'USD', sector: 'Broad market ETF' },
 ];
 
-// these are illustrative starting prices in shekels or dollars, never exchange quotes
+// illustrative starting prices for the simulated worlds only, never exchange quotes.
 export const initialPrices: Record<string, string> = {
   'LUMI.TA': '72.40', 'POLI.TA': '68.20', 'MZTF.TA': '214.50', 'DSCT.TA': '36.80',
   'BEZQ.TA': '6.90', 'AZRG.TA': '352.00', 'ESLT.TA': '1560.00', 'ICL.TA': '20.60',

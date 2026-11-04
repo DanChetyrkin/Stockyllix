@@ -11,8 +11,6 @@ import type { MarketInsightsService } from '../services/market-insights.js';
 import type { DailyQuizService } from '../services/daily-quiz.js';
 import type { PerformanceService } from '../services/performance-service.js';
 import type { BankIsraelService } from '../services/bank-israel.js';
-import type { CurrentMarketService } from '../feeds/current-market.js';
-import type { NewsService } from '../feeds/news.js';
 import type { WorldClockService } from '../services/world-clock.js';
 import type { TestSimulationService } from '../services/test-simulation-service.js';
 
@@ -29,10 +27,6 @@ interface AppOptions extends GameServices {
   profile?: ProfileService;
   testRealmServices?: (uid: string) => GameServices | Promise<GameServices>;
   bankIsrael?: BankIsraelService;
-  currentMarket?: Pick<CurrentMarketService, 'get'> & Partial<Pick<CurrentMarketService, 'checkSample'>>;
-  news?: Pick<NewsService, 'get'>;
-  currentMarketAccess?: 'disabled' | 'admin' | 'public';
-  newsAccess?: 'disabled' | 'admin' | 'public';
   verifyToken: (token: string) => Promise<{ uid: string }>;
   adminUids: Set<string>;
   corsOrigins: string[];
@@ -57,7 +51,7 @@ const instrumentIdInput = z.string().min(1).max(40).regex(/^[a-zA-Z0-9_.-]+$/);
 const watchInput = z.object({ instrumentId: instrumentIdInput, targetPrice: z.string().max(30), direction: z.enum(['at_or_below', 'at_or_above']) }).strict();
 const quizInput = z.object({ worldId: worldIdInput, date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), questionId: z.string().min(1).max(60), answerIndex: z.number().int().min(0).max(3) }).strict();
 const advanceInput = z.object({ worldId: worldIdInput, target: z.iso.datetime({ offset: true }) }).strict();
-const clockInput = z.object({ worldId: worldIdInput, action: z.enum(['pause', 'resume', 'historical', 'realtime', 'set', 'next', 'next_order']),
+const clockInput = z.object({ worldId: worldIdInput, action: z.enum(['pause', 'resume', 'set', 'next', 'next_order']),
   target: z.iso.datetime({ offset: true }).optional(),
   targetIsrael: z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), time: z.string().regex(/^\d{2}:\d{2}$/) }).strict().optional(),
 }).strict().refine(input => input.action === 'set' ? Number(input.target !== undefined) + Number(input.targetIsrael !== undefined) === 1
@@ -72,6 +66,12 @@ function requestKey(request: Request) {
 
 function integerQuery(value: unknown, fallback: number) {
   return value === undefined ? fallback : z.coerce.number().int().min(0).max(1_000_000).parse(value);
+}
+
+// optional services are absent in some tests and configurations.
+function available<T>(service: T | undefined, code: string, message: string): T {
+  if (!service) throw new GameError(code, message, 503, true);
+  return service;
 }
 
 export function createApp(options: AppOptions) {
@@ -104,7 +104,7 @@ export function createApp(options: AppOptions) {
   // a resized profile photo fits here without raising limits for trading routes.
   app.use('/api/me/profile', express.json({ limit: '64kb' }));
   app.use(express.json({ limit: '12kb' }));
-  app.get('/health', (_request, response) => response.json({ status: 'ok', version: '1.4.0', release: 'demo-controls-v4',
+  app.get('/health', (_request, response) => response.json({ status: 'ok', version: '1.5.0', release: 'final-cleanup-v5',
     commit: /^[a-f0-9]{40}$/i.test(process.env.RENDER_GIT_COMMIT ?? '') ? process.env.RENDER_GIT_COMMIT : null }));
 
   const router = express.Router();
@@ -151,7 +151,8 @@ export function createApp(options: AppOptions) {
       response.locals.gameServices = await options.testRealmServices(uid(response));
     }
     response.locals.testRealm = Boolean(test);
-    const independent = /^\/(?:me\/profile|market\/current|news|reference\/fx|admin\/feeds)(?:\/|$)/.test(request.path);
+    // profile and reference rate do not depend on game time.
+    const independent = /^\/(?:me\/profile|reference\/fx)(?:\/|$)/.test(request.path);
     const worker = /^\/admin\/clock\/jobs\//.test(request.path);
     const receipt = request.method === 'GET' && /^\/admin\/clock\/requests\//.test(request.path);
     if (!independent && !worker && !receipt) await selected(response).clock?.synchronize();
@@ -161,14 +162,13 @@ export function createApp(options: AppOptions) {
     const input = initializeInput.parse(request.body);
     response.json(await selected(response).game.initialize(uid(response), input.displayName));
   });
+  const profile = () => available(options.profile, 'PROFILE_UNAVAILABLE', 'Profile settings are temporarily unavailable.');
   router.get('/me/profile', async (_request, response) => {
-    if (!options.profile) throw new GameError('PROFILE_UNAVAILABLE', 'Profile settings are temporarily unavailable.', 503, true);
-    response.json({ profile: await options.profile.get(uid(response)) });
+    response.json({ profile: await profile().get(uid(response)) });
   });
   router.post('/me/profile', async (request, response) => {
     const input = profileInput.parse(request.body);
-    if (!options.profile) throw new GameError('PROFILE_UNAVAILABLE', 'Profile settings are temporarily unavailable.', 503, true);
-    response.json({ profile: await options.profile.save(uid(response), input) });
+    response.json({ profile: await profile().save(uid(response), input) });
   });
   router.get('/world', async (_request, response) => {
     const services = selected(response);
@@ -176,57 +176,34 @@ export function createApp(options: AppOptions) {
   });
   router.get('/portfolio', async (_request, response) => response.json(await selected(response).game.getPortfolio(uid(response))));
   router.get('/performance', async (_request, response) => {
-    const performance = selected(response).performance;
-    if (!performance) throw new GameError('REPORT_UNAVAILABLE', 'Performance is temporarily unavailable.', 503, true);
+    const performance = available(selected(response).performance, 'REPORT_UNAVAILABLE', 'Performance is temporarily unavailable.');
     response.json(await performance.get(uid(response)));
   });
   router.get('/market', async (_request, response) => response.json(await selected(response).game.getMarket()));
-  router.get('/market/current', async (_request, response) => {
-    const access = options.currentMarketAccess ?? 'admin';
-    if (access === 'disabled' || !options.currentMarket) throw new GameError('CURRENT_MARKET_UNAVAILABLE', 'Current quote access is unavailable.', 503, true);
-    if (access === 'admin' && !response.locals.isAdmin) throw new GameError('FEED_ACCESS_RESTRICTED', 'This source is available only in the owner preview. Use the public market panel.', 403);
-    response.json({ ...await options.currentMarket.get(), access });
-  });
-  router.get('/news', async (_request, response) => {
-    const access = options.newsAccess ?? 'admin';
-    if (access === 'admin' && !response.locals.isAdmin) throw new GameError('FEED_ACCESS_RESTRICTED', 'This news source is available only in the owner preview. Use the public news panel.', 403);
-    if (access === 'disabled' || !options.news) throw new GameError('NEWS_NOT_CONFIGURED', 'The news API is not configured on this server.', 503);
-    response.json({ ...await options.news.get(), access });
-  });
   router.get('/reference/fx', async (_request, response) => {
-    if (!options.bankIsrael) throw new GameError('REFERENCE_FX_UNAVAILABLE', 'The Bank of Israel reference rate is temporarily unavailable.', 503, true);
-    response.json(await options.bankIsrael.get());
+    const bankIsrael = available(options.bankIsrael, 'REFERENCE_FX_UNAVAILABLE', 'The Bank of Israel reference rate is temporarily unavailable.');
+    response.json(await bankIsrael.get());
   });
+  const insights = (response: Response) => available(selected(response).insights, 'MARKET_UNAVAILABLE', 'Market details are temporarily unavailable.');
   router.get('/instruments/:id/history', async (request, response) => {
-    const insights = selected(response).insights;
-    if (!insights) throw new GameError('MARKET_UNAVAILABLE', 'Market details are temporarily unavailable.', 503, true);
-    response.json(await insights.history(instrumentIdInput.parse(request.params.id)));
+    response.json(await insights(response).history(instrumentIdInput.parse(request.params.id)));
   });
   router.get('/watchlist', async (_request, response) => {
-    const insights = selected(response).insights;
-    if (!insights) throw new GameError('MARKET_UNAVAILABLE', 'Your watchlist is temporarily unavailable.', 503, true);
-    response.json(await insights.getWatchlist(uid(response)));
+    response.json(await insights(response).getWatchlist(uid(response)));
   });
   router.post('/watchlist', async (request, response) => {
-    const insights = selected(response).insights;
-    if (!insights) throw new GameError('MARKET_UNAVAILABLE', 'Your watchlist is temporarily unavailable.', 503, true);
-    response.json(await insights.setWatch(uid(response), watchInput.parse(request.body)));
+    response.json(await insights(response).setWatch(uid(response), watchInput.parse(request.body)));
   });
   router.post('/watchlist/remove', async (request, response) => {
     const input = z.object({ instrumentId: instrumentIdInput }).strict().parse(request.body);
-    const insights = selected(response).insights;
-    if (!insights) throw new GameError('MARKET_UNAVAILABLE', 'Your watchlist is temporarily unavailable.', 503, true);
-    response.json(await insights.removeWatch(uid(response), input.instrumentId));
+    response.json(await insights(response).removeWatch(uid(response), input.instrumentId));
   });
+  const quiz = (response: Response) => available(selected(response).quiz, 'QUIZ_UNAVAILABLE', 'The daily quiz is temporarily unavailable.');
   router.get('/daily-quiz', async (_request, response) => {
-    const quiz = selected(response).quiz;
-    if (!quiz) throw new GameError('QUIZ_UNAVAILABLE', 'The daily quiz is temporarily unavailable.', 503, true);
-    response.json(await quiz.get(uid(response)));
+    response.json(await quiz(response).get(uid(response)));
   });
   router.post('/daily-quiz/answer', async (request, response) => {
-    const quiz = selected(response).quiz;
-    if (!quiz) throw new GameError('QUIZ_UNAVAILABLE', 'The daily quiz is temporarily unavailable.', 503, true);
-    response.json(await quiz.answer(uid(response), quizInput.parse(request.body)));
+    response.json(await quiz(response).answer(uid(response), quizInput.parse(request.body)));
   });
   router.get('/orders', async (request, response) => {
     const before = request.query.beforeSequence === undefined ? undefined : integerQuery(request.query.beforeSequence, 0);
@@ -249,40 +226,21 @@ export function createApp(options: AppOptions) {
     if (!response.locals.isAdmin) throw new GameError('FORBIDDEN', 'An administrator is required.', 403);
     next();
   });
-  router.post('/admin/feeds/current-market/check', async (request, response) => {
-    z.object({}).strict().parse(request.body ?? {});
-    z.object({}).strict().parse(request.query);
-    if (options.currentMarketAccess === 'disabled' || !options.currentMarket?.checkSample) {
-      throw new GameError('CURRENT_MARKET_UNAVAILABLE', 'Current quote access is unavailable.', 503, true);
-    }
-    const result = await options.currentMarket.checkSample();
-    log({ event: 'current_market_diagnostic', requestId: response.locals.requestId,
-      attemptedSymbols: result.diagnostic.attemptedSymbols, refreshedSymbols: result.diagnostic.refreshedSymbols,
-      status: result.status, failureCode: result.failureCode, nextRefreshAt: result.nextRefreshAt });
-    response.json(result);
-  });
+  const clock = (response: Response) => available(selected(response).clock, 'CLOCK_UNAVAILABLE', 'Clock controls are not configured.');
   router.post('/admin/clock/configure', async (request, response) => {
     const input = clockInput.parse(request.body);
-    const clock = selected(response).clock;
-    if (!clock) throw new GameError('CLOCK_UNAVAILABLE', 'Automatic clock controls are not configured.', 503);
-    response.json(await clock.configure(uid(response), input, requestKey(request)));
+    response.json(await clock(response).configure(uid(response), input, requestKey(request)));
   });
   router.get('/admin/clock/audit', async (_request, response) => {
-    const clock = selected(response).clock;
-    if (!clock) throw new GameError('CLOCK_UNAVAILABLE', 'Clock audit is not configured.', 503);
-    response.json(await clock.audit());
+    response.json(await clock(response).audit());
   });
   router.get('/admin/clock/targets', async (_request, response) => {
-    const clock = selected(response).clock;
-    if (!clock) throw new GameError('CLOCK_UNAVAILABLE', 'Clock targets are not configured.', 503);
-    response.json(await clock.targets());
+    response.json(await clock(response).targets());
   });
   router.get('/admin/clock/requests/:key', async (request, response) => {
     const key = z.string().uuid().parse(request.params.key);
     const worldId = request.query.worldId === undefined ? undefined : worldIdInput.parse(request.query.worldId);
-    const clock = selected(response).clock;
-    if (!clock) throw new GameError('CLOCK_UNAVAILABLE', 'Clock receipts are not configured.', 503);
-    response.json(await clock.requestStatus(key, worldId));
+    response.json(await clock(response).requestStatus(key, worldId));
   });
   router.post('/admin/clock/advance', async (request, response) => {
     const input = advanceInput.parse(request.body);

@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useGame } from '@/context/GameContext';
 import { Badge, Button, Card, CardTitle, Copy, Eyebrow, Notice } from '@/components/ui/kit';
+import { israelDateTime } from '@/utils/admin-clock';
 
 interface Quiz {
   worldId: string;
@@ -21,7 +22,8 @@ export function DailyQuiz({ compact = false }: { compact?: boolean }) {
   const { world, testRealm } = useGame();
   if (!user || !world) return null;
   if (world.status === 'advancing' || world.clock?.syncing) return <Card style={{ gap: 12 }}><Eyebrow>The daily question</Eyebrow><Copy muted>The game clock is moving. Your question will update when it finishes.</Copy></Card>;
-  const gameDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(world.clock?.targetNow || world.now));
+  // a new game day in israel loads a new question, even without a price event.
+  const gameDay = israelDateTime(world.clock?.targetNow || world.now).date;
   return <QuizCard key={`${user.uid}/${testRealm ? 'test' : 'shared'}/${world.id}/${world.revision}/${gameDay}`} uid={user.uid} worldId={world.id} revision={world.revision} compact={compact} />;
 }
 

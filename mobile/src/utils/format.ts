@@ -15,9 +15,9 @@ export function percent(value: string | number | undefined, signed = false) {
   return `${signed && amount > 0 ? '+' : ''}${amount.toFixed(2)}%`;
 }
 
-export function dateTime(value: string | undefined | null, timeZone = 'Asia/Jerusalem') {
+export function dateTime(value: string | undefined | null) {
   if (!value || Number.isNaN(new Date(value).getTime())) return '—';
-  return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone, hour12: false }).format(new Date(value));
+  return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem', hour12: false }).format(new Date(value));
 }
 
 export function day(value: string | undefined) {

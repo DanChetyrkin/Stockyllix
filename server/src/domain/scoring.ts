@@ -4,12 +4,13 @@ import { decimal, formatDecimal, portfolioValue, weeklyReturn } from './valuatio
 export function rankPortfolios(dataset: Dataset, snapshot: MarketSnapshot, portfolios: Portfolio[]): LeaderboardRow[] {
   const entries = portfolios.map((portfolio) => {
     const value = portfolio.week.finalValueILS === undefined ? portfolioValue(dataset, snapshot, portfolio) : decimal(portfolio.week.finalValueILS);
-    // settlement dust must not decide a percentile rank
+    // round first, so tiny settlement differences cannot decide a rank.
     const returns = decimal(formatDecimal(weeklyReturn(value, portfolio.week), 12));
     const mddPct = decimal(formatDecimal(decimal(portfolio.week.mddRatio).mul(100), 12));
     return { portfolio, value, returns, mddPct };
   });
   const eligible = entries.filter((entry) => entry.portfolio.week.eligible);
+  // percentile = 100 × (players - rank) / (players - 1); equal results share a rank.
   const percentile = (better: number) => eligible.length <= 1 ? decimal(100) : decimal(100).mul(eligible.length - 1 - better).div(eligible.length - 1);
   const percentiles = (field: 'returns' | 'mddPct', direction: number) => {
     const sorted = [...eligible].sort((a, b) => a[field].cmp(b[field]) * direction);

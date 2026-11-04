@@ -1,10 +1,10 @@
-export type ClockAction = 'pause' | 'resume' | 'historical' | 'realtime' | 'set' | 'next' | 'next_order';
+export type ClockAction = 'pause' | 'resume' | 'set' | 'next' | 'next_order';
 export interface IsraelDateTime { date: string; time: string }
 export interface ClockRequest { action: ClockAction; target?: string; targetIsrael?: IsraelDateTime; key: string; worldId: string }
 
 export const clockActionLabels: Record<ClockAction, string> = {
-  pause: 'Pause clock', resume: 'Resume clock', historical: 'Historical playback',
-  realtime: 'Real time', set: 'Set game time', next: 'Next opening or closing', next_order: 'Next pending execution',
+  pause: 'Pause clock', resume: 'Resume clock', set: 'Set game time',
+  next: 'Next opening or closing', next_order: 'Next pending execution',
 };
 
 export function validCalendarDate(value: string) {

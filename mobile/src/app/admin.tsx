@@ -234,13 +234,16 @@ export default function AdminScreen() {
     <PageTitle title="World controls" subtitle="Control the selected game clock. All dates and times below use Israel time." action={<Button compact variant="quiet" loading={busy} onPress={() => void refreshWorld()}>Refresh</Button>} />
     {!world ? <Copy muted>Connecting to world controls…</Copy> : !isAdmin ? <Empty title="Administrator access required" detail="Only a server-authorized administrator can change game time." /> : <>
       <View style={{ gap: 10, padding: 16, backgroundColor: testRealm ? palette.mint : palette.soft, borderRadius: 12 }}>
-        <View style={[ui.row, { justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }]}><Text style={{ fontSize: 15, fontWeight: '700', color: palette.ink }}>{testRealm ? 'Isolated test game' : 'Shared league game'}</Text><Button compact variant="secondary" disabled={busy || !ready || !!saved || !!newGameDraft} onPress={() => void changeScope()}>{testRealm ? 'Return to shared league' : 'Open isolated test game'}</Button></View>
+        <View style={[ui.row, { justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }]}>
+          <Text style={{ fontSize: 15, fontWeight: '700', color: palette.ink }}>{testRealm ? 'Isolated test game' : 'Shared league game'}</Text>
+          <Button compact variant="secondary" disabled={busy || !ready || !!saved || !!newGameDraft} onPress={() => void changeScope()}>{testRealm ? 'Return to shared league' : 'Open isolated test game'}</Button>
+        </View>
         <Copy muted style={{ fontSize: 12 }}>{testRealm ? 'Only your test account and this test game are affected. Shared players and portfolios stay separate.' : 'Changes here affect every player. Open an isolated test game before experimenting.'}</Copy>
       </View>
       {localScopeReady && error && <Notice tone="error">{error}</Notice>}
       {clock?.error && <Notice tone="error">{synchronizationMessage(clock.error)}</Notice>}
       {localScopeReady && message && <Copy style={{ color: palette.green }}>{message}</Copy>}
-      {localScopeReady && saved && !busy && <Notice action={<Button compact variant="secondary" onPress={() => { setAdvanced(true); void inspectSaved(); }}>Check request</Button>}>{savedState === 'checking' ? 'Checking a previous clock request…' : savedState === 'not_accepted' ? 'A saved clock change has not been accepted. Review it in Advanced before retrying.' : 'The outcome of a previous clock change is unknown. Check its server status before retrying.'}</Notice>}
+      {localScopeReady && saved && !busy && <Notice action={<Button compact variant="secondary" onPress={() => { setAdvanced(true); void inspectSaved(); }}>Check request</Button>}>{savedRequestText(savedState)}</Notice>}
       {localScopeReady && busy && <Copy muted>{processing || syncing ? 'Updating game time and processing reached events…' : 'Applying clock change…'}</Copy>}
       <View style={{ gap: 12 }}>
         <View style={[ui.row, { justifyContent: 'space-between', flexWrap: 'wrap' }]}><CardTitle>Game time</CardTitle><Badge tone={syncing ? 'warning' : 'neutral'}>{finished ? 'Period complete' : syncing ? 'Synchronizing' : clock?.running ? 'Running · 1×' : 'Paused'}</Badge></View>
@@ -284,9 +287,32 @@ export default function AdminScreen() {
         <Button compact variant="quiet" onPress={() => setAdvanced(value => !value)}>{advanced ? 'Hide advanced controls ↑' : 'Advanced · history and recovery ↓'}</Button>
         {localScopeReady && advanced && <>
           <Copy muted style={{ fontSize: 12 }}>Israel time now: {clock ? dateTime(clock.serverNow) : 'Connecting…'} · Prices processed through {dateTime(world.now)}.</Copy>
-          {(saved || storageFailed || newGameDraft) && <View style={{ gap: 10 }}><CardTitle>Saved request recovery</CardTitle>{saved && <><Copy>{clockActionLabels[saved.action]}{saved.targetIsrael ? ` · ${saved.targetIsrael.date} ${saved.targetIsrael.time} Israel` : saved.target ? ` · ${dateTime(saved.target)}` : ''}</Copy><Copy muted>{savedState === 'checking' ? 'Checking the server receipt…' : savedState === 'not_accepted' ? 'The server has no accepted receipt for this request. Retrying uses its original request id and inputs.' : 'The server could not confirm this request. Check status first; a retry always uses its original request id.'}</Copy><View style={[ui.row, { flexWrap: 'wrap' }]}><Button compact variant="secondary" disabled={busy} onPress={() => void inspectSaved()}>Check server receipt</Button><Button compact disabled={busy || savedState === 'checking' || syncing} onPress={() => void configure(saved.action)}>Retry same request</Button></View></>}<Button compact variant="quiet" disabled={busy} onPress={() => void clearLocalRequest()}>Check server and clear local retry data</Button><Copy muted style={{ fontSize: 12 }}>Clearing affects this device only. It does not cancel server jobs, accepted time changes or orders.</Copy></View>}
-          <View style={{ gap: 12 }}><CardTitle>Synchronization</CardTitle>{world.job ? <><Copy>{world.job.completedEvents} / {world.job.totalEvents} events completed · {number(world.job.processedPortfolios, 0)} account updates</Copy>{world.job.lastError && world.job.lastError !== clock?.error && <Copy style={{ color: palette.red }}>{synchronizationMessage(world.job.lastError)}</Copy>}<View style={[ui.row, { flexWrap: 'wrap' }]}>{processing ? <Button compact variant="secondary" onPress={() => { keepProcessing.current = false; }}>Stop extra processing requests</Button> : <><Button compact loading={busy} disabled={busy} onPress={() => void step(true)}>Resume synchronization</Button><Button compact variant="secondary" disabled={busy} onPress={() => void step(false)}>Process one step</Button></>}</View></> : <Copy muted>No unfinished job. The server catches up from saved clock anchors after sleep or restart.</Copy>}</View>
-          <View style={{ gap: 8 }}><CardTitle>Real-time trading</CardTitle><Copy muted>{clock?.realtimeUnavailableReason || 'Unavailable until current execution prices and FX are verified. Historical prices keep their original dates.'}</Copy></View>
+          {(saved || storageFailed || newGameDraft) && <View style={{ gap: 10 }}>
+            <CardTitle>Saved request recovery</CardTitle>
+            {saved && <>
+              <Copy>{clockActionLabels[saved.action]}{saved.targetIsrael ? ` · ${saved.targetIsrael.date} ${saved.targetIsrael.time} Israel` : saved.target ? ` · ${dateTime(saved.target)}` : ''}</Copy>
+              <Copy muted>{savedRequestText(savedState)}</Copy>
+              <View style={[ui.row, { flexWrap: 'wrap' }]}>
+                <Button compact variant="secondary" disabled={busy} onPress={() => void inspectSaved()}>Check server receipt</Button>
+                <Button compact disabled={busy || savedState === 'checking' || syncing} onPress={() => void configure(saved.action)}>Retry same request</Button>
+              </View>
+            </>}
+            <Button compact variant="quiet" disabled={busy} onPress={() => void clearLocalRequest()}>Check server and clear local retry data</Button>
+            <Copy muted style={{ fontSize: 12 }}>Clearing affects this device only. It does not cancel server jobs, accepted time changes or orders.</Copy>
+          </View>}
+          <View style={{ gap: 12 }}>
+            <CardTitle>Synchronization</CardTitle>
+            {world.job ? <>
+              <Copy>{world.job.completedEvents} / {world.job.totalEvents} events completed · {number(world.job.processedPortfolios, 0)} account updates</Copy>
+              {world.job.lastError && world.job.lastError !== clock?.error && <Copy style={{ color: palette.red }}>{synchronizationMessage(world.job.lastError)}</Copy>}
+              <View style={[ui.row, { flexWrap: 'wrap' }]}>
+                {processing ? <Button compact variant="secondary" onPress={() => { keepProcessing.current = false; }}>Stop extra processing requests</Button> : <>
+                  <Button compact loading={busy} disabled={busy} onPress={() => void step(true)}>Resume synchronization</Button>
+                  <Button compact variant="secondary" disabled={busy} onPress={() => void step(false)}>Process one step</Button>
+                </>}
+              </View>
+            </> : <Copy muted>No unfinished job. The server catches up from saved clock anchors after sleep or restart.</Copy>}
+          </View>
           {ready && <View style={{ gap: 12 }}><CardTitle>Recent clock changes</CardTitle><ClockAudit key={storageKey} /></View>}
         </>}
       </View>
@@ -299,12 +325,17 @@ function TargetAction({ title, target, loading, empty, count, disabled, onPress,
   return <View style={{ gap: 8 }}><CardTitle>{title}</CardTitle>{target ? <><Text style={{ color: palette.ink, fontSize: 17, fontWeight: '600', fontVariant: ['tabular-nums'] }}>{dateTime(target.at)}</Text><Copy muted>{target.market === 'US' ? 'United States' : 'Tel Aviv'} · {target.kind === 'MARKET_OPEN' ? 'Market opens' : 'Market closes'}{count !== undefined ? ` · ${count} pending ${count === 1 ? 'order' : 'orders'}` : ''}</Copy></> : <Copy muted>{loading ? 'Checking scheduled events…' : empty}</Copy>}<Button variant="secondary" disabled={disabled} onPress={onPress}>{button}</Button></View>;
 }
 
-interface ClockAuditResponse { worldId: string; entries: { action: ClockAction; at: string; after: { mode: string; running: boolean; anchorGameAt: string } }[] }
+interface ClockAuditResponse { worldId: string; entries: { action: ClockAction; at: string; after: { running: boolean; anchorGameAt: string } }[] }
 function ClockAudit() {
   const resource = useApi<ClockAuditResponse>('/admin/clock/audit');
   return <DataState loading={resource.loading} error={resource.error} hasData={!!resource.data} retry={() => void resource.refresh()}><View style={{ gap: 12 }}>{resource.data?.entries.length === 0 && <Copy muted>No clock changes recorded in this game.</Copy>}{resource.data?.entries.map((entry, index) => <View key={`${entry.at}/${index}`} style={{ gap: 4 }}><Copy style={{ fontWeight: '600' }}>{clockActionLabels[entry.action] || entry.action} · {dateTime(entry.at)}</Copy><Copy muted style={{ fontSize: 12 }}>Game time {dateTime(entry.after.anchorGameAt)} · {entry.after.running ? 'Running' : 'Paused'}</Copy></View>)}</View></DataState>;
 }
 
+function savedRequestText(state: RequestState) {
+  if (state === 'checking') return 'Checking a previous clock request with the server…';
+  if (state === 'not_accepted') return 'The server has no record of this saved clock change. Retrying uses its original request id and inputs.';
+  return 'The outcome of a previous clock change is unknown. Check its server receipt before retrying.';
+}
 function receiptPath(request: ClockRequest) { return `/admin/clock/requests/${encodeURIComponent(request.key)}?worldId=${encodeURIComponent(request.worldId)}`; }
 function receiptMessage(receipt: ClockReceipt) {
   if (receipt.processingStatus === 'syncing' || receipt.processingStatus === 'accepted') return 'The server already accepted the clock change. Processing continues safely; it was not submitted again.';

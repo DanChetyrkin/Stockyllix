@@ -6,10 +6,10 @@ import type { ClockJob, Dataset, LeaderboardRow, Order, OrderInput, Portfolio, V
 import { rankPortfolios } from '../domain/scoring.js';
 import { executeOrder, parseAmount, reserveOrder } from '../domain/trading.js';
 import { decimal, formatDecimal, instrumentPriceILS, portfolioSummary, portfolioValue, sampleWeek, weeklyReturn } from '../domain/valuation.js';
-import { getWeekId, isEligibleJoin, isMarketOpen, nextExecution } from '../world/index.js';
+import { dueEvents, getWeekId, isEligibleJoin, isMarketOpen, nextExecution } from '../world/index.js';
 import { previousSessionClose, priceChangePct } from '../world/price-change.js';
 import { DatasetRegistry, datasetRegistry } from '../world/registry.js';
-import { clockPath, clockTarget, type WorldClock } from '../domain/clock.js';
+import { readGameTime } from '../domain/clock.js';
 
 const PAGE_SIZE = 25;
 const RANKING_PAGE_BATCH = 100;
@@ -107,11 +107,10 @@ export class GameService {
     return world;
   }
 
+  // trading waits until every reached price event is applied to all portfolios.
   private async tradingTime(tx: Transaction, world: World, dataset: Dataset) {
-    const clock = await tx.get<WorldClock>(clockPath(world.id));
-    if (!clock) return world.now;
-    const target = clockTarget(clock, world, dataset.endsAt, this.now().getTime());
-    if (dataset.events.some(event => Date.parse(event.at) > Date.parse(world.now) && Date.parse(event.at) <= Date.parse(target))) {
+    const target = await readGameTime(tx, world, dataset.endsAt, this.now().getTime());
+    if (dueEvents(dataset, world.now, target).length) {
       throw new GameError('CLOCK_SYNCING', 'The server is completing due market events. Wait briefly, then retry the same request.', 423, true);
     }
     return target;
@@ -150,25 +149,12 @@ export class GameService {
     this.requireIdle(world);
     const portfolio = await this.store.get<Portfolio>(playerPath(world.id, uid));
     if (!portfolio) throw new GameError('PLAYER_NOT_INITIALIZED', 'Create your player profile first.', 404);
-    const realDate = this.realDate();
-    const review = await this.store.get<ReviewRecord>(`${playerPath(world.id, uid)}/reviews/${realDate}`);
-    const activity = review ? undefined : await this.store.get<VisitRecord>(`${playerPath(world.id, uid)}/activity/current`);
     const summary = portfolioSummary(dataset, world.snapshot, portfolio);
-    const baseline = review?.baselineValueILS ?? activity?.lastValueILS ?? '1000000';
-    const valueChangeILS = formatDecimal(portfolioValue(dataset, world.snapshot, portfolio).sub(baseline), 2);
     const largest = [...summary.holdings].sort((a, b) => decimal(b.valueILS).cmp(a.valueILS))[0];
     await this.checkRead(world);
     return {
       worldId: world.id, revision: world.revision, portfolio, summary,
-      dailyReview: {
-        worldDate: DateTime.fromISO(world.now).setZone('Asia/Jerusalem').toISODate(), realDate, seenToday: Boolean(review),
-        returnedOnLaterRealDay: review?.returnedOnLaterRealDay ?? false,
-        valueChangeILS, previousReviewDate: review?.previousReviewDate ?? activity?.lastRealDate ?? null,
-        pendingOrders: portfolio.pendingOrderIds.length,
-        headline: `Your weekly return is ${formatDecimal(summary.weeklyReturnPct, 2)}%`,
-        insight: largest ? `${largest.instrumentId} is your largest holding (${largest.weightPct}%). Diversification limits exposure to one instrument.` : 'Cash has no price drawdown. Compare return and stability together before deciding how to invest.',
-        largestHolding: largest ?? null,
-      },
+      insight: largest ? `${largest.instrumentId} is your largest holding (${largest.weightPct}%). Diversification limits exposure to one instrument.` : 'Cash has no price drawdown. Compare return and stability together before deciding how to invest.',
     };
   }
 
@@ -236,6 +222,7 @@ export class GameService {
       const dataset = this.datasets.get(world.datasetId);
       const path = playerPath(world.id, uid);
       const portfolio = await tx.get<Portfolio>(path);
+      // the same request key returns the saved order instead of reserving cash again.
       const id = requestId(key);
       const existing = await tx.get<Order>(`${path}/orders/${id}`);
       if (existing) {
@@ -253,7 +240,7 @@ export class GameService {
         sequence: portfolio.nextSequence, status: 'pending', submittedAt, createdAt: this.now().toISOString(),
         executeEventId: event.id, executeAt: event.at, requestKey: key,
       };
-      const next = reserveOrder(dataset, portfolio, order, input, world.snapshot);
+      const next = reserveOrder(dataset, portfolio, order, world.snapshot);
       tx.set(path, next);
       tx.set(`${path}/orders/${id}`, order);
       return order;
@@ -275,9 +262,10 @@ export class GameService {
         return;
       }
       this.requireIdle(world);
+      // a jump becomes a saved job that walks every event up to the target, in order.
       if (timestamp <= Date.parse(world.now) || timestamp > Date.parse(dataset.endsAt)) throw new GameError('INVALID_TIME', 'Target must be after the world clock and within the dataset.', 400);
       const eventIndex = dataset.events.findIndex((event) => Date.parse(event.at) > Date.parse(world.now));
-      const totalEvents = dataset.events.filter((event) => Date.parse(event.at) > Date.parse(world.now) && Date.parse(event.at) <= timestamp).length;
+      const totalEvents = dueEvents(dataset, world.now, target).length;
       const job: ClockJob = {
         id: randomUUID(), target: new Date(timestamp).toISOString(), requestKey: key, fence: 0, leaseOwner: null, leaseUntil: 0,
         eventIndex: eventIndex === -1 ? dataset.events.length : eventIndex, afterUid: null,
@@ -291,6 +279,7 @@ export class GameService {
 
   private jobResponse(world: World) { return { worldId: world.id, revision: world.revision, status: world.status, job: this.publicWorld(world).job }; }
 
+  // a lease with a fence number stops a stale worker from writing after another one took over.
   private requireLease(world: World, jobId: string, owner: string, fence: number) {
     if (world.status !== 'advancing' || !world.job || world.job.id !== jobId || world.job.leaseOwner !== owner || world.job.fence !== fence || world.job.leaseUntil <= this.now().getTime()) throw new GameError('LEASE_LOST', 'This worker lost its clock lease. Retry to resume safely.', 409, true);
     return world.job;
@@ -330,6 +319,7 @@ export class GameService {
     const job = claimed.job!;
     const event = dataset.events[job.eventIndex];
     if (!event || Date.parse(event.at) > Date.parse(job.target)) throw new Error('invalid clock event cursor');
+    // players are processed in pages; the world moves to the event only after every portfolio has it.
     const players = await this.store.list<Portfolio>(`${worldPath(claimed.id)}/players`, { orderBy: 'uid', limit: this.batchSize, ...(job.afterUid ? { startAfter: job.afterUid } : {}) });
     const started = Date.now();
     let processed = 0;
@@ -361,10 +351,12 @@ export class GameService {
       this.requireLease(world, jobId, owner, fence);
       const path = playerPath(worldId, uid);
       let portfolio = await tx.get<Portfolio>(path);
+      // the event marker is saved with the portfolio, so a retried step never fills an order twice.
       if (!portfolio || portfolio.lastEventId === event.id) return;
       const pending = await Promise.all(portfolio.pendingOrderIds.map((id) => tx.get<Order>(`${path}/orders/${id}`)));
       if (pending.some((order) => !order)) throw new GameError('DATA_INTEGRITY', 'A reserved order is missing. The clock is paused for investigation.', 503);
       const changed: Order[] = [];
+      // a new week keeps cash and holdings but restarts return and drawdown.
       if (event.kind === 'WEEK_START') {
         const value = portfolioValue(dataset, event.snapshot, portfolio).toFixed(12);
         portfolio = { ...portfolio, week: { weekId: event.weekId, startValueILS: value, peakValueILS: value, mddRatio: '0', eligible: true } };

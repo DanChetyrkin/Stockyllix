@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 import { DateTime } from 'luxon';
 import type { Dataset, EventKind, Instrument, Market, MarketSnapshot, WorldEvent } from '../domain/model.js';
 import { buildSession, getWeekId, validateDataset, validateFxRows, WORLD_ZONE, type FxRow } from './index.js';
-import type { DailyBar } from './twelve-data.js';
+
+export interface DailyBar { date: string; open: string; close: string }
 
 const priority: Record<EventKind, number> = { WEEK_END: 0, WEEK_START: 1, FX: 2, MARKET_OPEN: 3, MARKET_CLOSE: 4 };
 type Draft = Omit<WorldEvent, 'snapshot'> & { prices?: Record<string, string>; fx?: FxRow };
@@ -59,6 +60,7 @@ export function buildHistoricalDataset(instruments: Instrument[], bars: Record<s
       }
     }
   }
+  // each fx rate becomes usable only when published, so no order sees a later rate.
   for (const row of fx) if (Date.parse(row.availableAt) > Date.parse(startsAt) && Date.parse(row.availableAt) <= Date.parse(endsAt)) drafts.push({ id: `FX:${row.date}`, at: row.availableAt, kind: 'FX', weekId: getWeekId(row.availableAt), fx: row });
   drafts.sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || priority[a.kind] - priority[b.kind] || a.id.localeCompare(b.id));
   let snapshot: MarketSnapshot = { at: startsAt, prices, fx: baselineFx.rate, fxAsOf: baselineFx.date };

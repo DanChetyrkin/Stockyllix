@@ -27,15 +27,11 @@ export interface World {
   nextEvent: { at: string; kind: string; market?: Market } | null;
   job: ClockJob | null;
   clock?: {
-    mode: 'historical' | 'custom' | 'realtime';
     running: boolean;
     serverNow: string;
     targetNow: string;
     syncing: boolean;
     finished: boolean;
-    realtimeAvailable: boolean;
-    realtimeUnavailableReason: string;
-    autoProgresses: boolean;
     error: string | null;
   };
 }
@@ -76,19 +72,6 @@ export interface Portfolio {
   joinedAt: string;
 }
 
-export interface DailyReview {
-  worldDate: string;
-  realDate: string;
-  seenToday: boolean;
-  returnedOnLaterRealDay: boolean;
-  headline: string;
-  insight: string;
-  largestHolding: HoldingSummary | null;
-  valueChangeILS: string;
-  previousReviewDate: string | null;
-  pendingOrders: number;
-}
-
 export interface HoldingSummary {
   instrumentId: string;
   units: string;
@@ -96,15 +79,15 @@ export interface HoldingSummary {
   priceILS: string;
   valueILS: string;
   weightPct: string;
-  maxSellAmountILS?: string;
+  maxSellAmountILS: string;
 }
 
 export interface PortfolioResponse {
   worldId: string;
   revision: number;
   portfolio: Portfolio;
-  summary: { valueILS: string; cashILS: string; holdingsValueILS?: string; cashWeightPct: string; reservedCashILS: string; availableCashILS: string; weeklyReturnPct: string; mddPct: string; eligible: boolean; holdings: HoldingSummary[] };
-  dailyReview: DailyReview;
+  summary: { valueILS: string; cashILS: string; holdingsValueILS: string; cashWeightPct: string; reservedCashILS: string; availableCashILS: string; weeklyReturnPct: string; mddPct: string; eligible: boolean; holdings: HoldingSummary[] };
+  insight: string;
 }
 
 export interface Order {

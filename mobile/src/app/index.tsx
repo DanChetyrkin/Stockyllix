@@ -21,7 +21,6 @@ export default function PortfolioScreen() {
   const { user } = useAuth();
   const summary = portfolio.data?.summary;
   const holdings = summary?.holdings.filter(holding => Number(holding.units) > 0) || [];
-  const holdingsValue = summary?.holdingsValueILS ?? (summary ? Number(summary.valueILS) - Number(summary.cashILS) : undefined);
   const name = playerDisplayName({ portfolioName: portfolio.data?.portfolio.displayName, accountName: user?.displayName, email: user?.email });
 
   return <AppShell>
@@ -32,7 +31,7 @@ export default function PortfolioScreen() {
         <View style={{ flexDirection: compact ? 'column' : 'row', flexWrap: 'wrap', gap: compact ? 20 : 28 }}>
           <AccountFigure label="Available cash" value={money(summary?.availableCashILS)} hint="For new orders" compact={compact} />
           <AccountFigure label="Reserved cash" value={money(summary?.reservedCashILS)} hint="Waiting for pending buys" compact={compact} />
-          <AccountFigure label="Holdings value" value={money(holdingsValue)} hint="Shares and funds you own" compact={compact} />
+          <AccountFigure label="Holdings value" value={money(summary?.holdingsValueILS)} hint="Shares and funds you own" compact={compact} />
         </View>
         <View style={{ gap: 5 }}><Copy style={{ fontWeight: '600', fontSize: 13 }}>Total cash: {money(summary?.cashILS)} <Copy muted style={{ fontSize: 12 }}>({percent(summary?.cashWeightPct)} of portfolio)</Copy></Copy><Copy muted style={{ fontSize: 12 }}>Total cash includes available and reserved cash. A pending buy reserves money; it does not reduce your total portfolio value.</Copy></View>
       </Card>
@@ -66,7 +65,7 @@ export default function PortfolioScreen() {
       </Card>
       <PortfolioPerformance />
       <View style={[ui.split, compact && { flexDirection: 'column' }]}>
-        <View style={{ flex: 1, width: compact ? '100%' : undefined, gap: 10 }}><CardTitle>Portfolio insight</CardTitle><Copy muted>{portfolio.data?.dailyReview.insight || 'Review your available cash and positions before placing an order.'}</Copy><Link href="/news" asChild><Button compact variant="quiet" onPress={() => undefined}>News & daily question →</Button></Link></View>
+        <View style={{ flex: 1, width: compact ? '100%' : undefined, gap: 10 }}><CardTitle>Portfolio insight</CardTitle><Copy muted>{portfolio.data?.insight || 'Review your available cash and positions before placing an order.'}</Copy><Link href="/news" asChild><Button compact variant="quiet" onPress={() => undefined}>News & daily question →</Button></Link></View>
         <View style={{ flex: 1, width: compact ? '100%' : undefined, gap: 10 }}><CardTitle>Weekly league</CardTitle><Copy muted>85% return ranking · 15% stability ranking. Compare your portfolio with the league over the same game week.</Copy><Link href="/leaderboard" asChild><Button compact variant="quiet" onPress={() => undefined}>Open league →</Button></Link></View>
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}><Copy muted style={{ fontSize: 12 }}>20% maximum per asset at purchase · No leverage · No short selling</Copy><Badge>{world?.source === 'historical' ? 'Real historical prices' : 'Simulated prices'}</Badge></View>

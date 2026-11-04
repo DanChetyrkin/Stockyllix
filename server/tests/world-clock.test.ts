@@ -43,7 +43,6 @@ describe('persisted server-owned world clock', () => {
     expect(current.now).toBe(world.now);
     expect(current.clock.targetNow).toBe(new Date(Date.parse(world.now) + 15_000).toISOString());
     expect(current.clock.serverNow).toBe('2026-11-04T12:00:15.000Z');
-    expect(current.clock.mode).toBe('historical');
     expect(current.clock.running).toBe(true);
     expect((await game.getPortfolio('alice')).summary.cashILS).toBe('1000000.00');
   });
@@ -73,7 +72,7 @@ describe('persisted server-owned world clock', () => {
     await clock.configure('admin-user', { worldId: world.id, action: 'set', target: '2026-10-05T06:59:59Z' }, key);
     await drain(clock);
     const paused = await clock.getWorld();
-    expect(paused.clock).toMatchObject({ mode: 'custom', running: false, targetNow: '2026-10-05T06:59:59.000Z' });
+    expect(paused.clock).toMatchObject({ running: false, targetNow: '2026-10-05T06:59:59.000Z' });
     elapse(60_000);
     expect((await clock.getWorld()).clock.targetNow).toBe(paused.clock.targetNow);
     await clock.configure('admin-user', { worldId: world.id, action: 'resume' }, randomUUID());
@@ -100,23 +99,13 @@ describe('persisted server-owned world clock', () => {
     await expect(clock.configure('admin', { ...input, action: 'resume' }, key)).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
   });
 
-  it('rejects real time before changing a historical world or its audit log', async () => {
-    const { clock, world, game } = await fixture();
-    const before = await clock.getWorld();
-    const portfolio = await game.getPortfolio('alice');
-    await expect(clock.configure('admin', { worldId: world.id, action: 'realtime' }, randomUUID())).rejects.toMatchObject({ code: 'REALTIME_DATA_UNAVAILABLE' });
-    expect(await clock.getWorld()).toEqual(before);
-    expect(await game.getPortfolio('alice')).toEqual(portfolio);
-    expect((await clock.audit()).entries).toHaveLength(0);
-  });
-
   it('next-event controls use the dataset and pause custom playback', async () => {
     const { clock, world } = await fixture();
     const expected = (await clock.getWorld()).nextEvent!.at;
     await clock.configure('admin', { worldId: world.id, action: 'next' }, randomUUID());
     const current = await drain(clock);
     expect(Date.parse(current.now)).toBe(Date.parse(expected));
-    expect(current.clock).toMatchObject({ mode: 'custom', running: false });
+    expect(current.clock).toMatchObject({ running: false });
   });
 
   it('next trading event skips currency and weekly events but still processes them in between', async () => {

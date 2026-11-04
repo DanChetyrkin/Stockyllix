@@ -3,7 +3,7 @@ import { MemoryStore } from '../data/memory-store.js';
 import { GameService } from '../services/game-service.js';
 import { createDataset } from '../world/index.js';
 
-// this measures the engine, not cloud capacity or firestore contention
+// this measures the engine, not cloud capacity or firestore contention.
 const count = Number(process.argv[2] ?? 1000);
 if (!Number.isInteger(count) || count < 1 || count > 5000) throw new Error('choose between 1 and 5000 players');
 const scenario = process.argv[3] ?? 'opening';
@@ -39,7 +39,7 @@ while (state.status !== 'idle') {
 }
 const board = await game.getLeaderboard(1);
 if (board.total !== count || board.rows.some((row) => row.score !== '100.00000000')) {
-  // score formatting is not an invariant; numeric equality is
+  // compare scores as numbers; their text format may differ.
   if (board.total !== count || board.rows.some((row) => Number(row.score) !== 100)) throw new Error('ranking invariant failed');
 }
 if (scenario === 'week') {

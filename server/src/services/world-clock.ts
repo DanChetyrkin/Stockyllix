@@ -4,16 +4,16 @@ import type { DocumentStore } from '../data/store.js';
 import type { Dataset, Order, Portfolio, World } from '../domain/model.js';
 import { clockPath, clockTarget, type WorldClock } from '../domain/clock.js';
 import { GameError } from '../domain/errors.js';
+import { dueEvents, nextMarketEvent } from '../world/index.js';
 import { datasetRegistry, type DatasetRegistry } from '../world/registry.js';
 import type { GameService } from './game-service.js';
 
-type ClockAction = 'pause' | 'resume' | 'historical' | 'realtime' | 'set' | 'next' | 'next_order';
+type ClockAction = 'pause' | 'resume' | 'set' | 'next' | 'next_order';
 interface ClockInput { worldId: string; action: ClockAction; target?: string; targetIsrael?: { date: string; time: string } }
 interface ClockRequest { input: ClockInput; actor: string; target?: string; requestedAt?: string; clockVersion?: number }
 interface Context { world: World; clock: WorldClock; dataset: Dataset }
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
-const realtimeReason = 'Real-time trading needs verified current execution prices and FX. This world contains dated historical prices. Keep historical playback, or create a separately verified real-time world.';
 
 function israelTarget(input: { date: string; time: string }) {
   const local = `${input.date}T${input.time}`;
@@ -47,7 +47,7 @@ export class WorldClockService {
       let clock = await tx.get<WorldClock>(clockPath(world.id));
       if (!clock) {
         const serverNow = this.now().toISOString();
-        clock = { mode: 'historical', running: this.options.autostart !== false,
+        clock = { running: this.options.autostart !== false,
           anchorGameAt: world.job?.target ?? world.now, anchorServerAt: serverNow,
           version: 1, updatedAt: serverNow, updatedBy: 'server' };
         tx.set(clockPath(world.id), clock);
@@ -60,10 +60,8 @@ export class WorldClockService {
     const serverNow = this.now().toISOString();
     const targetNow = clockTarget(clock, world, dataset.endsAt, Date.parse(serverNow));
     const finished = Date.parse(world.now) >= Date.parse(dataset.endsAt);
-    const due = dataset.events.some(event => Date.parse(event.at) > Date.parse(world.now) && Date.parse(event.at) <= Date.parse(targetNow));
-    return { mode: clock.mode, running: clock.running && !finished, serverNow, targetNow,
-      syncing: world.status === 'advancing' || due, finished, autoProgresses: true as const,
-      realtimeAvailable: false as const, realtimeUnavailableReason: realtimeReason,
+    return { running: clock.running && !finished, serverNow, targetNow,
+      syncing: world.status === 'advancing' || dueEvents(dataset, world.now, targetNow).length > 0, finished,
       error: world.job?.lastError ?? null, version: clock.version };
   }
 
@@ -90,7 +88,7 @@ export class WorldClockService {
       if (world.job?.lastError && (world.job.retryAfter ?? 0) > this.now().getTime()) return;
       if (world.status === 'idle') {
         const target = clockTarget(clock, world, dataset.endsAt, this.now().getTime());
-        const due = dataset.events.filter(event => Date.parse(event.at) > Date.parse(world.now) && Date.parse(event.at) <= Date.parse(target));
+        const due = dueEvents(dataset, world.now, target);
         const advanceTo = due.at(-1)?.at ?? (Date.parse(target) >= Date.parse(dataset.endsAt) && Date.parse(world.now) < Date.parse(dataset.endsAt) ? dataset.endsAt : null);
         if (!advanceTo) return;
         try { await this.game.advance(advanceTo, `automatic-${hash(`${world.id}/${advanceTo}`)}`, world.id); }
@@ -103,7 +101,7 @@ export class WorldClockService {
       try { await this.game.step(latest.job.id); }
       catch (cause) {
         if (cause instanceof GameError && ['JOB_BUSY', 'LEASE_LOST', 'WORLD_CHANGED'].includes(cause.code)) return;
-        // the durable job records the cause; keep its recovery controls readable.
+        // the saved job keeps the error, so the admin screen can show it and resume later.
         const entry = { event: 'clock_sync_failed', worldId: latest.id, jobId: latest.job.id, code: cause instanceof GameError ? cause.code : 'PROCESSING_FAILED' };
         if (this.options.logger) this.options.logger(entry);
         else process.stdout.write(`${JSON.stringify(entry)}\n`);
@@ -146,7 +144,7 @@ export class WorldClockService {
   async targets() {
     const { world, dataset, clock } = await this.context();
     const gameNow = clockTarget(clock, world, dataset.endsAt, this.now().getTime());
-    const event = dataset.events.find(event => ['MARKET_OPEN', 'MARKET_CLOSE'].includes(event.kind) && Date.parse(event.at) > Date.parse(gameNow));
+    const event = nextMarketEvent(dataset, gameNow);
     const pending = await this.pendingOrders(world, dataset);
     const pointer = await this.store.get<{ worldId: string }>('system/current');
     const latest = await this.store.get<World>(`worlds/${world.id}`);
@@ -167,14 +165,13 @@ export class WorldClockService {
     const audit = await this.store.get<{ at: string; after: WorldClock }>(`worlds/${worldId}/clockAudit/${hash(key)}`);
     const target = saved.target ?? audit?.after.anchorGameAt ?? saved.input.target ?? world?.now ?? null;
     const clockVersion = saved.clockVersion ?? audit?.after.version ?? null;
-    const due = world && target && this.datasets.get(world.datasetId).events.some(event => Date.parse(event.at) > Date.parse(world.now) && Date.parse(event.at) <= Date.parse(target));
+    const due = world && target && dueEvents(this.datasets.get(world.datasetId), world.now, target).length > 0;
     const processingStatus = clock && clockVersion !== null && clock.version > clockVersion ? 'superseded'
       : world?.status === 'advancing' || due ? 'syncing' : world ? 'completed' : 'accepted';
     return { accepted: true as const, requestKey: key, worldId, action: saved.input.action, target, requestedAt: saved.requestedAt ?? audit?.at ?? null, clockVersion, processingStatus };
   }
 
   async configure(actor: string, input: ClockInput, key: string) {
-    if (input.action === 'realtime') throw new GameError('REALTIME_DATA_UNAVAILABLE', realtimeReason, 422);
     const initial = await this.context();
     const requestPath = `worlds/${input.worldId}/clockRequests/${hash(key)}`;
     const previousRequest = await this.store.get<ClockRequest>(requestPath);
@@ -203,7 +200,7 @@ export class WorldClockService {
           target = new Date(input.target).toISOString();
         }
       } else if (input.action === 'next') {
-        const next = dataset.events.find(event => ['MARKET_OPEN', 'MARKET_CLOSE'].includes(event.kind) && Date.parse(event.at) > Date.parse(currentTarget));
+        const next = nextMarketEvent(dataset, currentTarget);
         if (!next) throw new GameError('DATASET_FINISHED', 'No future market event remains. Create a separate historical test world to start earlier.', 422);
         target = next.at;
       } else if (input.action === 'next_order') {
@@ -213,9 +210,8 @@ export class WorldClockService {
       }
       if (Date.parse(target) < Date.parse(currentTarget)) throw new GameError('CLOCK_BACKWARD', 'A world cannot move backwards. Create a separate test world for an earlier date.', 422);
       if (Date.parse(target) > Date.parse(dataset.endsAt)) throw new GameError('DATASET_FINISHED', 'The selected time is outside the historical price period.', 422);
-      const custom = input.action === 'set' || input.action === 'next' || input.action === 'next_order';
-      const after: WorldClock = { ...before, mode: custom ? 'custom' : input.action === 'historical' ? 'historical' : before.mode,
-        running: custom || input.action === 'pause' ? false : true,
+      // a time jump pauses the clock so the admin can inspect the result.
+      const after: WorldClock = { ...before, running: input.action === 'resume',
         anchorGameAt: target, anchorServerAt: serverNow, version: before.version + 1, updatedAt: serverNow, updatedBy: actor };
       tx.set(clockPath(world.id), after);
       tx.set(requestPath, { input, actor, target, requestedAt: serverNow, clockVersion: after.version });

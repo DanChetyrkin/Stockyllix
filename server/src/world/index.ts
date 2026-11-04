@@ -37,7 +37,7 @@ export function isEligibleJoin(at: string): boolean {
   return local.weekday === 1 && local.hour < 10;
 }
 
-// the assignment's hours define the simulation; actual exchange holidays are not inferred
+// trading hours come from the assignment; real holidays come only from imported data.
 export function buildSession(date: string, market: Market): TradingSession | null {
   const zone = market === 'TA' ? WORLD_ZONE : 'America/New_York';
   const localDate = DateTime.fromISO(date, { zone });
@@ -70,6 +70,18 @@ export function nextExecution(dataset: Dataset, instrumentId: string, now: strin
   return dataset.events.find((event) => event.market === instrument.market && event.kind === kind && event.at === at) ?? null;
 }
 
+// events after the last processed time and up to the target still need processing.
+export function dueEvents(dataset: Dataset, processedAt: string, target: string): WorldEvent[] {
+  const from = Date.parse(processedAt);
+  const to = Date.parse(target);
+  return dataset.events.filter((event) => Date.parse(event.at) > from && Date.parse(event.at) <= to);
+}
+
+export function nextMarketEvent(dataset: Dataset, after: string): WorldEvent | null {
+  return dataset.events.find((event) => (event.kind === 'MARKET_OPEN' || event.kind === 'MARKET_CLOSE')
+    && Date.parse(event.at) > Date.parse(after)) ?? null;
+}
+
 export function snapshotAt(dataset: Dataset, at: string): MarketSnapshot {
   const target = parseInstant(at).toMillis();
   if (target < Date.parse(dataset.startsAt) || target > Date.parse(dataset.endsAt)) throw new Error('Timestamp outside the dataset');
@@ -81,7 +93,7 @@ export function snapshotAt(dataset: Dataset, at: string): MarketSnapshot {
   return { ...result, prices: { ...result.prices } };
 }
 
-// keyed hashes give reproducible variation without exposing the private seed in the dataset
+// keyed hashes give repeatable prices without putting the private seed in the dataset.
 function noise(seed: string, key: string): number {
   const hash = createHash('sha256').update(`${seed}:${key}`).digest();
   return hash.readUInt32BE(0) / 0xffffffff * 2 - 1;
@@ -295,7 +307,7 @@ export function validateDataset(value: unknown): Dataset {
     }
     boundaryDate = boundaryDate.plus({ days: 1 });
   }
-  // simulated worlds have complete weekday sessions; imported history may omit exchange holidays
+  // simulated worlds have every weekday; imported history may skip exchange holidays.
   if (data.source === 'simulated') {
     let date = parseInstant(data.startsAt).setZone(WORLD_ZONE).startOf('day');
     const last = parseInstant(data.endsAt).setZone(WORLD_ZONE).toISODate()!;
