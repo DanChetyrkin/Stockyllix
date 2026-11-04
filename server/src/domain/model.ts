@@ -110,6 +110,7 @@ export interface ClockJob {
   totalEvents: number;
   processedPortfolios: number;
   lastError: string | null;
+  retryAfter?: number;
   createdAt: string;
 }
 

@@ -7,7 +7,7 @@ import { AppShell } from '@/components/AppShell';
 import { DailyQuiz } from '@/components/DailyQuiz';
 import { ProviderWidget } from '@/components/market/ProviderWidget';
 import { newsMarkets, newsStocks, type NewsMarket } from '@/components/market/news-options';
-import { Button, Card, CardTitle, Copy, Empty, Field, Notice } from '@/components/ui/kit';
+import { Button, Card, CardTitle, Copy, Empty, Field, Notice, PageTitle } from '@/components/ui/kit';
 import { useGame } from '@/context/GameContext';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -35,7 +35,7 @@ export default function NewsScreen() {
     });
   }, [initialized, worldId, worldStatus]));
   return <AppShell>
-    <View style={{ gap: 4 }}><Text accessibilityRole="header" style={{ fontSize: 24, fontWeight: '700', color: palette.ink }}>News & a daily question</Text><Copy muted style={{ fontSize: 12 }}>Current headlines · Real publication time, separate from the game clock.</Copy></View>
+    <PageTitle title="News" subtitle="Current headlines use real publication time. The daily question follows the game day." />
     <DailyQuiz compact />
     <Card style={{ gap: 12, padding: 16 }}>
       <View accessibilityRole="radiogroup" accessibilityLabel="News market" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{newsMarkets.map(item => <Pressable key={item.value} accessibilityRole="radio" accessibilityState={{ checked: !symbol && market === item.value }} onPress={() => { setMarket(item.value); setSymbol(''); }} style={{ paddingHorizontal: 12, paddingVertical: 10, minHeight: 40, borderRadius: 8, backgroundColor: !symbol && market === item.value ? palette.mint : palette.background }}><Text style={{ color: !symbol && market === item.value ? palette.green : palette.ink, fontSize: 12, fontWeight: '600' }}>{item.label}</Text></Pressable>)}</View>

@@ -26,6 +26,7 @@ The assignment is authoritative. The following decisions fill gaps; they are not
 | Sessions | TA Mon–Thu10:00–17:30, Fri10:00–13:50; US09:30–16:00 NY | IANA timezone conversion; assignment hours govern | Tests cover both DST transitions and Friday |
 | Holidays | Not specified | Explicit dataset sessions; simulated world uses weekdays, not a full real holiday calendar | Missing quote is not automatically a holiday; historical imports must supply holiday sessions |
 | Clock advancement | Shared and controllable | Admin-only, forward-only, within dataset; one durable job | Account operations blocked while advancing; lease and fencing prevent stale workers |
+| Clock shortcuts and receipts | Not specified | Next pending execution is distinct from next market opening/closing; normal Israel date/time is server-validated | Same request UUID confirms an accepted action after reload; DST gaps/ambiguity are rejected |
 | Multi-event jumps | Not specified | Process every crossed event chronologically | Same result as processing the same events individually |
 | Competition week | Monday–Friday | Monday00:00 through Saturday00:00 Israel | Includes FridayUS close; week-end values freeze |
 | Weekly transition | Not specified | Keep assets and cash; reset baseline/peak/MDD | No weekly cash grant |
@@ -41,6 +42,7 @@ The assignment is authoritative. The following decisions fill gaps; they are not
 | Fees/dividends/splits | Not specified | Not simulated; historical imports must avoid unhandled splits | Explicit educational simplification |
 | Future information | Not specified | Private future snapshots and seed; API returns only current/public metadata | External historical lookup remains a replay limitation |
 | Reset | Not specified | Admin confirmation, idle world only, fresh world ID | Old data retained; stale-world submissions rejected |
+| Separate test simulation | Extra administrator testing tool | Generated stock prices and FX for 28 Israel calendar days from a selected date; admin test realm only | Private immutable descriptor rehydrates exact data after restart; shared real history and legacy dataset IDs never change |
 | Daily quiz | Additional educational feature | Shared question per game day in Israel time; one current saved answer per player/world | First answer wins retries; next game day replaces it; no cash/score effect |
 | Return-visit measurement | Daily feature needs success measure | Count real-date review visits separately in the backend | Advancing simulated days is not measured real retention |
 

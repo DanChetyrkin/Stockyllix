@@ -1,4 +1,4 @@
-import { PropsWithChildren } from 'react';
+import { PropsWithChildren, useEffect, useState } from 'react';
 import { Link, Redirect, usePathname } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,6 +22,19 @@ export function AppShell({ children }: PropsWithChildren) {
   const compact = width < 900;
   const independentPage = ['/help', '/current-market', '/news'].includes(pathname);
   const canUseWithoutPortfolio = independentPage || (pathname === '/admin' && game.isAdmin);
+  const serverAnchor = game.world?.clock?.serverNow;
+  const [israelNow, setIsraelNow] = useState<string | undefined>(serverAnchor);
+  useEffect(() => {
+    if (!serverAnchor) return;
+    const received = performance.now();
+    const update = () => setIsraelNow(new Date(Date.parse(serverAnchor) + performance.now() - received).toISOString());
+    update();
+    // this timer only displays server time; all trading time is enforced by the api.
+    const timer = setInterval(update, 1000);
+    return () => clearInterval(timer);
+  }, [serverAnchor]);
+  const clock = game.world?.clock;
+  const gameTime = clock ? new Date(Math.min(Date.parse(game.world!.endsAt), Date.parse(clock.targetNow) + (clock.running && serverAnchor && israelNow ? Math.max(0, Date.parse(israelNow) - Date.parse(serverAnchor)) : 0))).toISOString() : game.world?.now;
   if (auth.loading) return <View style={styles.fullLoading}><ActivityIndicator color={palette.green} /><Copy muted>Restoring your session…</Copy></View>;
   if (!auth.user) return <Redirect href="/auth" />;
 
@@ -32,21 +45,22 @@ export function AppShell({ children }: PropsWithChildren) {
     </View>
     <View style={[styles.worldbar, compact && { paddingHorizontal: 20 }]}>
       <View style={{ gap: 5 }}>
-        <Text style={styles.label}>YOUR SHARED WORLD</Text>
-        <Text style={styles.date}>{game.world ? day(game.world.now) : 'Connecting to the league'}</Text>
-        <Text style={styles.clock}>{clockTime(game.world?.now)} · Israel time · game clock</Text>
+        <Text style={styles.label}>{game.testRealm ? 'ISOLATED TEST WORLD' : 'SHARED GAME TIME'} · ASIA/JERUSALEM</Text>
+        <Text style={styles.date}>{game.world ? day(gameTime) : 'Connecting to the league'}</Text>
+        <Text style={styles.clock}>{clockTime(gameTime)} · {clock?.finished ? 'Period complete' : clock?.syncing ? 'Synchronizing events' : clock?.running ? 'Automatic · 1×' : 'Paused / custom'}</Text>
+        <Text style={styles.clock}>Israel now: {israelNow ? `${day(israelNow)} · ${clockTime(israelNow)}` : 'Connecting to server time'}</Text>
       </View>
       <View style={{ gap: 10, alignItems: 'center' }}><WorldStatus /><ThemePicker /></View>
     </View>
   </>;
 
   return <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-    {!compact && pageHeader}
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
-      {/* the mobile header scrolls with the page instead of covering its content. */}
-      {compact && pageHeader}
+      {/* the full header scrolls with the page on every screen size. */}
+      {pageHeader}
       <View style={[styles.content, compact && { padding: 20 }]}>
       <View style={styles.contentInner}>
+        {game.testRealm && <Notice tone="neutral" action={<Button compact variant="secondary" onPress={() => void game.switchRealm(false)}>Return to shared world</Button>}>Isolated administrator test world. Shared players and balances are unaffected.</Notice>}
         {auth.initializing && <Notice>Preparing your portfolio securely… This may take a moment while the server wakes up.</Notice>}
         {auth.error && <Notice tone="error" action={<Button compact loading={auth.initializing} variant="secondary" onPress={() => void auth.retryInitialization()}>Try again</Button>}>{auth.error}</Notice>}
         {game.error && <Notice tone="error" action={<Button compact loading={game.refreshing} variant="secondary" onPress={() => void game.refreshWorld()}>Reconnect</Button>}>{game.error}</Notice>}

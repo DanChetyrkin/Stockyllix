@@ -9,6 +9,7 @@ import { AppShell } from '@/components/AppShell';
 import { InstrumentInsights } from '@/components/market/InstrumentInsights';
 import { WatchlistPanel } from '@/components/market/WatchlistPanel';
 import { MarketModes } from '@/components/market/MarketModes';
+import { ExecutionTiming } from '@/components/market/ExecutionTiming';
 import { Badge, Button, Card, CardTitle, Copy, DataState, Empty, Eyebrow, Field, Notice, PageTitle, useThemedStyles } from '@/components/ui/kit';
 import { useAuth } from '@/context/AuthContext';
 import { useGame } from '@/context/GameContext';
@@ -16,6 +17,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { useApi } from '@/hooks/use-api';
 import { dateTime, money, number, observationDate } from '@/utils/format';
 import { dailyChangeValue, sortMarketAssets, type MarketSort, type SortDirection } from '@/utils/market-sort';
+import { orderBlockReason, parseOrderDraft } from '@/utils/order-draft';
 
 interface SavedRequest { key: string; input: OrderInput }
 
@@ -24,7 +26,8 @@ export default function MarketScreen() {
   const ui = useThemedStyles();
   const market = useApi<MarketResponse>('/market');
   const portfolio = useApi<PortfolioResponse>('/portfolio');
-  const { world, refreshWorld } = useGame();
+  const recentOrders = useApi<{ orders: Order[] }>('/orders');
+  const { world, refreshWorld, isAdmin, testRealm } = useGame();
   const { user } = useAuth();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
@@ -38,10 +41,11 @@ export default function MarketScreen() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<Order | null>(null);
   const [saved, setSaved] = useState<SavedRequest | null>(null);
+  const [storageProblem, setStorageProblem] = useState(false);
   const [loadedStorageKey, setLoadedStorageKey] = useState<string | null>(null);
   const inFlight = useRef(false);
   const wide = useWindowDimensions().width >= 1200;
-  const storageKey = `stockyllix.pending-order.${user?.uid || 'signed-out'}`;
+  const storageKey = `stockyllix.pending-order.${user?.uid || 'signed-out'}${testRealm ? '.test' : ''}`;
   const storageReady = loadedStorageKey === storageKey;
   const assets = market.data?.instruments || [];
   const selected = assets.find(item => item.id === (saved?.input.instrumentId || selectedId)) || assets[0];
@@ -49,6 +53,9 @@ export default function MarketScreen() {
   const directionLabel = sortBy === 'name' ? sortDirection === 'asc' ? 'A → Z' : 'Z → A' : sortDirection === 'asc' ? 'Low → high' : 'High → low';
   const holding = portfolio.data?.summary.holdings.find(item => item.instrumentId === selected?.id);
   const hasPendingSell = side === 'sell' && Number(holding?.reservedUnits || '0') > 0;
+  const outcome = success ? recentOrders.data?.orders.find(order => order.id === success.id) || success : null;
+  const availableCash = portfolio.data ? Number(portfolio.data.summary.availableCashILS) : undefined;
+  const blocked = !portfolio.data ? portfolio.error || 'Loading account balances. Refresh status if this does not finish.' : orderBlockReason({ ready: storageReady, storageProblem, savedWorldId: saved?.input.worldId, worldId: world?.id, advancing: world?.status === 'advancing' || !!world?.clock?.syncing, finished: !!world?.finished, hasExecution: !!selected?.nextExecutionAt, pendingSell: hasPendingSell && !saved, side, availableCash, amount: Number(amount), units: Number(holding?.units || '0') });
 
   useEffect(() => {
     let active = true;
@@ -56,17 +63,25 @@ export default function MarketScreen() {
     AsyncStorage.getItem(storageKey).then(value => {
       if (!active) return;
       if (value) {
-        const draft = JSON.parse(value) as SavedRequest;
-        if (typeof draft.key !== 'string' || !draft.input?.worldId || !draft.input.instrumentId || !['buy', 'sell'].includes(draft.input.side)) throw new Error('Saved request is not valid.');
+        const draft = parseOrderDraft(value)!;
         setSaved(draft);
         setSelectedId(draft.input.instrumentId);
         setAmount(draft.input.amountILS);
         setSide(draft.input.side);
       } else setSaved(null);
+      setStorageProblem(false);
       setLoadedStorageKey(storageKey);
-    }).catch(() => { if (active) setError('Could not read saved order state. Reload before submitting another order.'); });
+    }).catch(() => { if (active) { setStorageProblem(true); setLoadedStorageKey(storageKey); setError('Could not read a saved request. Check Orders before clearing the local draft.'); } });
     return () => { active = false; };
   }, [storageKey, user]);
+
+  async function clearLocalDraft() {
+    try {
+      await AsyncStorage.removeItem(storageKey);
+      setSaved(null); setStorageProblem(false); setLoadedStorageKey(storageKey); setReviewing(false); setError(null);
+      await refreshWorld();
+    } catch { setError('The local draft could not be cleared. Free device storage, then try again.'); }
+  }
 
   async function sendOrder() {
     if (inFlight.current || !selected || !world || !storageReady) return;
@@ -91,8 +106,9 @@ export default function MarketScreen() {
       await refreshWorld();
     } catch (cause) {
       setError(errorMessage(cause));
+      await refreshWorld();
       // a definite client rejection has no unknown network outcome.
-      if (cause instanceof ApiError && cause.status >= 400 && cause.status < 500 && cause.code !== 'WORLD_ADVANCING') {
+      if (cause instanceof ApiError && cause.status >= 400 && cause.status < 500 && !['WORLD_ADVANCING', 'CLOCK_SYNCING'].includes(cause.code)) {
         try { await AsyncStorage.removeItem(storageKey); setSaved(null); setReviewing(false); }
         catch { setError('The request was rejected, but its saved state could not be cleared. Reload and retry the same request.'); }
       }
@@ -108,8 +124,8 @@ export default function MarketScreen() {
 
   return <AppShell>
     <MarketModes />
-    <PageTitle title="Your demo market." subtitle="Trade 20 assets using the shared game date. Current market quotes never set these execution prices." />
-    {world && <Badge>{world.source === 'historical' ? 'Real historical prices' : 'Simulated demo prices'} · {dateTime(world.now)} · Israel time</Badge>}
+    <PageTitle title="Market" subtitle={world?.source === 'simulated' ? 'Test game · simulated prices and currency rates, separate from the shared game.' : 'Game trading · real historical prices and currency rates from the covered period.'} />
+    {world && <Badge>{world.source === 'historical' ? 'Real historical prices' : 'Simulated prices'} · {dateTime(world.clock?.targetNow || world.now)} · Israel time</Badge>}
     {world && !world.nextEvent && <Notice>The demo has reached the end of its price period. New orders need a future execution event. An administrator can start a new world from World controls.</Notice>}
     {market.data && <View style={[ui.row, { flexWrap: 'wrap', justifyContent: 'space-between' }]}><Copy muted style={{ fontSize: 12 }}>Prices as of {dateTime(market.data.asOf)} · Israel time</Copy><Copy muted style={{ fontSize: 11 }}>USD / ILS {number(market.data.fx, 6)} · Rate date: {observationDate(market.data.fxAsOf)}</Copy></View>}
     <DataState loading={market.loading} error={market.error} hasData={!!market.data} retry={() => void market.refresh()}>
@@ -133,24 +149,27 @@ export default function MarketScreen() {
         </View>
         <View style={{ width: wide ? 360 : '100%', gap: 16 }}>
           <Card style={{ gap: 20 }}>
-            <Eyebrow>Your next decision</Eyebrow>
+            <Eyebrow>Order</Eyebrow>
             {selected ? <>
               <View style={{ gap: 6 }}><Text style={{ fontSize: 27, fontWeight: '700', color: palette.ink }}>{selected.symbol}</Text><Copy muted>{selected.name}</Copy><Badge tone={selected.marketOpen ? 'positive' : 'neutral'}>{selected.marketOpen ? 'Market open' : 'Market closed'} · {selected.market === 'TA' ? 'Tel Aviv' : 'US'}</Badge></View>
               <View style={ui.divider} />
               <View style={{ flexDirection: 'row', gap: 8 }}>{(['buy', 'sell'] as Side[]).map(option => <View key={option} style={{ flex: 1 }}><Button compact variant={side === option ? 'primary' : 'secondary'} disabled={!!saved || busy || reviewing} onPress={() => setSide(option)}>{option === 'buy' ? 'Buy' : 'Sell'}</Button></View>)}</View>
-              <Field label="Amount in shekels (ILS)" placeholder="e.g. 25,000" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" editable={!saved && !busy && !reviewing} hint="Enter digits and a decimal point; do not use commas." />
-              <View style={{ gap: 9 }}><Detail label="Available cash" value={money(portfolio.data?.summary.availableCashILS)} /><Detail label="Your units" value={number(holding?.units || '0', 6)} />{side === 'sell' && <Detail label="Maximum at last price" value={money(holding?.maxSellAmountILS)} />}<Detail label="Current price in ILS" value={money(selected.priceILS)} /><Detail label="Scheduled execution" value={selected.nextExecutionKind === 'MARKET_CLOSE' ? 'Today’s close' : selected.nextExecutionKind === 'MARKET_OPEN' ? 'Next opening' : 'No event left'} /><Detail label="Execution time (Israel)" value={dateTime(selected.nextExecutionAt)} /></View>
+              <Field label="Amount in shekels (ILS)" placeholder="e.g. 25000" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" editable={!saved && !busy && !reviewing} hint="Enter digits and a decimal point; do not use commas." />
+              <ExecutionTiming at={outcome?.status === 'pending' ? outcome.executeAt : selected.nextExecutionAt} kind={outcome?.status === 'pending' ? null : selected.nextExecutionKind} market={selected.market} pending={outcome?.status === 'pending'} />
+              <View style={{ gap: 9 }}><Detail label="Available cash" value={money(portfolio.data?.summary.availableCashILS)} /><Detail label="Your units" value={number(holding?.units || '0', 6)} />{side === 'sell' && <Detail label="Maximum at last price" value={money(holding?.maxSellAmountILS)} />}<Detail label="Last known price in ILS" value={money(selected.priceILS)} /></View>
               <Copy muted style={{ fontSize: 11, lineHeight: 18 }}>The final price is set at execution, including the available USD/ILS rate for US assets. Fractional units are supported. {side === 'buy' ? 'A buy may be rejected if the total position exceeds 20% at execution.' : 'The quoted maximum is an estimate. A lower execution price can reject the sell. Your existing units are reserved while it waits.'}</Copy>
               {error && <Notice tone="error">{error}</Notice>}
               {saved && !busy && <Notice>Check the outcome of your previous order request. Retrying is safe and will not create a duplicate.</Notice>}
               {hasPendingSell && !saved && <Notice>This holding has units reserved by a pending sell. Wait for that order to finish before sending another sell.</Notice>}
-              {success && <Notice tone="success">{success.status === 'pending' ? `Order submitted. Execution: ${dateTime(success.executeAt)} (Israel).` : `Order is ${success.status}.`} <Link href="/orders" style={{ color: palette.green, fontWeight: '700' }}>View orders →</Link></Notice>}
-              {reviewing && !saved && <Notice tone="warning">Confirm {side} of {money(amount)} in {selected.symbol}. Once sent, this order cannot be cancelled.</Notice>}
-              {saved ? <Button loading={busy} disabled={world?.status === 'advancing'} onPress={() => void sendOrder()}>Retry saved request safely</Button> : reviewing ? <><Button loading={busy} disabled={world?.status === 'advancing' || !selected.nextExecutionAt || hasPendingSell} onPress={() => void sendOrder()}>Confirm & send order</Button><Button variant="quiet" disabled={busy} compact onPress={() => setReviewing(false)}>Back to editing</Button></> : <Button disabled={!storageReady || world?.status === 'advancing' || !selected.nextExecutionAt || hasPendingSell} onPress={reviewOrder}>Review {side} order  →</Button>}
+              {outcome && <Notice tone={outcome.status === 'rejected' ? 'error' : 'success'}>{outcome.status === 'pending' ? `Order accepted and waiting. Expected execution: ${dateTime(outcome.executeAt)} (game time, Israel). ${outcome.side === 'buy' ? 'Cash is reserved, not spent.' : 'Your existing units are reserved.'}` : outcome.status === 'executed' ? `${outcome.side === 'buy' ? 'Purchase' : 'Sale'} executed on ${dateTime(outcome.fill?.executedAt || outcome.executeAt)} (game time, Israel).` : `Order rejected: ${outcome.rejection?.message || 'A trading rule prevented execution.'}`} <Link href="/orders" style={{ color: palette.green, fontWeight: '700' }}>View orders →</Link></Notice>}
+              {reviewing && !saved && <View style={{ gap: 9, paddingVertical: 10 }}><Copy>Confirm {side} of {money(amount)} in {selected.symbol}. Once accepted, the order cannot be cancelled.</Copy>{side === 'buy' && <Detail label="Available after reservation" value={money(availableCash === undefined ? undefined : Math.max(0, availableCash - Number(amount)))} />}<Detail label="Expected execution (Israel)" value={dateTime(selected.nextExecutionAt)} /><Copy muted style={{ fontSize: 12 }}>A pending buy moves available cash into reserved cash. Total portfolio value does not fall by the order amount.</Copy></View>}
+              {blocked && <View style={{ gap: 8 }}><Copy style={{ color: palette.amber, fontSize: 12 }}>{blocked}</Copy><View style={[ui.row, { flexWrap: 'wrap' }]}><Button compact variant="quiet" onPress={() => void refreshWorld()}>Refresh status</Button>{isAdmin && <Link href="/admin" asChild><Button compact variant="quiet" onPress={() => undefined}>World controls</Button></Link>}</View></View>}
+              {(storageProblem || (saved && saved.input.worldId !== world?.id)) && <View style={{ gap: 9 }}><Link href="/orders" style={{ color: palette.green }}>Check accepted orders first →</Link><Button compact variant="secondary" disabled={busy} onPress={() => void clearLocalDraft()}>Clear local draft only</Button><Copy muted style={{ fontSize: 11 }}>This does not cancel or remove an accepted server order.</Copy></View>}
+              {saved ? <><Copy muted style={{ fontSize: 12 }}>{busy ? 'Waiting for server confirmation…' : 'A previous response is unknown. Retry this same request safely; do not create a second order.'}</Copy><Button loading={busy} disabled={!!blocked} onPress={() => void sendOrder()}>{busy ? 'Sending order…' : 'Retry saved request safely'}</Button></> : reviewing ? <><Button loading={busy} disabled={!!blocked} onPress={() => void sendOrder()}>Confirm & send order</Button><Button variant="quiet" disabled={busy} compact onPress={() => setReviewing(false)}>Back to editing</Button></> : <Button disabled={!!blocked} onPress={reviewOrder}>Review {side} order  →</Button>}
             </> : <Copy muted>Select an asset to explore your next investment.</Copy>}
           </Card>
           {selected && <WatchlistPanel key={selected.id} instrument={selected} selectionDisabled={!!saved || busy} onSelect={id => { setSelectedId(id); setReviewing(false); setSuccess(null); setError(null); }} />}
-          <Card style={{ gap: 9, backgroundColor: palette.soft }}><CardTitle>One thoughtful step.</CardTitle><Copy muted style={{ fontSize: 12 }}>An open market order executes at that session’s close. When the market is closed, it waits for the next opening. You can always see the planned time before sending.</Copy></Card>
+          <View style={{ gap: 9 }}><CardTitle>Execution rules</CardTitle><Copy muted style={{ fontSize: 12 }}>Orders sent while open execute at the close; closed-market orders wait for the next opening. {world?.finished ? 'This price period is complete. A separate world is required for new orders.' : world?.clock?.running ? 'Historical time advances automatically at 1×. The server catches up after sleep.' : 'The game clock is paused. An administrator can resume it or advance to an event.'}</Copy></View>
         </View>
       </View>
     </DataState>

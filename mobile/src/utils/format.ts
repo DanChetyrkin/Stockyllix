@@ -22,7 +22,7 @@ export function dateTime(value: string | undefined | null, timeZone = 'Asia/Jeru
 
 export function day(value: string | undefined) {
   if (!value) return '—';
-  return new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Jerusalem' }).format(new Date(value));
+  return new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jerusalem' }).format(new Date(value));
 }
 
 export function clockTime(value: string | undefined) {

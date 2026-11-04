@@ -38,12 +38,7 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npm run lint
-      - run: npm run test:config
-      - run: npm run test:auth
-      - run: npm run test:theme
-      - run: npm run test:requests
-      - run: npm run test:name
-      - run: npm run test:market
+      - run: node --test scripts/*.test.mjs
       - run: npx expo export --platform web
         env:
           EXPO_PUBLIC_API_URL: https://api.example.test/api

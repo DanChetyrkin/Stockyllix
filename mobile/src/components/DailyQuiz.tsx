@@ -18,10 +18,11 @@ interface Quiz {
 
 export function DailyQuiz({ compact = false }: { compact?: boolean }) {
   const { user } = useAuth();
-  const { world } = useGame();
+  const { world, testRealm } = useGame();
   if (!user || !world) return null;
-  if (world.status === 'advancing') return <Card style={{ gap: 12 }}><Eyebrow>The daily question</Eyebrow><Copy muted>The game clock is moving. Your question will update when it finishes.</Copy></Card>;
-  return <QuizCard key={`${user.uid}/${world.id}/${world.revision}`} uid={user.uid} worldId={world.id} revision={world.revision} compact={compact} />;
+  if (world.status === 'advancing' || world.clock?.syncing) return <Card style={{ gap: 12 }}><Eyebrow>The daily question</Eyebrow><Copy muted>The game clock is moving. Your question will update when it finishes.</Copy></Card>;
+  const gameDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(world.clock?.targetNow || world.now));
+  return <QuizCard key={`${user.uid}/${testRealm ? 'test' : 'shared'}/${world.id}/${world.revision}/${gameDay}`} uid={user.uid} worldId={world.id} revision={world.revision} compact={compact} />;
 }
 
 function QuizCard({ uid, worldId, revision, compact }: { uid: string; worldId: string; revision: number; compact: boolean }) {
@@ -51,7 +52,7 @@ function QuizCard({ uid, worldId, revision, compact }: { uid: string; worldId: s
     } catch (cause) {
       if (active.current && request === requestNumber.current && auth?.currentUser?.uid === uid) {
         setError(errorMessage(cause));
-        if (cause instanceof ApiError && ['WORLD_CHANGED', 'WORLD_ADVANCING'].includes(cause.code)) await refreshWorld();
+        if (cause instanceof ApiError && ['WORLD_CHANGED', 'WORLD_ADVANCING', 'CLOCK_SYNCING'].includes(cause.code)) await refreshWorld();
       }
     } finally {
       if (active.current && request === requestNumber.current) setLoading(false);
@@ -78,7 +79,7 @@ function QuizCard({ uid, worldId, revision, compact }: { uid: string; worldId: s
       setSelected(result.answer?.answerIndex ?? null);
     } catch (cause) {
       if (!active.current || request !== requestNumber.current || auth?.currentUser?.uid !== uid) return;
-      if (cause instanceof ApiError && ['QUIZ_EXPIRED', 'WORLD_ADVANCING'].includes(cause.code)) { await refreshWorld(); await refresh(); }
+      if (cause instanceof ApiError && ['QUIZ_EXPIRED', 'WORLD_ADVANCING', 'CLOCK_SYNCING'].includes(cause.code)) { await refreshWorld(); await refresh(); }
       else setError(errorMessage(cause));
     } finally {
       if (auth?.currentUser?.uid === uid) setSubmitting(false);

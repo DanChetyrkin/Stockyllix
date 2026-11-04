@@ -13,13 +13,21 @@ import type { PerformanceService } from '../services/performance-service.js';
 import type { BankIsraelService } from '../services/bank-israel.js';
 import type { CurrentMarketService } from '../feeds/current-market.js';
 import type { NewsService } from '../feeds/news.js';
+import type { WorldClockService } from '../services/world-clock.js';
+import type { TestSimulationService } from '../services/test-simulation-service.js';
 
-interface AppOptions {
+export interface GameServices {
   game: GameService;
-  profile?: ProfileService;
   insights?: MarketInsightsService;
   quiz?: DailyQuizService;
   performance?: PerformanceService;
+  clock?: WorldClockService;
+  simulations?: TestSimulationService;
+}
+
+interface AppOptions extends GameServices {
+  profile?: ProfileService;
+  testRealmServices?: (uid: string) => GameServices | Promise<GameServices>;
   bankIsrael?: BankIsraelService;
   currentMarket?: Pick<CurrentMarketService, 'get'> & Partial<Pick<CurrentMarketService, 'checkSample'>>;
   news?: Pick<NewsService, 'get'>;
@@ -49,7 +57,14 @@ const instrumentIdInput = z.string().min(1).max(40).regex(/^[a-zA-Z0-9_.-]+$/);
 const watchInput = z.object({ instrumentId: instrumentIdInput, targetPrice: z.string().max(30), direction: z.enum(['at_or_below', 'at_or_above']) }).strict();
 const quizInput = z.object({ worldId: worldIdInput, date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), questionId: z.string().min(1).max(60), answerIndex: z.number().int().min(0).max(3) }).strict();
 const advanceInput = z.object({ worldId: worldIdInput, target: z.iso.datetime({ offset: true }) }).strict();
-const resetInput = z.object({ worldId: worldIdInput, confirmation: z.literal('RESET'), datasetId: z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/).optional() }).strict();
+const clockInput = z.object({ worldId: worldIdInput, action: z.enum(['pause', 'resume', 'historical', 'realtime', 'set', 'next', 'next_order']),
+  target: z.iso.datetime({ offset: true }).optional(),
+  targetIsrael: z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), time: z.string().regex(/^\d{2}:\d{2}$/) }).strict().optional(),
+}).strict().refine(input => input.action === 'set' ? Number(input.target !== undefined) + Number(input.targetIsrael !== undefined) === 1
+  : input.target === undefined && input.targetIsrael === undefined, { message: 'Set needs exactly one target date.' });
+const resetInput = z.object({ worldId: worldIdInput, confirmation: z.literal('RESET'), datasetId: z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/).optional(),
+  simulation: z.object({ startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).strict().optional(),
+}).strict().refine(input => !(input.datasetId && input.simulation), { message: 'Choose historical data or a separate simulated test world.' });
 
 function requestKey(request: Request) {
   return z.string().uuid().parse(request.get('Idempotency-Key'));
@@ -83,13 +98,13 @@ export function createApp(options: AppOptions) {
       callback(new GameError('ORIGIN_NOT_ALLOWED', 'This website is not allowed to use the API.', 403));
     },
     methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Stockyllix-Test'],
     exposedHeaders: ['X-Request-Id'],
   }));
   // a resized profile photo fits here without raising limits for trading routes.
   app.use('/api/me/profile', express.json({ limit: '64kb' }));
   app.use(express.json({ limit: '12kb' }));
-  app.get('/health', (_request, response) => response.json({ status: 'ok', version: '1.2.0', release: 'historical-news-v2',
+  app.get('/health', (_request, response) => response.json({ status: 'ok', version: '1.4.0', release: 'demo-controls-v4',
     commit: /^[a-f0-9]{40}$/i.test(process.env.RENDER_GIT_COMMIT ?? '') ? process.env.RENDER_GIT_COMMIT : null }));
 
   const router = express.Router();
@@ -126,9 +141,25 @@ export function createApp(options: AppOptions) {
     }));
   }
   const uid = (response: Response) => response.locals.uid as string;
+  const selected = (response: Response): GameServices => response.locals.gameServices ?? options;
+  router.use(async (request, response, next) => {
+    const test = request.get('X-Stockyllix-Test');
+    if (test && test !== 'true') throw new GameError('INVALID_INPUT', 'The test-world header must be true or absent.', 400);
+    if (test) {
+      if (!response.locals.isAdmin) throw new GameError('FORBIDDEN', 'An administrator is required to use an isolated test world.', 403);
+      if (!options.testRealmServices) throw new GameError('TEST_WORLD_UNAVAILABLE', 'Isolated test worlds are not configured.', 503);
+      response.locals.gameServices = await options.testRealmServices(uid(response));
+    }
+    response.locals.testRealm = Boolean(test);
+    const independent = /^\/(?:me\/profile|market\/current|news|reference\/fx|admin\/feeds)(?:\/|$)/.test(request.path);
+    const worker = /^\/admin\/clock\/jobs\//.test(request.path);
+    const receipt = request.method === 'GET' && /^\/admin\/clock\/requests\//.test(request.path);
+    if (!independent && !worker && !receipt) await selected(response).clock?.synchronize();
+    next();
+  });
   router.post('/me/initialize', async (request, response) => {
     const input = initializeInput.parse(request.body);
-    response.json(await options.game.initialize(uid(response), input.displayName));
+    response.json(await selected(response).game.initialize(uid(response), input.displayName));
   });
   router.get('/me/profile', async (_request, response) => {
     if (!options.profile) throw new GameError('PROFILE_UNAVAILABLE', 'Profile settings are temporarily unavailable.', 503, true);
@@ -140,14 +171,16 @@ export function createApp(options: AppOptions) {
     response.json({ profile: await options.profile.save(uid(response), input) });
   });
   router.get('/world', async (_request, response) => {
-    response.json({ world: await options.game.getWorld(), isAdmin: Boolean(response.locals.isAdmin) });
+    const services = selected(response);
+    response.json({ world: services.clock ? await services.clock.getWorld() : await services.game.getWorld(), isAdmin: Boolean(response.locals.isAdmin), testRealm: Boolean(response.locals.testRealm) });
   });
-  router.get('/portfolio', async (_request, response) => response.json(await options.game.getPortfolio(uid(response))));
+  router.get('/portfolio', async (_request, response) => response.json(await selected(response).game.getPortfolio(uid(response))));
   router.get('/performance', async (_request, response) => {
-    if (!options.performance) throw new GameError('REPORT_UNAVAILABLE', 'Performance is temporarily unavailable.', 503, true);
-    response.json(await options.performance.get(uid(response)));
+    const performance = selected(response).performance;
+    if (!performance) throw new GameError('REPORT_UNAVAILABLE', 'Performance is temporarily unavailable.', 503, true);
+    response.json(await performance.get(uid(response)));
   });
-  router.get('/market', async (_request, response) => response.json(await options.game.getMarket()));
+  router.get('/market', async (_request, response) => response.json(await selected(response).game.getMarket()));
   router.get('/market/current', async (_request, response) => {
     const access = options.currentMarketAccess ?? 'admin';
     if (access === 'disabled' || !options.currentMarket) throw new GameError('CURRENT_MARKET_UNAVAILABLE', 'Current quote access is unavailable.', 503, true);
@@ -165,46 +198,52 @@ export function createApp(options: AppOptions) {
     response.json(await options.bankIsrael.get());
   });
   router.get('/instruments/:id/history', async (request, response) => {
-    if (!options.insights) throw new GameError('MARKET_UNAVAILABLE', 'Market details are temporarily unavailable.', 503, true);
-    response.json(await options.insights.history(instrumentIdInput.parse(request.params.id)));
+    const insights = selected(response).insights;
+    if (!insights) throw new GameError('MARKET_UNAVAILABLE', 'Market details are temporarily unavailable.', 503, true);
+    response.json(await insights.history(instrumentIdInput.parse(request.params.id)));
   });
   router.get('/watchlist', async (_request, response) => {
-    if (!options.insights) throw new GameError('MARKET_UNAVAILABLE', 'Your watchlist is temporarily unavailable.', 503, true);
-    response.json(await options.insights.getWatchlist(uid(response)));
+    const insights = selected(response).insights;
+    if (!insights) throw new GameError('MARKET_UNAVAILABLE', 'Your watchlist is temporarily unavailable.', 503, true);
+    response.json(await insights.getWatchlist(uid(response)));
   });
   router.post('/watchlist', async (request, response) => {
-    if (!options.insights) throw new GameError('MARKET_UNAVAILABLE', 'Your watchlist is temporarily unavailable.', 503, true);
-    response.json(await options.insights.setWatch(uid(response), watchInput.parse(request.body)));
+    const insights = selected(response).insights;
+    if (!insights) throw new GameError('MARKET_UNAVAILABLE', 'Your watchlist is temporarily unavailable.', 503, true);
+    response.json(await insights.setWatch(uid(response), watchInput.parse(request.body)));
   });
   router.post('/watchlist/remove', async (request, response) => {
     const input = z.object({ instrumentId: instrumentIdInput }).strict().parse(request.body);
-    if (!options.insights) throw new GameError('MARKET_UNAVAILABLE', 'Your watchlist is temporarily unavailable.', 503, true);
-    response.json(await options.insights.removeWatch(uid(response), input.instrumentId));
+    const insights = selected(response).insights;
+    if (!insights) throw new GameError('MARKET_UNAVAILABLE', 'Your watchlist is temporarily unavailable.', 503, true);
+    response.json(await insights.removeWatch(uid(response), input.instrumentId));
   });
   router.get('/daily-quiz', async (_request, response) => {
-    if (!options.quiz) throw new GameError('QUIZ_UNAVAILABLE', 'The daily quiz is temporarily unavailable.', 503, true);
-    response.json(await options.quiz.get(uid(response)));
+    const quiz = selected(response).quiz;
+    if (!quiz) throw new GameError('QUIZ_UNAVAILABLE', 'The daily quiz is temporarily unavailable.', 503, true);
+    response.json(await quiz.get(uid(response)));
   });
   router.post('/daily-quiz/answer', async (request, response) => {
-    if (!options.quiz) throw new GameError('QUIZ_UNAVAILABLE', 'The daily quiz is temporarily unavailable.', 503, true);
-    response.json(await options.quiz.answer(uid(response), quizInput.parse(request.body)));
+    const quiz = selected(response).quiz;
+    if (!quiz) throw new GameError('QUIZ_UNAVAILABLE', 'The daily quiz is temporarily unavailable.', 503, true);
+    response.json(await quiz.answer(uid(response), quizInput.parse(request.body)));
   });
   router.get('/orders', async (request, response) => {
     const before = request.query.beforeSequence === undefined ? undefined : integerQuery(request.query.beforeSequence, 0);
-    response.json(await options.game.getOrders(uid(response), before));
+    response.json(await selected(response).game.getOrders(uid(response), before));
   });
   router.get('/leaderboard', async (request, response) => {
     const week = request.query.weekId === undefined ? undefined : z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(request.query.weekId);
     const page = integerQuery(request.query.page, 1);
     if (page < 1) throw new GameError('INVALID_PAGE', 'Page numbers start at one.', 400);
-    response.json(await options.game.getLeaderboard(page, week));
+    response.json(await selected(response).game.getLeaderboard(page, week));
   });
   router.post('/orders', async (request, response) => {
     const input = orderInput.parse(request.body);
-    const order = await options.game.submitOrder(uid(response), input, requestKey(request));
+    const order = await selected(response).game.submitOrder(uid(response), input, requestKey(request));
     response.status(201).json({ order });
   });
-  router.post('/daily-review/view', async (_request, response) => response.json(await options.game.recordReview(uid(response))));
+  router.post('/daily-review/view', async (_request, response) => response.json(await selected(response).game.recordReview(uid(response))));
 
   router.use('/admin', (_request, response, next) => {
     if (!response.locals.isAdmin) throw new GameError('FORBIDDEN', 'An administrator is required.', 403);
@@ -222,21 +261,54 @@ export function createApp(options: AppOptions) {
       status: result.status, failureCode: result.failureCode, nextRefreshAt: result.nextRefreshAt });
     response.json(result);
   });
+  router.post('/admin/clock/configure', async (request, response) => {
+    const input = clockInput.parse(request.body);
+    const clock = selected(response).clock;
+    if (!clock) throw new GameError('CLOCK_UNAVAILABLE', 'Automatic clock controls are not configured.', 503);
+    response.json(await clock.configure(uid(response), input, requestKey(request)));
+  });
+  router.get('/admin/clock/audit', async (_request, response) => {
+    const clock = selected(response).clock;
+    if (!clock) throw new GameError('CLOCK_UNAVAILABLE', 'Clock audit is not configured.', 503);
+    response.json(await clock.audit());
+  });
+  router.get('/admin/clock/targets', async (_request, response) => {
+    const clock = selected(response).clock;
+    if (!clock) throw new GameError('CLOCK_UNAVAILABLE', 'Clock targets are not configured.', 503);
+    response.json(await clock.targets());
+  });
+  router.get('/admin/clock/requests/:key', async (request, response) => {
+    const key = z.string().uuid().parse(request.params.key);
+    const worldId = request.query.worldId === undefined ? undefined : worldIdInput.parse(request.query.worldId);
+    const clock = selected(response).clock;
+    if (!clock) throw new GameError('CLOCK_UNAVAILABLE', 'Clock receipts are not configured.', 503);
+    response.json(await clock.requestStatus(key, worldId));
+  });
   router.post('/admin/clock/advance', async (request, response) => {
     const input = advanceInput.parse(request.body);
-    response.status(202).json(await options.game.advance(input.target, requestKey(request), input.worldId));
+    const services = selected(response);
+    response.status(202).json(services.clock ? await services.clock.jump(uid(response), input.target, requestKey(request), input.worldId) : await services.game.advance(input.target, requestKey(request), input.worldId));
   });
   router.post('/admin/clock/jobs/:id/step', async (request, response) => {
     const id = z.string().regex(/^[a-zA-Z0-9_-]+$/).max(100).parse(request.params.id);
-    const result = await options.game.step(id);
+    const result = await selected(response).game.step(id);
     log({ event: 'clock_step', requestId: response.locals.requestId, jobId: id });
     response.json(result);
   });
   router.post('/admin/reset', async (request, response) => {
     const input = resetInput.parse(request.body);
-    response.status(201).json(await options.game.reset(requestKey(request), input.worldId, input.datasetId));
+    const services = selected(response);
+    if (input.simulation && (!response.locals.testRealm || !services.simulations)) throw new GameError('TEST_SIMULATION_ONLY', 'Simulated prices are available only in your isolated administrator test world.', 403);
+    const choices = services.game.listDatasets();
+    if (!response.locals.testRealm && (input.datasetId ? choices.find(dataset => dataset.id === input.datasetId)?.source !== 'historical' : !choices.some(dataset => dataset.source === 'historical'))) {
+      throw new GameError('HISTORICAL_DATA_REQUIRED', 'The shared game must use an available real historical dataset.', 400);
+    }
+    const world = input.simulation ? await services.simulations!.create(services.game, uid(response), requestKey(request), input.worldId, input.simulation.startDate)
+      : await services.game.reset(requestKey(request), input.worldId, input.datasetId);
+    services.clock?.invalidate();
+    response.status(201).json(world);
   });
-  router.get('/admin/datasets', (_request, response) => response.json({ datasets: options.game.listDatasets() }));
+  router.get('/admin/datasets', (_request, response) => response.json({ datasets: selected(response).game.listDatasets(), simulationAllowed: Boolean(response.locals.testRealm && selected(response).simulations) }));
   app.use('/api', router);
   app.use((_request, _response) => { throw new GameError('NOT_FOUND', 'This endpoint does not exist.', 404); });
 

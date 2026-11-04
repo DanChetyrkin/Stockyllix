@@ -9,6 +9,7 @@ import { decimal, formatDecimal, instrumentPriceILS, portfolioSummary, portfolio
 import { getWeekId, isEligibleJoin, isMarketOpen, nextExecution } from '../world/index.js';
 import { previousSessionClose, priceChangePct } from '../world/price-change.js';
 import { DatasetRegistry, datasetRegistry } from '../world/registry.js';
+import { clockPath, clockTarget, type WorldClock } from '../domain/clock.js';
 
 const PAGE_SIZE = 25;
 const RANKING_PAGE_BATCH = 100;
@@ -30,6 +31,10 @@ interface ReviewRecord {
 }
 interface VisitRecord { lastRealDate: string; firstRealDate: string; distinctRealDays: number; lastValueILS: string }
 
+export function createWorld(dataset: Dataset, id: string): World {
+  return { id, now: dataset.startsAt, revision: 0, status: 'idle', snapshot: dataset.initialSnapshot, datasetId: dataset.id, job: null, leaderboardGeneration: null, weekId: getWeekId(dataset.startsAt) };
+}
+
 export class GameService {
   private readonly now: () => Date;
   private readonly leaseMs: number;
@@ -45,7 +50,7 @@ export class GameService {
 
   private freshWorld(id: string, datasetId = this.listDatasets()[0]!.id): World {
     const dataset = this.datasets.get(datasetId);
-    return { id, now: dataset.startsAt, revision: 0, status: 'idle', snapshot: dataset.initialSnapshot, datasetId: dataset.id, job: null, leaderboardGeneration: null, weekId: getWeekId(dataset.startsAt) };
+    return createWorld(dataset, id);
   }
 
   private async current(): Promise<World> {
@@ -71,6 +76,7 @@ export class GameService {
       id: world.job.id, target: world.job.target, completedEvents: world.job.completedEvents,
       totalEvents: world.job.totalEvents, processedPortfolios: world.job.processedPortfolios,
       stage: world.job.stage, lastError: world.job.lastError,
+      nextRetryAt: world.job.retryAfter ? new Date(world.job.retryAfter).toISOString() : null,
       leaseExpiresAt: world.job.leaseOwner ? new Date(world.job.leaseUntil).toISOString() : null,
     };
     return {
@@ -101,7 +107,18 @@ export class GameService {
     return world;
   }
 
+  private async tradingTime(tx: Transaction, world: World, dataset: Dataset) {
+    const clock = await tx.get<WorldClock>(clockPath(world.id));
+    if (!clock) return world.now;
+    const target = clockTarget(clock, world, dataset.endsAt, this.now().getTime());
+    if (dataset.events.some(event => Date.parse(event.at) > Date.parse(world.now) && Date.parse(event.at) <= Date.parse(target))) {
+      throw new GameError('CLOCK_SYNCING', 'The server is completing due market events. Wait briefly, then retry the same request.', 423, true);
+    }
+    return target;
+  }
+
   async getWorld() { return this.publicWorld(await this.current()); }
+  describeWorld(world: World) { return this.publicWorld(world); }
   listDatasets() {
     const available = this.datasets.summaries();
     const historical = available.filter(dataset => dataset.source === 'historical');
@@ -115,11 +132,12 @@ export class GameService {
       const existing = await tx.get<Portfolio>(playerPath(world.id, uid));
       this.requireIdle(world);
       if (existing) return existing;
+      const joinedAt = await this.tradingTime(tx, world, this.datasets.get(world.datasetId));
       const portfolio: Portfolio = {
         uid, displayName: displayName.trim().slice(0, 40) || 'Player', cashAgorot: 100_000_000, reservedCashAgorot: 0,
         holdings: {}, pendingOrderIds: [], pendingBuyAgorot: {}, nextSequence: 1,
-        week: { weekId: world.weekId, startValueILS: '1000000.000000000000', peakValueILS: '1000000.000000000000', mddRatio: '0', eligible: isEligibleJoin(world.now) },
-        lastEventId: null, joinedAt: world.now, createdAt: this.now().toISOString(),
+        week: { weekId: world.weekId, startValueILS: '1000000.000000000000', peakValueILS: '1000000.000000000000', mddRatio: '0', eligible: isEligibleJoin(joinedAt) },
+        lastEventId: null, joinedAt, createdAt: this.now().toISOString(),
       };
       tx.set(playerPath(world.id, uid), portfolio);
       return portfolio;
@@ -225,13 +243,14 @@ export class GameService {
         return existing;
       }
       this.requireIdle(world);
+      const submittedAt = await this.tradingTime(tx, world, dataset);
       if (!portfolio) throw new GameError('PLAYER_NOT_INITIALIZED', 'Create your player profile first.', 404);
       if (!dataset.instruments.some((instrument) => instrument.id === input.instrumentId)) throw new GameError('UNKNOWN_INSTRUMENT', 'Unknown instrument.', 400);
-      const event = nextExecution(dataset, input.instrumentId, world.now);
+      const event = nextExecution(dataset, input.instrumentId, submittedAt);
       if (!event || Date.parse(event.at) > Date.parse(dataset.endsAt)) throw new GameError('DATASET_FINISHED', 'No execution event remains for this instrument.');
       const order: Order = {
         id, uid, worldId: world.id, instrumentId: input.instrumentId, side: input.side, amountAgorot,
-        sequence: portfolio.nextSequence, status: 'pending', submittedAt: world.now, createdAt: this.now().toISOString(),
+        sequence: portfolio.nextSequence, status: 'pending', submittedAt, createdAt: this.now().toISOString(),
         executeEventId: event.id, executeAt: event.at, requestKey: key,
       };
       const next = reserveOrder(dataset, portfolio, order, input, world.snapshot);
@@ -285,7 +304,7 @@ export class GameService {
       if (world.status === 'idle') return world;
       if (!world.job || world.job.id !== jobId) throw new GameError('JOB_NOT_FOUND', 'The clock job does not exist.', 404);
       if (world.job.leaseOwner && world.job.leaseUntil > this.now().getTime()) throw new GameError('JOB_BUSY', 'Another worker is processing this clock job. Retry shortly.', 409, true);
-      const job = { ...world.job, fence: world.job.fence + 1, leaseOwner: owner, leaseUntil: this.now().getTime() + this.leaseMs, lastError: null };
+      const job = { ...world.job, fence: world.job.fence + 1, leaseOwner: owner, leaseUntil: this.now().getTime() + this.leaseMs, lastError: null, retryAfter: 0 };
       tx.set(worldPath(world.id), { ...world, job });
       return { ...world, job };
     });
@@ -298,7 +317,7 @@ export class GameService {
       await this.store.transaction(async (tx) => {
         const world = await this.txWorld(tx, claimed.id);
         if (world.job?.id === jobId && world.job.leaseOwner === owner && world.job.fence === fence) {
-          tx.set(worldPath(world.id), { ...world, job: { ...world.job, leaseOwner: null, leaseUntil: 0, lastError: error instanceof GameError ? error.code : 'PROCESSING_FAILED' } });
+          tx.set(worldPath(world.id), { ...world, job: { ...world.job, leaseOwner: null, leaseUntil: 0, lastError: error instanceof GameError ? error.code : 'PROCESSING_FAILED', retryAfter: this.now().getTime() + 15_000 } });
         }
       }).catch(() => undefined);
       throw error;
@@ -413,9 +432,10 @@ export class GameService {
     const request = { worldId: expectedWorldId ?? null, datasetId: datasetId ?? null };
     const world = await this.store.transaction(async (tx) => {
       const path = `adminRequests/${requestId(key)}`;
-      const existing = await tx.get<{ worldId: string; request?: typeof request }>(path);
+      const existing = await tx.get<{ worldId: string; request?: typeof request; simulationInput?: unknown }>(path);
       const existingWorld = existing ? await tx.get<World>(worldPath(existing.worldId)) : undefined;
       if (existingWorld) {
+        if (existing?.simulationInput) throw new GameError('IDEMPOTENCY_CONFLICT', 'This request already created a simulated test world.', 409);
         if (existing?.request ? existing.request.worldId !== request.worldId || existing.request.datasetId !== request.datasetId : Boolean(datasetId && datasetId !== existingWorld.datasetId)) {
           throw new GameError('IDEMPOTENCY_CONFLICT', 'This reset request key was already used for another world or dataset.', 409);
         }

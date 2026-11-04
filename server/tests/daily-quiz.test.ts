@@ -4,8 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from '../src/api/app.js';
 import { MemoryStore } from '../src/data/memory-store.js';
 import type { World } from '../src/domain/model.js';
+import { clockPath, clockTarget, type WorldClock } from '../src/domain/clock.js';
 import { DailyQuizService, type QuizView } from '../src/services/daily-quiz.js';
 import { GameService } from '../src/services/game-service.js';
+import { WorldClockService } from '../src/services/world-clock.js';
 import { createDataset } from '../src/world/index.js';
 
 async function setup() {
@@ -26,6 +28,29 @@ function answerInput(day: QuizView, answerIndex = 0) {
   return { worldId: day.worldId, date: day.date, questionId: day.question.id, answerIndex };
 }
 
+async function clockQuizSetup() {
+  const store = new MemoryStore();
+  const dataset = createDataset('quiz-logical-clock-fixture');
+  let milliseconds = Date.parse('2026-11-04T10:00:00Z');
+  const now = () => new Date(milliseconds);
+  const game = new GameService(store, dataset, { now });
+  const world = await game.getWorld();
+  const clock = new WorldClockService(store, game, dataset, { now });
+  const quiz = new DailyQuizService(store, { now, gameTime: async (world, tx) => {
+    const clockState = await tx.get<WorldClock>(clockPath(world.id));
+    return clockState ? clockTarget(clockState, world, dataset.endsAt, milliseconds) : world.now;
+  } });
+  const settle = async () => {
+    for (let attempt = 0; attempt < 1000; attempt += 1) {
+      clock.invalidate();
+      await clock.synchronize();
+      if (!(await clock.getWorld()).clock.syncing) return;
+    }
+    throw new Error('quiz clock did not settle');
+  };
+  return { game, world, quiz, clock, settle, elapse: (elapsed: number) => { milliseconds += elapsed; } };
+}
+
 async function advanceTo(game: GameService, target: string) {
   const world = await game.getWorld();
   let state = await game.advance(target, randomUUID(), world.id);
@@ -37,6 +62,44 @@ async function advanceTo(game: GameService, target: string) {
 }
 
 describe('game-day financial quiz', () => {
+  it('changes at logical Israel midnight without a market event or world write, and rejects yesterday’s answer', async () => {
+    const { game, world, quiz, clock, settle, elapse } = await clockQuizSetup();
+    await clock.configure('admin', { worldId: world.id, action: 'set', target: '2026-10-24T20:59:59Z' }, randomUUID());
+    await settle();
+    const previous = await quiz.get('alice');
+    expect(previous.date).toBe('2026-10-24');
+    await quiz.answer('alice', answerInput(previous));
+    await clock.configure('admin', { worldId: world.id, action: 'resume' }, randomUUID());
+    const processed = await game.getWorld();
+    elapse(2000);
+    await settle();
+    expect(await game.getWorld()).toEqual(processed);
+    const sunday = await quiz.get('alice');
+    expect(sunday.date).toBe('2026-10-25');
+    expect(sunday.question.id).not.toBe(previous.question.id);
+    expect(sunday.answer).toBeNull();
+    await expect(quiz.answer('alice', answerInput(previous))).rejects.toMatchObject({ code: 'QUIZ_EXPIRED' });
+    expect((await quiz.answer('alice', answerInput(sunday))).date).toBe('2026-10-25');
+  });
+
+  it('keeps a paused logical date despite real days passing and follows Israel winter-time midnight on resume', async () => {
+    const { world, quiz, clock, settle, elapse } = await clockQuizSetup();
+    await clock.configure('admin', { worldId: world.id, action: 'set', target: '2026-10-25T21:59:59Z' }, randomUUID());
+    await settle();
+    const sunday = await quiz.get('alice');
+    expect(sunday.date).toBe('2026-10-25');
+    const answered = await quiz.answer('alice', answerInput(sunday));
+    elapse(2 * 86_400_000);
+    await settle();
+    expect(await quiz.get('alice')).toEqual(answered);
+    await clock.configure('admin', { worldId: world.id, action: 'resume' }, randomUUID());
+    elapse(2000);
+    await settle();
+    const monday = await quiz.get('alice');
+    expect(monday.date).toBe('2026-10-26');
+    expect(monday.answer).toBeNull();
+  });
+
   it('shares the game-day question across players and reloads without exposing its answer', async () => {
     const { quiz, store } = await setup();
     const alice = await quiz.get('alice');

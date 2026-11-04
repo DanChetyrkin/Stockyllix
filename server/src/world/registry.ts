@@ -13,15 +13,19 @@ export class DatasetRegistry {
 
   constructor(defaultDataset: Dataset, additional: Dataset[] = []) {
     this.defaultId = defaultDataset.id;
-    for (const source of [defaultDataset, ...additional]) {
-      // loaders/builders validate input; this registry preserves the supplied version.
-      const copy = structuredClone(source);
-      const existing = this.datasets.get(copy.id);
-      if (existing && JSON.stringify(existing) !== JSON.stringify(copy)) throw new Error('Different datasets cannot share an identifier');
-      freeze(copy);
-      this.datasets.set(copy.id, copy);
-    }
+    for (const source of [defaultDataset, ...additional]) this.register(source);
   }
+
+  register(source: Dataset) {
+    // loaders/builders validate input; this registry preserves the supplied version.
+    const copy = structuredClone(source);
+    const existing = this.datasets.get(copy.id);
+    if (existing && JSON.stringify(existing) !== JSON.stringify(copy)) throw new Error('Different datasets cannot share an identifier');
+    freeze(copy);
+    this.datasets.set(copy.id, copy);
+  }
+
+  fork() { return new DatasetRegistry(this.get(this.defaultId), [...this.datasets.values()].filter(source => source.id !== this.defaultId)); }
 
   get(id: string): Dataset {
     const dataset = this.datasets.get(id);

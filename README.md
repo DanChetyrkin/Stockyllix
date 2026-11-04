@@ -1,110 +1,50 @@
 # Stockyllix
 
-A noncommercial educational portfolio-league demonstration for an interview, built with Expo, React Native, TypeScript, Express, Firebase Authentication and Firestore. Start with **₪1,000,000**, submit shekel-denominated orders, and compare weekly return and maximum drawdown.
+An educational, noncommercial interview demo for the House of Finance portfolio-league assignment. Players receive **₪1,000,000** of virtual cash, trade twenty TA/US instruments and compete on weekly return and maximum drawdown (MDD).
 
-**Play in your browser:** [stockyllix.web.app](https://stockyllix.web.app). The same link works on a phone without installing an app.
+**[Play in your browser](https://stockyllix.web.app)** · **[3–5 minute reviewer walkthrough](docs/reviewer-demo.md)** · **[How to play](https://stockyllix.web.app/help)**
 
-**Reviewer administrator:** `admin@stockyllix.com`. Ask the project owner for the password. Administrators can advance the shared clock and reset the demonstration world; ordinary players cannot.
+Reviewer administrator: `admin@stockyllix.com`. Obtain the password privately from the owner. No administrator password or server credentials belong in this repository.
 
-**Data disclosure:** the active game uses real historical replay for **October 19–November 2, 2026**, using twenty Yahoo daily price series and Bank of Israel USD/ILS. Loading this private snapshot does not fetch Yahoo or claim a data licence. The legacy simulated world is preserved with its original data; new-world choices use the installed real history. See [release status and activation](docs/finish-release.md). **Current market** and **News & quiz** embed official TradingView panels; their real-world data can be delayed and never execute historical orders. No real money is involved.
+## What was built and why
 
-## What works in the implementation
+One Expo / React Native / TypeScript client serves Web and mobile. An Express / Node API verifies Firebase ID tokens and enforces balances, orders, prices and time through Firestore transactions. Firebase Hosting serves the static app, Render **Free** runs the API, and Firebase Authentication / Firestore remain on **Spark**. No Cloud Functions, paid worker or payment card is required.
 
-- One Expo app for browser and mobile, with email/password authentication.
-- Server-owned balances, reservations, execution prices, currency conversion and clock.
-- Twenty instruments, ten from each market, fractional units and pending orders.
-- A 20% concentration limit, no leverage, no short selling and no cancellation.
-- Weekly return/MDD scoring, archived leaderboards and a personal insight on the portfolio page.
-- Resumable clock jobs, atomic updates, request deduplication and administrator access.
-- Your supplied logo, grouped navigation, private profile photo/name, and persisted Auto/Light/Dark appearance.
-- A financial quiz that changes with the shared game day, private price targets, revealed-price charts and reversible daily-change/name sorting.
-- A How to play guide, compact game-status details and explicit paused/loading/error states.
-- Realized/unrealized ILS profit using weighted average cost, plus a same-period SPY comparison using the active world's price series. Nothing is annualized.
+The shared league uses **real historical prices**: October 19–November 2, 2026, with twenty Yahoo daily series, an October 16 baseline and Bank of Israel USD/ILS. The period has two complete competition weeks plus an execution buffer, checked sessions and no reported corporate actions. ILA quotes are converted to ILS. Only observations reached by game time are visible. The clock stops when the actual data ends; a separate new world preserves earlier records.
 
-The public Web app uses Firebase Authentication and the Render API at `https://stockyllix-api.onrender.com/api`. Hosting, internal routes, administrator sign-in, historical buys/sells, weekly ranking, end-of-period refusal and persistence after an actual Render restart have been checked in the cloud. See [verification](docs/verification.md) for measured checks and remaining limits.
+An administrator-only **Simulation** test realm supports a selectable start date, including March 2027. Generated prices and FX are clearly labelled simulated and apply only to that separate test game. They never replace shared historical data or redate real observations. Use the shared historical league to inspect real-data trading.
 
-The authenticated `/api/reference/fx` endpoint separately fetches the latest published Bank of Israel representative rate. The Yahoo server adapter retains separate price/fetch timestamps and shares a persistent Firestore cache. Earlier local HTTP checks returned twenty quotes, but Render returned HTTP 429. Yahoo's explicit automated-access permission requirement now blocks further collection unless that permission is obtained; it is not a working cloud quote feed. Cached observations remain labelled old. The official TradingView display is separate and is not scraped into our API.
+**Current market** and **News & quiz** display official TradingView panels. Quotes may be delayed or from a closed session; news follows real publication time. These panels never supply execution prices. The Yahoo server feed is blocked by source permission and prior Render throttling; the Alpha Vantage free key did not obtain News access. The latest published BOI reference panel is separate from historical execution FX. See [sources and rights](docs/data-sources.md).
 
-The historical Yahoo/BOI snapshot can be selected only for a new world; existing worlds keep their exact dataset. Rights to reuse/display the previously downloaded snapshot remain unverified, and no provider approval is claimed. This is distinct from the explicit restriction on new automated collection. Alpha Vantage News is implemented with a shared cache, but the owner's free key returned a Premium requirement, not articles. Public news uses TradingView's News Feed instead.
+## Trade and clock decisions
 
-## Run locally on Windows
+| Topic | Decision and reason |
+| --- | --- |
+| Pending cash | A pending ₪50,000 buy reserves ₪50,000 and leaves ₪950,000 available. Total cash/value stay ₪1,000,000 until execution. |
+| Execution | During a market session, execute at its close; otherwise at the next open. No cancellation, leverage, short selling or partial fills. |
+| 20% limit | Check holdings plus pending buys at submission; recheck actual exposure at execution. Appreciation alone never forces a sale. |
+| Consistency | Atomic portfolio/order updates, fixed request keys, reserved units and durable event markers prevent double spending/filling. |
+| Weekly score | 85% return percentile + 15% stability percentile. MDD uses price/FX event samples. Ties share scores; a sole eligible player gets 100. |
+| Week/late joining | Monday–Friday in Israel time. Assets carry forward; statistics restart. Midweek entrants are provisional until the next full week. |
+| Missing data/end | Stop safely rather than invent a price. The clock stays within its dataset; old games are retained. |
 
-Use Node **26.13.0** and Java **21** for the Firestore emulator. Run commands from this checkout; quote paths containing spaces.
+The full [missing-rule table](docs/rules.md) covers precision, FIFO, FX availability, ties, holidays and tests.
 
-```powershell
-Set-Location -LiteralPath "C:\Users\danch\OneDrive\Desktop\House of Finance Project\Stockyllix\server"
-npm ci
-if (-not (Test-Path -LiteralPath ".env")) { Copy-Item -LiteralPath ".env.example" -Destination ".env" }
-npm run import:ecb
-```
+**Clock controls:** sign in as a server-configured administrator and open **World controls**. Normal date/time inputs use Israel time, including DST. Pause/resume controls persisted **1× server-time** playback. Jump to a pending order's execution or the next market event, or choose a forward date. Every intermediate event is processed once. Backward experiments require a new test game; real-time trading remains unavailable without verified execution data. Recovery is in the [runbook](docs/runbook.md). Current Israel time and historical game time are always distinguished.
 
-Set `DATASET_SEED` in `server/.env` to a private random value. Keep the emulator settings and `FIREBASE_PROJECT_ID=demo-stockyllix` for local work. Do not use a real service-account key with the emulators.
+## Daily feature and deliberate omissions
 
-Terminal 1, from `server`:
+The compact daily finance question above news explains a concept and changes with the **game's Israel calendar day**. Portfolio metrics remain on Portfolio, without a duplicate review page. Real-date return visits are measured separately: moving the game is not a real return visit, and improved retention has not been proven.
 
-```powershell
-npx firebase emulators:start --only auth,firestore --project demo-stockyllix --config ../firebase.json
-```
+We omitted a second Web app, store builds, push, company fundamentals, annualized returns, paid feeds, Docker, microservices and corporate-action processing. They add little to the required demo or lack a verified free source. The real replay avoids reported dividends/splits; fees are explicitly omitted. A month's return is never presented as annual performance. Spark/Render limits mean thousands of users require measurement and a capacity plan.
 
-Terminal 2, from `server`:
+## Run, verify and hand over
 
-```powershell
-npm run seed:local
-npm run dev
-```
+- [Windows setup, Expo Go, deployment, secrets and recovery](docs/runbook.md)
+- [Measured verification and current release status](docs/verification.md)
+- [1.4.0 deployment checklist](docs/finish-release.md)
+- [Learning and interview questions](docs/learning.md)
 
-Terminal 3:
+Source release being prepared: **1.4.0 / demo-controls-v4**. Deployment and acceptance are recorded separately; the version label does not claim completed cloud QA.
 
-```powershell
-Set-Location -LiteralPath "C:\Users\danch\OneDrive\Desktop\House of Finance Project\Stockyllix\mobile"
-npm ci
-if (-not (Test-Path -LiteralPath ".env.local")) { Copy-Item -LiteralPath ".env.example" -Destination ".env.local" }
-npm run web
-```
-
-Before starting Expo, fill the public settings with project `demo-stockyllix`, API key `demo-key`, app ID `demo-app`, API URL `http://localhost:3000/api`, and `EXPO_PUBLIC_USE_EMULATORS=true`. The auth emulator URL is `http://127.0.0.1:9099`. These dummy values are for local emulators only. The setup screen explains missing settings. Restart Expo after changing environment variables.
-
-The local seed creates `admin@example.test` and `player@example.test`, password `stockyllix-local-demo`. These accounts exist only in the local Auth emulator. Set `ADMIN_UIDS=demo-admin` in `server/.env`. For physical devices, configure an appropriate LAN host and origins; loopback on a phone refers to the phone, not your computer.
-
-Do not start a second emulator if the ports are already occupied. Local emulator state is temporary unless explicitly exported/imported. If `java` is missing from PATH, add your installed Java 21 `bin` directory to that terminal's `$env:PATH`; no system setting needs to change.
-
-## Advance the shared clock
-
-Sign in with an administrator UID configured in the API. Open **World controls**, choose the next event or an ISO timestamp, then **Advance clock**. Processing starts automatically through bounded requests. If interrupted or paused, reopen controls and choose **Resume & process**. A long advance may require another resume after the client reaches its processing limit. Players keep their last completed data; a newly opened screen explains that processing is paused instead of showing an endless loader. Open **How to play** in the menu for a first-order walkthrough.
-
-Reset is administrator-only and requires typing `RESET`. It creates a new world; it does not delete the old world or cancel an in-progress job. All players then initialize once in the new world.
-
-## Decisions and trade-offs
-
-The detailed [rule table](docs/rules.md) defines reservations, rounding, ties, week boundaries and missing data. [Market-data notes](docs/data-sources.md) explain source checks, ECB attribution, simulation and future-data limits.
-
-Orders submitted while their market is open execute at that session's close. Otherwise they execute at the next open. Accepted orders can be rejected at execution if a rule no longer permits the fill. They cannot be cancelled by the player.
-
-Weekly score is `0.85 × return percentile + 0.15 × stability percentile`. Stability uses sampled maximum drawdown. Assets and cash carry into the next week; competition statistics reset. Cash and reserved assets remain part of portfolio value.
-
-We intentionally omitted a second web client, push notifications, paid feeds, Cloud Functions, Docker, commissions, dividends and corporate-action processing. The selected historical window excludes reported corporate actions. The quiz appears above news; portfolio metrics and the personal insight stay on the home page, without a duplicate review page. Actual return visits use server real dates, separately from game days; retention improvement has not been proven.
-
-Charts reveal known observations only; price targets never place an order. Daily change needs a prior session close. Company fundamentals are omitted because a suitable public source was not verified. Performance and capacity limits are detailed in the [runbook](docs/runbook.md).
-
-Auto appearance follows real Israel time (dark 20:00–07:00), not the simulation. The quiz allows one answer per user/game day in Israel time. All players share that day's question; retries preserve the first answer, and the next game day replaces the current saved answer. Quiz results do not affect score or cash. Real-date review visits remain separate retention instrumentation. Sign-up checks 8+ characters with a letter and digit plus matching confirmation; verify the Firebase password policy before public release. Sign-in errors do not reveal whether an email exists.
-
-## Tests and deployment
-
-```powershell
-# from server
-npm run typecheck
-npm run lint
-npm test
-npm run build
-npm run test:load
-npm run test:load -- 1000 week
-npx firebase emulators:exec --only auth,firestore --project demo-stockyllix --config ../firebase.json "npm run test:emulator"
-```
-
-From `mobile`, run `npm run typecheck`, `npm run lint`, `npm run test:config`, `npm run test:auth`, `npm run test:theme`, `npm run test:requests`, `npm run test:name`, `npm run test:market`, and `npm run build:web`. GitHub Actions covers application and emulator checks; inspect the final commit's actual run. No deployment secrets are exposed to pull-request jobs.
-
-Before each release, run `npm run check:release` from `mobile`, rebuild the production Web app, deploy only Hosting, then check the live files and authenticated application. The production API URL is `https://stockyllix-api.onrender.com/api`. Keep emulator settings out of the production build.
-
-Deployment is **Firebase Hosting (static SPA) → Render Free (API) → Firebase Auth + Firestore Spark**. Cloud Functions and App Hosting are not used. Never enter a payment card or enable Blaze. Free-tier sleep, quotas and recovery limits are explicit in the [runbook](docs/runbook.md). The repo includes deployment configuration, not a claim that cloud access was already granted.
-
-For the learning sequence and interview walkthrough, see [learning notes](docs/learning.md).
+Submission needs accepted **Write** access for `rotemyavne7` (last verified: Read), the public link and private reviewer credentials. Physical Expo Go use remains distinct from browser/mobile-width checks and native bundle compilation.

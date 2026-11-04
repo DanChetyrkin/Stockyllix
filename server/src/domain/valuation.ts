@@ -45,6 +45,7 @@ export function portfolioSummary(dataset: Dataset, snapshot: MarketSnapshot, por
   const value = portfolioValue(dataset, snapshot, portfolio);
   return {
     valueILS: value.toFixed(2),
+    holdingsValueILS: value.sub(decimal(portfolio.cashAgorot).div(100)).toFixed(2),
     cashILS: decimal(portfolio.cashAgorot).div(100).toFixed(2),
     cashWeightPct: value.isZero() ? '0.0000' : decimal(portfolio.cashAgorot).div(100).div(value).mul(100).toFixed(4),
     availableCashILS: decimal(portfolio.cashAgorot - portfolio.reservedCashAgorot).div(100).toFixed(2),

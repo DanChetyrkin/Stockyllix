@@ -36,9 +36,9 @@ Manually compute MDD for1m →1.1m →990k →1.05m. Explain the percentile conv
 
 Run a local failure/restart demonstration. Find a request by ID, interpret a rejected order and resume a clock job. Explain Render sleep, ephemeral disk, Spark quotas, why Cloud Functions was omitted, and which checks were performed locally versus in the cloud.
 
-Prepare a five-minute demonstration: sign in → portfolio → pending order → admin advance → executed order → ranking → daily review. Then answer: what would fail first at1,000players, what evidence supports that answer, and what would you measure before changing architecture?
+Use the [reviewer walkthrough](reviewer-demo.md): sign in → separate test game → pending order → advance to its execution → executed order → portfolio/ranking → daily question above news. Then answer: what would fail first at 1,000 players, what evidence supports that answer, and what would you measure before changing architecture?
 
-Real-date review tracking tests instrumentation. It does not prove improved retention. Simulated stock prices with real ECB FX are a disclosed product decision, not live-market support.
+Real-date return tracking tests instrumentation, not improved retention. The shared game replays real Yahoo/BOI history. Preserved legacy simulation and a newly selected dated test simulation are separate, disclosed sources; the test simulation generates its own FX and never claims to be real market data.
 
 ## 7. Personal features without changing competition rules
 
@@ -46,9 +46,11 @@ Trace a resized photo through authenticated API validation to the private profil
 
 Explain the time boundaries: shared game time drives trading and the quiz's Israel calendar day; real Israel dates measure review return visits; real Israel hours plus a saved manual preference control appearance. Crossing game midnight changes the question, while it does not count as a real return visit or change appearance. Each player has one current saved quiz answer; the next game day replaces it, and duplicate submissions keep the first answer.
 
-Trace Advance clock → returned job ID → automatic bounded steps → published state. Explain why Resume continues persisted work after a reload and why React clock polling must not invalidate every in-flight data request. Find How to play and the compact source/status details; internal identifiers belong in diagnostics rather than ordinary labels.
+Trace Advance to pending execution → server-selected event → durable job → bounded steps → published state. Explain why a server receipt can confirm a clock change after a reload, why an unknown outcome keeps its original request key, and why clock polling must not invalidate every in-flight data request. Compare the pending-execution shortcut with the next market event. Find advanced recovery; internal identifiers belong in diagnostics rather than ordinary labels.
 
-Distinguish the live BOI representative reference panel, the staged BOI historical file and the active ECB execution dataset. Explain why a Twelve Data importer without an API key, tested coverage and display/storage permission is not a working stock integration. Explain why import activation needs a new world rather than replacing prices under existing positions.
+Distinguish the latest published BOI reference panel, the real historical replay's BOI execution rates and the preserved legacy world's ECB rates. Explain why a Twelve Data importer without a key, verified coverage and display/storage permission is not a working integration. Explain why import activation needs a new world instead of replacing prices under existing positions, and why TradingView display is not a game-data API.
+
+Create a dated 28-day simulated test game, for example March 2027, only in the administrator's test realm. Explain why its private versioned descriptor must be persisted with the world, why its registry is separate from shared history and how restart recreates exactly the same data. Explain the differing Israel/New York DST transition dates without shifting historical observations. Use normal Israel date/time input; explain why a nonexistent or ambiguous minute is rejected instead of silently selecting an offset.
 
 Work through weighted average cost: buy 10 units for 3,000 ILS, buy 10 for 4,000, then sell 5 for 2,000. The sold cost is 1,750, realized profit is 250, and remaining cost is 5,250. Explain why a USD position's ILS result includes FX and why SPY must use the same period/currency. A month's return is not an annual return.
 

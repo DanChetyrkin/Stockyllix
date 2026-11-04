@@ -1,35 +1,42 @@
-# Stockyllix API on Render Free
+# Stockyllix API
 
-The Blueprint is `render.yaml` at the repository root. It defines one Node web service with `plan: free` and `rootDir: server`. It creates no database or persistent disk. Automatic code deployment is disabled.
+Node / Express / TypeScript enforces the game behind Firebase ID tokens. All game documents live in Firestore; the client cannot set balances, execution prices, FX or time. The existing public API is `https://stockyllix-api.onrender.com/api`.
 
-Public API: `https://stockyllix-api.onrender.com/api`. Browser game: [stockyllix.web.app](https://stockyllix.web.app).
+Source release being prepared: **1.4.0 / demo-controls-v4**. Verify the deployed version, release and exact commit at `/health`; a package version or successful build does not prove deployment. Actual checks are in [verification](../docs/verification.md).
 
-The market-feed release identifies itself at `/health` with `version: 1.1.0` and `release: market-feeds-v1`. It adds owner-only current Yahoo quotes, a durable shared cache, a guarded Alpha Vantage News adapter and immutable historical dataset selection for new worlds. See the [release handoff](../docs/finish-release.md) for deployment, exact environment-variable names and the remaining cloud checks. Real-data public-use rights remain separate from technical access.
+## Existing Render Free setup
 
-## Blueprint setup
+Use branch `codex/render-free-deploy`, Blueprint Path `render.yaml`, root `server`, **Free**, auto-deploy off. The manifest creates one Node service with no database or persistent disk:
 
-Choose branch `codex/render-free-deploy` and Blueprint Path `render.yaml`.
+- Build: `npm ci --include=dev && npm run import:ecb && npm run build && npm prune --omit=dev`
+- Start: `npm start`
+- Health: `/health`
 
-Render prompts for these server environment variables:
+Keep the existing `stockyllix` Spark project, server credential, `ADMIN_UIDS`, exact HTTPS `CORS_ORIGINS` and private `DATASET_SEED`. `FIREBASE_SERVICE_ACCOUNT` contains the JSON **only as a secret**; a local Windows path is not a Render credential. Do not change the seed/FX/dataset to resolve a code deployment problem.
 
-| Variable | Value |
-| --- | --- |
-| `FIREBASE_SERVICE_ACCOUNT` | The complete service-account JSON, entered only as a Render secret. A path on your Windows computer does not exist on Render. |
-| `ADMIN_UIDS` | The intended administrator's Firebase Authentication UID; comma-separated for multiple administrators. |
-| `CORS_ORIGINS` | Exact public HTTPS origins used by the web app, comma-separated. No trailing slash or `/api` path. |
-| `DATASET_SEED` | A private random value of at least 32 characters. Keep it unchanged across deployments. |
+The installed historical snapshot remains a Render Secret File `yahoo-world.json`, with `HISTORICAL_DATASET_PATH=/etc/secrets/yahoo-world.json`. Shared game trades resolve its real October/November 2026 Yahoo prices and BOI FX. The build's ECB import preserves legacy dataset support; it does not replace that snapshot's execution FX. Ordinary trades make no external price requests.
 
-The Firebase project is `stockyllix`. Keep Firebase on Spark and select Free for the Render service; do not add a payment card or enable billing. Local emulator settings and local demo accounts are not cloud credentials.
+### Reliable ECB preparation
 
-The build installs locked dependencies, imports historical ECB USD/ILS rates, compiles TypeScript, then removes development dependencies. It runs `npm start` and uses `/health` for health checks. Stock prices remain a labelled simulation; no paid stock API is required. The optional Bank of Israel reference panel uses the public official API.
+The existing build command stays unchanged; no new Render setting, secret or service is required. `import:ecb` first validates an existing local FX file against the **original 22 observations**, their pinned canonical SHA-256 and the full legacy world's baseline/coverage. A valid file requires no network request. If `DATASET_PATH` points to a valid complete private default dataset, that dataset is validated instead and standalone FX preparation is skipped.
 
-Game data persists in Firestore. Render's local disk is temporary, so do not store portfolios or credentials in uploaded files there. Keep a private copy of the exact price dataset, FX file and seed; a changed dataset intentionally cannot take over an existing world.
+If the local file is absent, the importer checks the private immutable Firestore document `referenceData/ecb-2026-10-02_2026-11-02-v1`, using the server's existing Firebase credentials. It validates the same exact rows/hash/coverage before restoring the ignored local file. The cache worker has a hard **8-second** deadline, including SDK retries; it cannot keep the build hanging indefinitely.
 
-The repository also includes Firebase rules that deny direct client access: all game reads/writes go through the authenticated API. Review existing cloud data/rules before deploying these with Firebase CLI. Uploading this Blueprint does not deploy Firebase rules, Hosting or the mobile app. The Web client has been published separately to Firebase Hosting; future client updates also require a separate Hosting deployment.
+When neither a valid local file nor an available cache can supply the observations, the importer makes at most **two official CSV attempts**, then **one official XML attempt**, each with a **12-second** deadline and **500ms / 1,000ms** backoff. A successful response must still match the immutable observations before it can be written or cached. An invalid present file/cache or changed source observations fail closed rather than being replaced with different rates. A missing/unreachable cache allows bounded official fallback; failure to save a cache does not invalidate an already validated local file.
 
-## Local checks
+No raw rates are committed. This reference cache does not change a game, world pointer, seed, price history or account balance. Optional `npm run import:ecb -- --refresh` explicitly rechecks the **same** immutable official observations; it is not a rate-update or dataset-rotation command. The real historical replay continues to use its own embedded BOI FX. For a failed build, restore the original valid private file/cache or retry bounded preparation; never change the seed or invent FX to make startup pass.
 
-From this directory:
+Keep Yahoo automated collection disabled without supplier permission. Current TradingView panels are separate source-owned displays. Do not set a licence-confirmation flag merely because technical requests work.
+
+## Clocks and separate test games
+
+1× historical playback uses persisted server/game anchors. Requests process bounded reached events after inactivity/restart; no always-on worker is assumed. Forward jumps, executions and weekly boundaries are durable and idempotent. Backward changes require a separate game.
+
+The administrator-only test header selects storage scoped by verified UID. Its optional selectable-date 28-day simulation has explicit generated prices/FX and a private immutable persisted descriptor; it never modifies shared history or replaces a dataset under positions. Existing/previous worlds keep their original data. Read the [runbook](../docs/runbook.md) for recovery and source limits.
+
+## Local commands
+
+Use Node 26.13.0; Java 21 is needed for Firestore emulators. From this directory:
 
 ```powershell
 npm ci
@@ -37,8 +44,9 @@ npm run typecheck
 npm run lint
 npm test
 npm run build
+npx firebase emulators:exec --only auth,firestore --project demo-stockyllix --config ../firebase.json "npm run test:emulator"
 ```
 
-A fresh cloud deployment needs Firebase credentials, IAM access and an authenticated smoke test. A successful build alone does not prove these. The production client uses `EXPO_PUBLIC_API_URL=https://stockyllix-api.onrender.com/api`.
+Use `demo-stockyllix` and emulator settings for local work; never send a real service-account key there. The [Windows runbook](../docs/runbook.md) documents setup, seed accounts and safe Expo Go production configuration.
 
-Never commit a service-account key, an actual `.env`, `node_modules`, private price files or emulator exports. `.env.example` contains placeholders only. The owner's `serverKey` directory stays outside this repository.
+Publishing this Blueprint does not publish Hosting, Rules or the client. The existing Web app is separately deployed to Firebase Hosting. See [release procedure](../docs/finish-release.md); never commit `.env`, keys, private future prices, simulation seeds/descriptors, `node_modules` or emulator exports.

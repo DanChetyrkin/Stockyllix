@@ -12,7 +12,7 @@ export class ApiError extends Error {
   }
 }
 
-export interface RequestOptions { method?: string; body?: unknown; requestKey?: string; signal?: AbortSignal }
+export interface RequestOptions { method?: string; body?: unknown; requestKey?: string; signal?: AbortSignal; testRealm?: boolean }
 
 export function requestDeadlineMs(baseUrl: string, useEmulators: boolean): number {
   if (!useEmulators) return 75_000;
@@ -49,7 +49,7 @@ export async function requestJson<T>(url: string, token: () => Promise<string>, 
     authenticating = false;
     const response = await abortable(fetch(url, {
       method: options.method || 'GET',
-      headers: { Authorization: `Bearer ${idToken}`, 'Content-Type': 'application/json', ...(options.requestKey ? { 'Idempotency-Key': options.requestKey } : {}) },
+      headers: { Authorization: `Bearer ${idToken}`, 'Content-Type': 'application/json', ...(options.requestKey ? { 'Idempotency-Key': options.requestKey } : {}), ...(options.testRealm ? { 'X-Stockyllix-Test': 'true' } : {}) },
       body: options.body === undefined ? undefined : JSON.stringify(options.body), signal: controller.signal,
     }), controller.signal);
     const payload = await abortable(response.json().catch(() => null), controller.signal);
