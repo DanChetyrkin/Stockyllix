@@ -50,7 +50,7 @@ export default function PortfolioScreen() {
           </View></ScrollView>}
         </Card>
         <View style={{ flex: 1, minWidth: 260, gap: 20 }}>
-          <Card style={{ gap: 18 }}><Eyebrow>Make it a daily habit</Eyebrow><CardTitle>A moment to reflect.</CardTitle><Copy muted>Your personal review connects your portfolio with a practical investing lesson.</Copy><Link href="/daily-review" asChild><Button variant="secondary" onPress={() => undefined}>Open your daily review  →</Button></Link></Card>
+          <Card style={{ gap: 14 }}><Eyebrow>Your daily insight</Eyebrow><CardTitle>{portfolio.data?.dailyReview.headline || 'A moment to reflect.'}</CardTitle><Copy muted>{portfolio.data?.dailyReview.insight || 'Check your cash, review your holdings and learn something new.'}</Copy><Link href="/news" asChild><Button compact variant="secondary" onPress={() => undefined}>News & today’s question →</Button></Link></Card>
           <Card style={{ gap: 16 }}><Eyebrow>The weekly league</Eyebrow><View style={{ flexDirection: 'row', gap: 14 }}><View style={{ flex: 1, gap: 5 }}><Text style={{ fontSize: 27, color: palette.green, fontWeight: '700' }}>85%</Text><Copy muted style={{ fontSize: 11 }}>Return ranking</Copy></View><View style={{ flex: 1, gap: 5 }}><Text style={{ fontSize: 27, color: palette.ink, fontWeight: '700' }}>15%</Text><Copy muted style={{ fontSize: 11 }}>Stability ranking</Copy></View></View><View style={ui.divider} /><Copy muted style={{ fontSize: 12 }}>Your score combines return and maximum drawdown percentiles. Higher is better.</Copy><Link href="/leaderboard" asChild><Button compact variant="quiet" onPress={() => undefined}>See the league  →</Button></Link></Card>
         </View>
       </View>

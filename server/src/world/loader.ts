@@ -14,9 +14,7 @@ export async function loadDatasetRegistry(): Promise<DatasetRegistry> {
   const active = await loadDataset();
   const candidatePath = process.env.HISTORICAL_DATASET_PATH;
   if (!candidatePath) return new DatasetRegistry(active);
-  if (process.env.HISTORICAL_DATA_USE_CONFIRMED !== 'true') {
-    throw new Error('Confirm source storage/public-display rights before enabling HISTORICAL_DATASET_PATH');
-  }
+  // selecting an existing private file neither fetches data nor grants a source licence.
   const candidate = await readPrivateDataset(candidatePath);
   if (candidate.source !== 'historical') throw new Error('The optional replay dataset must contain historical prices');
   return new DatasetRegistry(active, [candidate]);

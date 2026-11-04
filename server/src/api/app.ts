@@ -21,7 +21,7 @@ interface AppOptions {
   quiz?: DailyQuizService;
   performance?: PerformanceService;
   bankIsrael?: BankIsraelService;
-  currentMarket?: Pick<CurrentMarketService, 'get'>;
+  currentMarket?: Pick<CurrentMarketService, 'get'> & Partial<Pick<CurrentMarketService, 'checkSample'>>;
   news?: Pick<NewsService, 'get'>;
   currentMarketAccess?: 'disabled' | 'admin' | 'public';
   newsAccess?: 'disabled' | 'admin' | 'public';
@@ -89,7 +89,8 @@ export function createApp(options: AppOptions) {
   // a resized profile photo fits here without raising limits for trading routes.
   app.use('/api/me/profile', express.json({ limit: '64kb' }));
   app.use(express.json({ limit: '12kb' }));
-  app.get('/health', (_request, response) => response.json({ status: 'ok', version: '1.1.0', release: 'market-feeds-v1' }));
+  app.get('/health', (_request, response) => response.json({ status: 'ok', version: '1.2.0', release: 'historical-news-v2',
+    commit: /^[a-f0-9]{40}$/i.test(process.env.RENDER_GIT_COMMIT ?? '') ? process.env.RENDER_GIT_COMMIT : null }));
 
   const router = express.Router();
   if (options.rateLimitEnabled !== false) {
@@ -208,6 +209,18 @@ export function createApp(options: AppOptions) {
   router.use('/admin', (_request, response, next) => {
     if (!response.locals.isAdmin) throw new GameError('FORBIDDEN', 'An administrator is required.', 403);
     next();
+  });
+  router.post('/admin/feeds/current-market/check', async (request, response) => {
+    z.object({}).strict().parse(request.body ?? {});
+    z.object({}).strict().parse(request.query);
+    if (options.currentMarketAccess === 'disabled' || !options.currentMarket?.checkSample) {
+      throw new GameError('CURRENT_MARKET_UNAVAILABLE', 'Current quote access is unavailable.', 503, true);
+    }
+    const result = await options.currentMarket.checkSample();
+    log({ event: 'current_market_diagnostic', requestId: response.locals.requestId,
+      attemptedSymbols: result.diagnostic.attemptedSymbols, refreshedSymbols: result.diagnostic.refreshedSymbols,
+      status: result.status, failureCode: result.failureCode, nextRefreshAt: result.nextRefreshAt });
+    response.json(result);
   });
   router.post('/admin/clock/advance', async (request, response) => {
     const input = advanceInput.parse(request.body);

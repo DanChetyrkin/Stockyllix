@@ -21,15 +21,16 @@ const insights = new MarketInsightsService(firebase.store, datasets);
 const quiz = new DailyQuizService(firebase.store);
 const performance = new PerformanceService(firebase.store, datasets);
 const bankIsrael = new BankIsraelService();
-const currentMarket = config.CURRENT_MARKET_ACCESS === 'disabled' ? undefined : new CurrentMarketService({ store: firebase.store, instruments: dataset.instruments });
+const currentMarket = config.CURRENT_MARKET_ACCESS === 'disabled' ? undefined : new CurrentMarketService({ store: firebase.store,
+  instruments: dataset.instruments, automatedAccessAuthorized: config.YAHOO_AUTOMATED_ACCESS_AUTHORIZED === 'true' });
 const news = config.NEWS_ACCESS === 'disabled' || !config.ALPHA_VANTAGE_API_KEY?.trim() ? undefined : new NewsService({ store: firebase.store, instruments: dataset.instruments, apiKey: config.ALPHA_VANTAGE_API_KEY });
 // fail startup if credentials or the persisted dataset do not match
-await game.getWorld();
+const initialWorld = await game.getWorld();
 const app = createApp({ game, profile, insights, quiz, performance, bankIsrael, currentMarket, news,
   currentMarketAccess: config.CURRENT_MARKET_ACCESS, newsAccess: config.NEWS_ACCESS,
   verifyToken: firebase.verifyToken, adminUids: config.adminUids, corsOrigins: config.corsOrigins });
 const server = app.listen(config.PORT, config.HOST, () => {
-  process.stdout.write(`${JSON.stringify({ event: 'listening', host: config.HOST, port: config.PORT, dataMode: dataset.source })}\n`);
+  process.stdout.write(`${JSON.stringify({ event: 'listening', host: config.HOST, port: config.PORT, dataMode: initialWorld.source })}\n`);
 });
 
 // stop accepting requests and let the current transaction finish

@@ -1,12 +1,12 @@
 # Stockyllix
 
-An educational portfolio league built with Expo, React Native, TypeScript, Express, Firebase Authentication and Firestore. Start with **₪1,000,000**, submit shekel-denominated orders, and compare weekly return and maximum drawdown.
+A noncommercial educational portfolio-league demonstration for an interview, built with Expo, React Native, TypeScript, Express, Firebase Authentication and Firestore. Start with **₪1,000,000**, submit shekel-denominated orders, and compare weekly return and maximum drawdown.
 
 **Play in your browser:** [stockyllix.web.app](https://stockyllix.web.app). The same link works on a phone without installing an app.
 
 **Reviewer administrator:** `admin@stockyllix.com`. Ask the project owner for the password. Administrators can advance the shared clock and reset the demonstration world; ordinary players cannot.
 
-**Data disclosure:** the existing demo world's execution prices remain simulated, with historical ECB USD/ILS. The shared world runs October 5–30, 2026, with November 2 as an execution buffer. The separate **Current market** and **Market news** pages embed official TradingView panels; their real-world data can be delayed and never execute demo orders. No real money is involved.
+**Data disclosure:** a separate real historical replay is prepared for **October 19–November 2, 2026**, using twenty Yahoo daily price series and Bank of Israel USD/ILS. Loading this private snapshot does not fetch Yahoo or claim a data licence. The legacy simulated world is preserved with its original data; new-world choices use real history once the private file is installed. See [release status and activation](docs/finish-release.md). **Current market** and **News & quiz** embed official TradingView panels; their real-world data can be delayed and never execute historical orders. No real money is involved.
 
 ## What works in the implementation
 
@@ -14,7 +14,7 @@ An educational portfolio league built with Expo, React Native, TypeScript, Expre
 - Server-owned balances, reservations, execution prices, currency conversion and clock.
 - Twenty instruments, ten from each market, fractional units and pending orders.
 - A 20% concentration limit, no leverage, no short selling and no cancellation.
-- Weekly return/MDD scoring, archived leaderboards and a personal daily review.
+- Weekly return/MDD scoring, archived leaderboards and a personal insight on the portfolio page.
 - Resumable clock jobs, atomic updates, request deduplication and administrator access.
 - Your supplied logo, grouped navigation, private profile photo/name, and persisted Auto/Light/Dark appearance.
 - A financial quiz that changes with the shared game day, private price targets, revealed-price charts and reversible daily-change/name sorting.
@@ -23,9 +23,9 @@ An educational portfolio league built with Expo, React Native, TypeScript, Expre
 
 The public Web app uses Firebase Authentication and the Render API at `https://stockyllix-api.onrender.com/api`. Hosting, static files, internal routes and administrator sign-in have been checked in the cloud. See [verification](docs/verification.md) for measured checks and remaining limits.
 
-The authenticated `/api/reference/fx` endpoint separately fetches the latest published Bank of Israel representative rate. A new server quote service (`/api/market/current`) fetches Yahoo observations for all twenty instruments, retains their price/fetch timestamps and uses a shared Firestore cache. It defaults to an administrator-only preview because public-display permission has not been verified. Local HTTP returned twenty real quotes and reused them after an API restart. The deployed Render API was also tested, but Yahoo returned HTTP 429 there: it currently reports source-unavailable, not working cloud quotes. A successful local download is not a data licence or cloud-access guarantee.
+The authenticated `/api/reference/fx` endpoint separately fetches the latest published Bank of Israel representative rate. The Yahoo server adapter retains separate price/fetch timestamps and shares a persistent Firestore cache. Earlier local HTTP checks returned twenty quotes, but Render returned HTTP 429. Yahoo's explicit automated-access permission requirement now blocks further collection unless that permission is obtained; it is not a working cloud quote feed. Cached observations remain labelled old. The official TradingView display is separate and is not scraped into our API.
 
-The historical Yahoo/BOI importer stages a separate immutable candidate and can select it only for a new world; existing worlds keep their exact dataset. Public activation remains gated on applicable data rights. Alpha Vantage News is implemented with a shared cache, but the owner's free key returned a Premium requirement, not articles. See [release handoff](docs/finish-release.md) for the exact remaining deployment and verification steps.
+The historical Yahoo/BOI snapshot can be selected only for a new world; existing worlds keep their exact dataset. Rights to reuse/display the previously downloaded snapshot remain unverified, and no provider approval is claimed. This is distinct from the explicit restriction on new automated collection. Alpha Vantage News is implemented with a shared cache, but the owner's free key returned a Premium requirement, not articles. Public news uses TradingView's News Feed instead.
 
 ## Run locally on Windows
 
@@ -82,7 +82,7 @@ Orders submitted while their market is open execute at that session's close. Oth
 
 Weekly score is `0.85 × return percentile + 0.15 × stability percentile`. Stability uses sampled maximum drawdown. Assets and cash carry into the next week; competition statistics reset. Cash and reserved assets remain part of portfolio value.
 
-We intentionally omitted a second web client, push notifications, paid feeds, Cloud Functions, Docker, commissions, dividends and corporate-action processing. The daily review adds educational value without rewarding unnecessary trades. Actual return visits use server real dates, separately from simulation days; retention improvement has not been proven.
+We intentionally omitted a second web client, push notifications, paid feeds, Cloud Functions, Docker, commissions, dividends and corporate-action processing. The selected historical window excludes reported corporate actions. The quiz appears above news; portfolio metrics and the personal insight stay on the home page, without a duplicate review page. Actual return visits use server real dates, separately from game days; retention improvement has not been proven.
 
 Charts reveal known observations only; price targets never place an order. Daily change needs a prior session close. Company fundamentals are omitted because a suitable public source was not verified. Performance and capacity limits are detailed in the [runbook](docs/runbook.md).
 
@@ -101,7 +101,7 @@ npm run test:load -- 1000 week
 npx firebase emulators:exec --only auth,firestore --project demo-stockyllix --config ../firebase.json "npm run test:emulator"
 ```
 
-From `mobile`, run `npm run typecheck`, `npm run lint`, `npm run test:config`, `npm run test:auth`, `npm run test:theme`, `npm run test:requests`, `npm run test:name`, `npm run test:market`, and `npm run build:web`. GitHub Actions configuration covers application and emulator checks; an actual GitHub run still needs verification. No deployment secrets are exposed to pull-request jobs.
+From `mobile`, run `npm run typecheck`, `npm run lint`, `npm run test:config`, `npm run test:auth`, `npm run test:theme`, `npm run test:requests`, `npm run test:name`, `npm run test:market`, and `npm run build:web`. GitHub Actions covers application and emulator checks; inspect the final commit's actual run. No deployment secrets are exposed to pull-request jobs.
 
 Before each release, run `npm run check:release` from `mobile`, rebuild the production Web app, deploy only Hosting, then check the live files and authenticated application. The production API URL is `https://stockyllix-api.onrender.com/api`. Keep emulator settings out of the production build.
 

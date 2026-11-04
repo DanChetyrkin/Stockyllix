@@ -43,7 +43,7 @@ export class GameService {
     this.batchSize = options.batchSize ?? 25;
   }
 
-  private freshWorld(id: string, datasetId = this.datasets.defaultId): World {
+  private freshWorld(id: string, datasetId = this.listDatasets()[0]!.id): World {
     const dataset = this.datasets.get(datasetId);
     return { id, now: dataset.startsAt, revision: 0, status: 'idle', snapshot: dataset.initialSnapshot, datasetId: dataset.id, job: null, leaderboardGeneration: null, weekId: getWeekId(dataset.startsAt) };
   }
@@ -102,7 +102,11 @@ export class GameService {
   }
 
   async getWorld() { return this.publicWorld(await this.current()); }
-  listDatasets() { return this.datasets.summaries(); }
+  listDatasets() {
+    const available = this.datasets.summaries();
+    const historical = available.filter(dataset => dataset.source === 'historical');
+    return historical.length ? historical : available;
+  }
 
   async initialize(uid: string, displayName: string) {
     const initial = await this.current();
@@ -421,7 +425,13 @@ export class GameService {
       if (expectedWorldId && pointer?.worldId !== expectedWorldId) throw new GameError('WORLD_CHANGED', 'The world was reset. Refresh and try again.', 409, true);
       const active = pointer ? await tx.get<World>(worldPath(pointer.worldId)) : undefined;
       if (active) this.requireIdle(active);
-      const created = this.freshWorld(`world-${randomUUID()}`, datasetId ?? active?.datasetId ?? this.datasets.defaultId);
+      const choices = this.listDatasets();
+      if (datasetId && !choices.some(dataset => dataset.id === datasetId)) {
+        throw new GameError('HISTORICAL_DATA_REQUIRED', 'Start a new world with an available real historical dataset.', 400);
+      }
+      const currentChoice = choices.find(dataset => dataset.id === active?.datasetId);
+      const selected = datasetId ?? currentChoice?.id ?? choices[0]!.id;
+      const created = this.freshWorld(`world-${randomUUID()}`, selected);
       tx.set(worldPath(created.id), created);
       tx.set('system/current', { worldId: created.id });
       tx.set(path, { worldId: created.id, request });

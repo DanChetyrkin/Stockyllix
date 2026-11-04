@@ -1,19 +1,49 @@
-import { useState } from 'react';
-import { Linking, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { Linking, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import type { NewsResponse } from '@/api/feeds';
+import { api } from '@/api/client';
 import { AppShell } from '@/components/AppShell';
+import { DailyQuiz } from '@/components/DailyQuiz';
 import { ProviderWidget } from '@/components/market/ProviderWidget';
-import { Badge, Button, Card, CardTitle, Copy, Empty, Notice, PageTitle } from '@/components/ui/kit';
+import { newsMarkets, newsStocks, type NewsMarket } from '@/components/market/news-options';
+import { Button, Card, CardTitle, Copy, Empty, Field, Notice } from '@/components/ui/kit';
 import { useGame } from '@/context/GameContext';
+import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import { useFeed } from '@/hooks/use-feed';
 import { dateTime } from '@/utils/format';
 
 export default function NewsScreen() {
-  const { isAdmin } = useGame();
+  const { isAdmin, world } = useGame();
+  const { initialized } = useAuth();
+  const { palette } = useTheme();
   const [preview, setPreview] = useState(false);
-  return <AppShell><PageTitle title="Beyond the ticker." subtitle="News from the real world, independent of the demo date. Open the original article for its full context." />
-    <Card style={{ gap: 14 }}><View style={{ flexDirection: 'row', gap: 8 }}><Badge>Current news</Badge><Badge>TradingView</Badge></View><Copy muted>Headlines and publication times are supplied by the source. These stories are not from the historical demo period.</Copy><ProviderWidget kind="news" /></Card>
-    {isAdmin && <Card style={{ gap: 12 }}><CardTitle>Owner news preview</CardTitle><Copy muted>The server adapter uses Alpha Vantage. Availability depends on the account’s News entitlement; a free API key alone may not include it.</Copy><Button compact variant="secondary" onPress={() => setPreview(value => !value)}>{preview ? 'Close API preview' : 'Open API preview'}</Button>{preview && <NewsPreview />}</Card>}
+  const [market, setMarket] = useState<NewsMarket>('all');
+  const [symbol, setSymbol] = useState('');
+  const [choosing, setChoosing] = useState(false);
+  const [query, setQuery] = useState('');
+  const worldId = world?.id;
+  const worldStatus = world?.status;
+  const selected = newsStocks.find(([value]) => value === symbol);
+  const stocks = newsStocks.filter(([value, label]) => `${value} ${label}`.toLowerCase().includes(query.toLowerCase()));
+  useFocusEffect(useCallback(() => {
+    if (!initialized || !worldId || worldStatus !== 'idle') return;
+    // real-day return measurement is separate from the quiz's game date.
+    void api('/daily-review/view', { method: 'POST' }).catch(() => {
+      console.warn('Daily check-in measurement was not saved.');
+    });
+  }, [initialized, worldId, worldStatus]));
+  return <AppShell>
+    <View style={{ gap: 4 }}><Text accessibilityRole="header" style={{ fontSize: 24, fontWeight: '700', color: palette.ink }}>News & a daily question</Text><Copy muted style={{ fontSize: 12 }}>Current headlines · Real publication time, separate from the game clock.</Copy></View>
+    <DailyQuiz compact />
+    <Card style={{ gap: 12, padding: 16 }}>
+      <View accessibilityRole="radiogroup" accessibilityLabel="News market" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{newsMarkets.map(item => <Pressable key={item.value} accessibilityRole="radio" accessibilityState={{ checked: !symbol && market === item.value }} onPress={() => { setMarket(item.value); setSymbol(''); }} style={{ paddingHorizontal: 12, paddingVertical: 10, minHeight: 40, borderRadius: 8, backgroundColor: !symbol && market === item.value ? palette.mint : palette.background }}><Text style={{ color: !symbol && market === item.value ? palette.green : palette.ink, fontSize: 12, fontWeight: '600' }}>{item.label}</Text></Pressable>)}</View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}><Button compact variant="secondary" onPress={() => setChoosing(true)}>{selected ? `${selected[1]} · ${symbol.split(':')[1]}` : 'Choose a company'}</Button>{symbol && <Button compact variant="quiet" onPress={() => setSymbol('')}>Clear company</Button>}<Copy muted style={{ fontSize: 11, flex: 1, minWidth: 160 }}>Filters use the source’s markets and symbols. Some companies may have no stories.</Copy></View>
+      <ProviderWidget kind="news" newsMarket={market} newsSymbol={symbol} />
+    </Card>
+    {isAdmin && <View style={{ gap: 10, alignItems: 'flex-start' }}><Button compact variant="quiet" onPress={() => setPreview(value => !value)}>{preview ? 'Hide server news diagnostics' : 'Server news diagnostics'}</Button>{preview && <Card style={{ gap: 12, width: '100%' }}><Copy muted style={{ fontSize: 12 }}>Alpha Vantage is a separate server preview. Its News entitlement is not included with every free key.</Copy><NewsPreview /></Card>}</View>}
+    <Modal visible={choosing} transparent animationType="fade" onRequestClose={() => setChoosing(false)}><View style={{ flex: 1, padding: 20, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(7,30,23,0.45)' }}><Card style={{ width: '100%', maxWidth: 440, maxHeight: '85%', gap: 14 }}><View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}><CardTitle>Company news</CardTitle><Button compact variant="quiet" onPress={() => setChoosing(false)}>Close</Button></View><Field label="Find a company" value={query} onChangeText={setQuery} placeholder="Name or symbol" /><ScrollView keyboardShouldPersistTaps="handled">{stocks.map(([value, label]) => <Pressable key={value} accessibilityRole="button" onPress={() => { setSymbol(value); setChoosing(false); }} style={{ paddingVertical: 13, borderBottomWidth: 1, borderColor: palette.line }}><Text style={{ color: palette.ink, fontSize: 14 }}>{label}</Text><Copy muted style={{ fontSize: 11 }}>{value}</Copy></Pressable>)}{!stocks.length && <Copy muted>No matching company.</Copy>}</ScrollView></Card></View></Modal>
   </AppShell>;
 }
 

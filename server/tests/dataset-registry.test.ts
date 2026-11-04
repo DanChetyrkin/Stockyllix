@@ -48,6 +48,8 @@ describe('immutable per-world replay datasets', () => {
     const registry = new DatasetRegistry(legacy, [candidate]);
     const service = new GameService(store, registry);
     expect((await service.getWorld()).id).toBe(original.id);
+    expect(service.listDatasets().map(dataset => dataset.id)).toEqual([candidate.id]);
+    await expect(service.reset('disallowed-new-simulation', original.id, legacy.id)).rejects.toMatchObject({ code: 'HISTORICAL_DATA_REQUIRED' });
     const created = await service.reset('select-replay-request', original.id, candidate.id);
     expect(created.datasetId).toBe(candidate.id);
     expect(created.source).toBe('historical');
@@ -78,13 +80,23 @@ describe('immutable per-world replay datasets', () => {
     const world = await service.getWorld();
     const attempts = await Promise.allSettled([
       service.reset('first-concurrent-reset', world.id, candidate.id),
-      service.reset('second-concurrent-reset', world.id, legacy.id),
+      service.reset('second-concurrent-reset', world.id, candidate.id),
     ]);
     expect(attempts.filter(item => item.status === 'fulfilled')).toHaveLength(1);
     expect(attempts.filter(item => item.status === 'rejected')).toHaveLength(1);
     const current = await service.getWorld();
     await service.advance('2026-10-05T07:00:00Z', 'unfinished-job-key', current.id);
     await expect(service.reset('reset-during-clock', current.id, candidate.id)).rejects.toMatchObject({ code: 'WORLD_ADVANCING' });
+  });
+
+  it('uses real historical prices for an unspecified new-world choice while keeping an existing simulated world unchanged', async () => {
+    const store = new MemoryStore();
+    const original = await new GameService(store, legacy).getWorld();
+    const service = new GameService(store, new DatasetRegistry(legacy, [candidate]));
+    expect((await service.getWorld()).datasetId).toBe(legacy.id);
+    const created = await service.reset('default-real-history-world', original.id);
+    expect(created.datasetId).toBe(candidate.id);
+    expect((await new GameService(new MemoryStore(), new DatasetRegistry(legacy, [candidate])).getWorld()).datasetId).toBe(candidate.id);
   });
 
   it('fails closed if an installed dataset is removed and marks the exact end without inventing prices', async () => {

@@ -1,61 +1,58 @@
-# Finish the market-data release
+# Release handoff — November 4, 2026
 
-This handoff distinguishes code readiness from a verified cloud connection. No payment card, paid subscription, new service or active-world reset is required for the current release.
+This is a noncommercial educational interview demonstration with virtual money. Source terms and technical availability are separate. No payment card, paid plan, new service or data deletion is required for the historical replay.
 
-## Verified status on November 4
+## Deploy the prepared server and private real history
 
-- Web release `d4a287990dd838fe` serves all 39 exact export files and the new SPA routes. External-widget rendering still needs a browser check.
-- Render now runs version `1.1.0` / `market-feeds-v1`. Authenticated quote requests reached the new API, but Yahoo returned HTTP 429 from that environment: twenty entries, zero available prices, explicit `PROVIDER_RATE_LIMIT`. A repeated request reused the recorded failure/cooldown. No source limit was bypassed.
-- One normal retry about five minutes later also returned provider-rate-limited, with its next eligible retry saved. No alternate host, proxy, IP or forced refresh was used.
-- Local HTTP with Firebase Auth/Firestore emulators returned twenty real quotes. A second request and an API restart retained the original Firestore cache and timestamps. The public world's clock/data were unchanged by the cloud checks.
-- Alpha Vantage News is not configured on Render (`NEWS_NOT_CONFIGURED`). The supplied local free key returned Premium-required; copying the same key to Render cannot resolve the endpoint entitlement.
-- All three [CI jobs for the code release](https://github.com/DanChetyrkin/Stockyllix/actions/runs/41816092379) passed. The repository collaborator check returned `read` for `rotemyavne7`; accepted write access is still required for submission.
+1. In the existing Render **stockyllix-api** service, keep **Free**, repository **DanChetyrkin/Stockyllix**, branch **codex/render-free-deploy**, and root directory **server**.
+2. Open **Environment → Secret Files → Add Secret File**. Use filename **yahoo-world.json**. Paste the contents of local **server/data/yahoo-world.json**, not a service-account key. Do not put this file in Git or a public URL: it contains unrevealed future game prices.
+3. Add **HISTORICAL_DATASET_PATH=/etc/secrets/yahoo-world.json**. Keep the original **DATASET_SEED**, **DATASET_PATH** if set, **FX_DATA_PATH**, Firebase credential, administrator UIDs and CORS origins unchanged. Do not set **HISTORICAL_DATA_USE_CONFIRMED**: selecting a file does not assert supplier approval.
+4. Keep **YAHOO_AUTOMATED_ACCESS_AUTHORIZED=false** (also the default), **CURRENT_MARKET_ACCESS=admin** and **NEWS_ACCESS=admin**. No new Yahoo collection is authorized. The existing Alpha Vantage free key did not obtain News articles, so copying it to Render is not a fix.
+5. Save and choose **Manual Deploy → Deploy latest commit** after the prepared commit is pushed. Auto-deploy is off. Verify [health](https://stockyllix-api.onrender.com/health): **version 1.2.0**, **release historical-news-v2**, and **commit** equal to the deployed GitHub SHA.
+6. Tell the agent that the release is live. The agent can then perform the requested cloud acceptance in a separate real-data world. Do not reset the old world merely to test deployment.
 
-## What to do next
+Render makes secret files available at `/etc/secrets/<filename>`. The candidate is about 42KB, below the combined 1MB limit. See [official secret-file instructions](https://render.com/docs/configure-environment-variables#secret-files). The file survives process restarts as deployment configuration; no runtime-local disk is used for balances, jobs or caches.
 
-1. Open Current market and Market news on the public site in your browser and on a phone. Check both market groups, all symbols, source attribution and links. Report whether the external panels render; do not send environment screenshots or passwords.
-2. Sign in as the administrator and inspect Owner data preview. In the current Render environment it can correctly show source-unavailable until the provider permits a refresh. Do not change public-use flags, reset the world or redeploy repeatedly to work around HTTP 429.
-3. For a custom public quote API, obtain a source arrangement that explicitly permits this educational public display/cache and access from the deployed host, covering both exchanges. Current Yahoo technical access is proven locally, not from Render. A provider key or local success alone is insufficient. The existing adapter/cache/UI are ready to reuse once that dependency is resolved.
-4. A public real-history replay additionally needs permission to store/display the historical dataset. Its candidate and isolated trading smoke already work; preserve the current world until the new-source activation is reviewed.
-5. Grant `rotemyavne7` write access in repository settings and verify it is accepted. Keep administrator credentials private.
+Browser automation could read Chrome's accessibility tree but could not target its window reliably (coordinate geometry unavailable; capture showed a different app). No alternative session/cookie extraction was attempted. The account-bound Render upload and deployment remain an operator step.
 
-## Deploy the existing Render service
+## What the historical world contains
 
-1. Open the existing **stockyllix-api** service in Render. Keep **Free**, the existing Firebase secret, `DATASET_SEED`, `FX_DATA_PATH`, administrator UIDs and CORS origins unchanged.
-2. Verify repository `DanChetyrkin/Stockyllix`, branch **codex/render-free-deploy**, root directory **server**. The existing Blueprint is **render.yaml** at the repository root.
-3. Keep `CURRENT_MARKET_ACCESS=admin` and `NEWS_ACCESS=admin` (these are also the defaults). Do not set public-use confirmation flags merely because an API call succeeds.
-4. Choose **Manual Deploy → Deploy latest commit**. Automatic deploy is disabled in this Blueprint.
-5. Verify [health](https://stockyllix-api.onrender.com/health) returns `status: ok`, `version: 1.1.0`, and `release: market-feeds-v1`. HTTP 200 from the old release does not prove this update deployed.
-6. Tell the project owner/agent that this exact release is live. Never paste a private environment value or complete environment screenshot into chat.
+Dataset **historical-8c9e717c12d59090** covers **October 19, 2026 00:00 Israel time → November 2, 2026 23:00 Israel time**, with October 16 closing baselines, two complete competition weeks and a final partial-week execution buffer.
 
-## See the result
+- Twenty real Yahoo OHLC series, normalized from ILA to ILS for TASE; US prices remain USD.
+- Real Bank of Israel daily representative USD/ILS. Each historical rate becomes available conservatively at the following Israel midnight; unavailable future rates are never used.
+- Officially checked TASE October 27 closure; no reported splits/dividends within the chosen scoring window. There is no synthetic gap-filling.
+- Opening/closing prices use the assignment's session hours. The game does not claim intraday path fidelity or true intraday MDD.
+- Buys, sells, reservations, valuation, P/L, weekly return, MDD and ranking all resolve the active world's immutable dataset.
+- The clock stops at the end. A new world preserves old world, portfolio, order and ranking documents. Old holdings never migrate to another price series. Generated datasets remain only for reading the legacy world; installed real-history choices exclude new generated-price worlds.
 
-- [Current market](https://stockyllix.web.app/current-market): official TradingView market panel. These are real-world, potentially delayed observations, not demo fills. The panel owns its source display/refresh and is not scraped by our API.
-- Sign in as the configured administrator and open **Owner data preview → Open server preview**. `/api/market/current` must return twenty Yahoo entries, separate price and fetch timestamps, normalized ILS/USD, session/delay/stale labels and a next-refresh time.
-- A second refresh within ten minutes must use the shared cache. A Render restart must reload the saved result/refresh lease from Firestore; it must not trigger one provider batch per visitor. A failed refresh keeps last good observations with old-data status.
-- [Demo trading](https://stockyllix.web.app/market): prices remain tied to the game clock and current immutable dataset. Real-world quotes never fund or execute a demo order.
-- [Market news](https://stockyllix.web.app/news): official TradingView news panel. Owner API preview is separate; no full article text is stored.
+The expanded local acceptance uses the actual private file and an isolated MemoryStore: twenty opening buys, twenty closing sells, fractional units/cash/P&L, twenty-one ranking participants, two weekly archives, source-bar comparison, no future history, recreation and end refusal. This is **not** a deployed trading test. See [verification](verification.md) for later HTTP/emulator and browser outcomes.
 
-The embedded panels still need a real browser/phone check for all twenty symbols, attribution, links, delayed/session labels, responsive layout, reload and unavailable-source behaviour. They run in a sandboxed frame with no access to app storage. An HTTP export check cannot establish that an external widget rendered.
+## Current prices: actual blocker and precise diagnostic
 
-## Alpha Vantage News
+Earlier local HTTP returned twenty real quotes and retained the Firestore cache after API restart. Render's actual requests returned Yahoo HTTP429, twice, with zero available prices. This was not a working cloud feed.
 
-The exact server variable is **ALPHA_VANTAGE_API_KEY**. It belongs only in ignored `server/.env` locally or Render's secret environment. It must never be `EXPO_PUBLIC_*`.
+[Yahoo terms, Section 2, conduct item 9](https://legal.yahoo.com/us/en/yahoo/terms/otos/index.html) explicitly require prior permission for automated access/collection. No such grant was obtained. New collection is therefore disabled before any fetch; **YAHOO_AUTOMATED_ACCESS_AUTHORIZED** must not be set merely because a local test or user approval succeeds. This is separate from the unverified reuse/display rights of the snapshot already acquired. We do not claim the commercial-use paragraph expressly bans this noncommercial interview display, and do not claim a licence was granted.
 
-The supplied free key was tested locally: HTTP 200 contained a Premium requirement and no articles. Adding that same key to Render will not unlock News. No paid upgrade is needed for the TradingView public panel. If an account later obtains the necessary endpoint entitlement and public-display permission, configure the key on Render and redeploy. The cache stores headline metadata only, with a six-hour shared refresh, persistent request budgeting and explicit premium/quota failure states.
+The administrator-only **POST /api/admin/feeds/current-market/check** accepts only `{}` and fixes the sample to **AAPL, MSFT, LUMI.TA, POLI.TA**. It shares the normal feed's Firestore cache, lease and cooldown. Without supplier permission it returns **SOURCE_PERMISSION_REQUIRED**, **attemptedSymbols: []**, and **allFourRefreshed: false**; this is an honest blocked result, not a successful four-stock test. With actual supplier permission it attempts at most four sequential source calls and stops immediately on throttling/access denial. It cannot force a refresh, accept arbitrary URLs/symbols or bypass a prior backoff. Only after all four actually refresh from Render should coverage expand to twenty.
 
-## Real historical replay
+No additional free account was identified that verifiably supplies these twenty listings with both cloud access and the required display/cache rights. Do not create an account or buy a plan based on an unsupported promise. Existing [TradingView market widgets](https://www.tradingview.com/widget/) provide the separate public source-owned display; widget rendering is not proof that our API receives prices.
 
-The existing public world must retain its exact source files and seed. A candidate is prepared separately from Yahoo daily history and BOI FX, with explicitly verified holidays and rejection of corporate actions in the selected period. Never overwrite `DATASET_PATH` or publish private future prices in Git.
+## Public UI and news
 
-Only after storage/public-display rights are established, securely deliver the private candidate through Render **Environment → Secret Files** as `yahoo-world.json`, then set `HISTORICAL_DATASET_PATH=/etc/secrets/yahoo-world.json` and `HISTORICAL_DATA_USE_CONFIRMED=true`. The staged file is about 42KB; Render documents a 1MB combined secret-file limit. See [official secret-file instructions](https://render.com/docs/configure-environment-variables#secret-files). Keep the original default dataset available. On the next deployment the administrator can choose **Real historical replay** in **World controls → Start a new world**. Typing RESET creates a new world; previous worlds and transactions remain intact. Do not perform this reset merely to check a deployment.
+- [Game](https://stockyllix.web.app): production Firebase Auth → Render API → Firestore; the release export is checked for the real API URL and absence of emulator settings/server secrets.
+- [News & quiz](https://stockyllix.web.app/news): TradingView's new compact News Feed with official asset-class/symbol filters, theme support and source links. News time is real publication time; quiz time follows the shared game day. The old `/daily-review` redirects here. Portfolio metrics/insight remain on the home page.
+- [Current market](https://stockyllix.web.app/current-market): source-owned TradingView display, potentially delayed. ILA is explicitly agorot, not ILS. No current quote executes a historical order.
+- The mobile header and clock scroll away with page content. Desktop retains the existing layout.
 
-Before activating a real-data world, verify one buy before opening, one during trading, execution FX, 20% rejection, duplicate retry, a holiday, a multi-event clock jump, weekly ranking and end-of-data refusal. The new-world transition must preserve previous documents and must not migrate balances or holdings between worlds.
+External panels remain sandboxed without access to account storage. Only the app-owned wrapper's outer height is measured. Provider content/shadow roots are not scraped, restyled or exported; attribution stays visible.
 
-## Remaining submission checks
+## Final acceptance still required in the deployed real world
 
-- Resolve the provider's HTTP 429 response and verify twenty valid quotes **from Render**, not only locally.
-- Complete a cloud trade/clock scenario using an agreed demo world; avoid altering someone else's portfolio unexpectedly.
-- Check a second physical device and Render cold start.
-- Verify GitHub CI ran and `rotemyavne7` has accepted write access.
-- Rehearse the explanation of source rights, delayed quotes, cache/fencing, world identity, transactions and idempotency.
+1. Sign in, create the separate historical world, initialize one million once and verify twenty prices/source/date.
+2. Buy before opening and while open; retry an identical request; verify opening/closing execution, USD FX, holdings/cash and the 20% rejection.
+3. Sell, advance multiple events, observe changing valuation and complete a weekly ranking; confirm no future history is exposed.
+4. Reload while processing, resume without duplicate fills, reach end-of-data and refuse further orders/time.
+5. Restart the Render service; confirm the same world, completed fills and saved caches remain. Create a fresh real world afterwards for the reviewer, keeping the acceptance world's records.
+6. Check the public site on a physical phone and Expo Go separately. A desktop narrow viewport or Android bundle is not a physical native-app test.
+7. Give **rotemyavne7** accepted GitHub **write** access (last checked: read), inspect final CI, and share administrator password privately.

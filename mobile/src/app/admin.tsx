@@ -34,6 +34,7 @@ export default function AdminScreen() {
   const actionBusy = useRef(false);
   const storageKey = `stockyllix.clock.${user?.uid || 'signed-out'}`;
   const ready = loadedStorageKey === storageKey;
+  const selectedDatasetId = datasetId || choices.data?.datasets.find(choice => choice.source === 'historical')?.id || world?.datasetId;
 
   useEffect(() => {
     mounted.current = true;
@@ -106,7 +107,7 @@ export default function AdminScreen() {
     try {
       const resetKey = `${storageKey}.reset`;
       const stored = await AsyncStorage.getItem(resetKey);
-      const request = stored ? JSON.parse(stored) as { key: string; worldId: string; datasetId?: string } : { key: randomUUID(), worldId: world!.id, datasetId: datasetId || world!.datasetId };
+      const request = stored ? JSON.parse(stored) as { key: string; worldId: string; datasetId?: string } : { key: randomUUID(), worldId: world!.id, datasetId: selectedDatasetId };
       if (!stored) await AsyncStorage.setItem(resetKey, JSON.stringify(request));
       await api('/admin/reset', { method: 'POST', body: { worldId: request.worldId, confirmation: 'RESET', ...(request.datasetId ? { datasetId: request.datasetId } : {}) }, requestKey: request.key });
       await AsyncStorage.removeItem(resetKey);
@@ -127,10 +128,10 @@ export default function AdminScreen() {
       <View style={ui.metricGrid}><Metric dark label="CURRENT GAME TIME" value={dateTime(world.now)} detail="Israel time · shared by all players" /><Card style={{ flex: 1, minWidth: 270, gap: 12 }}><CardTitle>Available price period</CardTitle><Copy muted>This game includes prices from {dateTime(world.startsAt)} to {dateTime(world.endsAt)}, Israel time. The clock can advance within this period.</Copy><Copy muted style={{ fontSize: 12 }}>Moving time affects every player. Trading resumes after all crossed market events have finished processing.</Copy></Card></View>
       <View style={ui.split}>
         <Card style={{ flex: 1, minWidth: 270, gap: 20 }}><Eyebrow>Advance the world</Eyebrow><CardTitle>Choose the next moment.</CardTitle>
-          <Field label="Target time (ISO with time zone)" value={target} onChangeText={setTarget} editable={!busy && world.status === 'idle' && !savedAdvance} placeholder="2026-10-26T17:30:00+02:00" hint={`Choose a time after ${dateTime(world.now)} and no later than ${dateTime(world.endsAt)} (Israel). “Use next event” fills the next opening or closing for you.`} autoCapitalize="none" />
-          <View style={[ui.row, { flexWrap: 'wrap' }]}><Button compact variant="secondary" disabled={busy || world.status !== 'idle' || !!savedAdvance || !world.nextEvent} onPress={() => setTarget(world.nextEvent?.at || '')}>Use next event</Button><Button compact variant="quiet" disabled={busy || world.status !== 'idle' || !!savedAdvance} onPress={() => setTarget(new Date(Math.min(Date.parse(world.now) + 86400000, Date.parse(world.endsAt))).toISOString())}>+ 24 hours</Button></View>
+          <Field label="Target time (ISO with time zone)" value={target} onChangeText={setTarget} editable={!busy && !world.finished && world.status === 'idle' && !savedAdvance} placeholder="2026-10-26T17:30:00+02:00" hint={`Choose a time after ${dateTime(world.now)} and no later than ${dateTime(world.endsAt)} (Israel). “Use next event” fills the next opening or closing for you.`} autoCapitalize="none" />
+          <View style={[ui.row, { flexWrap: 'wrap' }]}><Button compact variant="secondary" disabled={busy || world.status !== 'idle' || !!savedAdvance || !world.nextEvent} onPress={() => setTarget(world.nextEvent?.at || '')}>Use next event</Button><Button compact variant="quiet" disabled={busy || world.finished || world.status !== 'idle' || !!savedAdvance} onPress={() => setTarget(new Date(Math.min(Date.parse(world.now) + 86400000, Date.parse(world.endsAt))).toISOString())}>+ 24 hours</Button></View>
           {savedAdvance && <Notice>Saved target: {dateTime(savedAdvance.target)}. You can safely retry if the previous response was interrupted.</Notice>}
-          <Button loading={busy && !running} disabled={!ready || world.status !== 'idle' || busy} onPress={() => void advance()}>{savedAdvance ? 'Retry saved clock request' : 'Advance clock  →'}</Button>
+          <Button loading={busy && !running} disabled={!ready || (world.finished && !savedAdvance) || world.status !== 'idle' || busy} onPress={() => void advance()}>{savedAdvance ? 'Retry saved clock request' : 'Advance clock  →'}</Button>
           {savedAdvance && <Button compact variant="quiet" disabled={busy} onPress={() => { void AsyncStorage.removeItem(storageKey).then(() => { setSavedAdvance(null); setError(null); }).catch(cause => setError(errorMessage(cause))); }}>Clear saved request after checking world status</Button>}
           <Copy muted style={{ fontSize: 12 }}>Advancing starts processing automatically. You can reopen this screen and continue after an interruption. Pausing stops automatic steps; it does not cancel the advance.</Copy>
         </Card>
@@ -139,9 +140,9 @@ export default function AdminScreen() {
         </Card>
       </View>
       <Card style={{ gap: 17, borderColor: palette.errorBorder }}><Eyebrow>New demonstration</Eyebrow><CardTitle>Start a new world.</CardTitle><Copy muted>This creates a new world and a fresh virtual portfolio for every player. Previous worlds and their transactions are preserved. Prices are never replaced inside an existing world.</Copy>
-        {world.finished && <Notice>This world has reached the end of its real or simulated price period. Start a new world to continue trading.</Notice>}
+        {world.finished && <Notice>This price period is complete. Results stay saved. Start a separate historical world to continue trading.</Notice>}
         {choices.error && <Copy muted>{choices.error}</Copy>}
-        {choices.data?.datasets.map(choice => <View key={choice.id} style={{ gap: 5 }}><Button compact variant={(datasetId || world.datasetId) === choice.id ? 'primary' : 'secondary'} disabled={busy || world.status !== 'idle'} onPress={() => setDatasetId(choice.id)}>{choice.source === 'historical' ? 'Real historical replay' : 'Simulation'} · {dateTime(choice.startsAt)} – {dateTime(choice.endsAt)}</Button><Copy muted style={{ fontSize: 11 }}>{choice.sourceDescription}</Copy></View>)}
+        {choices.data?.datasets.map(choice => <View key={choice.id} style={{ gap: 5 }}><Button compact variant={selectedDatasetId === choice.id ? 'primary' : 'secondary'} disabled={busy || world.status !== 'idle'} onPress={() => setDatasetId(choice.id)}>{choice.source === 'historical' ? 'Real historical replay' : 'Simulation'} · {dateTime(choice.startsAt)} – {dateTime(choice.endsAt)}</Button><Copy muted style={{ fontSize: 11 }}>{choice.sourceDescription}</Copy></View>)}
         <Field label="Type RESET to confirm" value={resetText} onChangeText={setResetText} editable={!busy && world.status === 'idle'} autoCapitalize="characters" /><Button variant="danger" disabled={resetText !== 'RESET' || busy || world.status !== 'idle'} loading={busy && !running} onPress={() => void reset()}>Start the selected shared world</Button></Card>
     </>}
   </AppShell>;

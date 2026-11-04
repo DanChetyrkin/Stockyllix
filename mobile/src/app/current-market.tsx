@@ -4,7 +4,7 @@ import type { CurrentMarketFeed, CurrentQuote } from '@/api/feeds';
 import { AppShell } from '@/components/AppShell';
 import { MarketModes } from '@/components/market/MarketModes';
 import { ProviderWidget } from '@/components/market/ProviderWidget';
-import { Badge, Button, Card, CardTitle, Copy, Field, Notice, PageTitle } from '@/components/ui/kit';
+import { Badge, Button, Card, Copy, Field, Notice, PageTitle } from '@/components/ui/kit';
 import { useGame } from '@/context/GameContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useFeed } from '@/hooks/use-feed';
@@ -17,7 +17,7 @@ export default function CurrentMarketScreen() {
     <MarketModes />
     <PageTitle title="The market, today." subtitle="Real-world prices and daily moves. Your demo portfolio follows its own historical game clock." />
     <Card style={{ gap: 14 }}><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}><Badge>TradingView</Badge><Badge tone="warning">Delayed data</Badge><Badge>Market watch · no orders</Badge></View><Copy muted>Prices are supplied by the source and may be delayed or show the last session close. Source delay and session labels apply. Tel Aviv quotes in this panel use ILA (agorot): 100 ILA = ₪1.</Copy><ProviderWidget kind="markets" /></Card>
-    {isAdmin && <Card style={{ gap: 12 }}><CardTitle>Owner data preview</CardTitle><Copy muted>Inspect the server’s current Yahoo quotes, source timestamps and shared refresh status. This private preview is separate from the public market panel and never sets demo execution prices.</Copy><Button compact variant="secondary" onPress={() => setPreview(value => !value)}>{preview ? 'Close server preview' : 'Open server preview'}</Button>{preview && <ServerQuotes />}</Card>}
+    {isAdmin && <View style={{ gap: 12, alignItems: 'flex-start' }}><Button compact variant="quiet" onPress={() => setPreview(value => !value)}>{preview ? 'Hide server quote diagnostics' : 'Server quote diagnostics'}</Button>{preview && <Card style={{ gap: 12, width: '100%' }}><Copy muted style={{ fontSize: 12 }}>Separate server observations and cache status. These never set historical execution prices.</Copy><ServerQuotes /></Card>}</View>}
   </AppShell>;
 }
 
@@ -26,17 +26,19 @@ function ServerQuotes() {
   const [query, setQuery] = useState('');
   const [market, setMarket] = useState('all');
   const [descending, setDescending] = useState(true);
+  const permissionMissing = feed.data?.quotes.some(quote => quote.failureCode === 'SOURCE_PERMISSION_REQUIRED');
   const quotes = (feed.data?.quotes ?? []).filter(quote => (market === 'all' || market === quote.market) && `${quote.symbol} ${quote.name}`.toLowerCase().includes(query.toLowerCase()))
     .sort((a, b) => a.changePercent === null ? b.changePercent === null ? a.name.localeCompare(b.name) : 1 : b.changePercent === null ? -1 : (Number(a.changePercent) - Number(b.changePercent)) * (descending ? -1 : 1));
   return <View style={{ gap: 14 }}>
     <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}><Badge>Yahoo · regular session only</Badge><Badge tone="warning">Delay not guaranteed</Badge><Button compact loading={feed.loading} variant="secondary" onPress={() => void feed.refresh()}>Refresh status</Button></View>
-    <Copy muted style={{ fontSize: 12 }}>Quotes refresh on demand through a shared server cache, at most once per 10 minutes. This page checks status every 2 minutes while active. Pre-market and after-hours prices are excluded.</Copy>
+    <Copy muted style={{ fontSize: 12 }}>When source access is authorized, quotes refresh through a shared cache at most once per 10 minutes. This page checks server status every 2 minutes while active. Extended sessions are excluded.</Copy>
+    {permissionMissing && <Copy muted>Automated Yahoo collection is disabled: the source requires prior permission. Cached prices, if present, are old. The TradingView panel above is independent.</Copy>}
     {feed.error && <Notice tone="error">{feed.error}</Notice>}
     {feed.loading && !feed.data && <Copy muted>Fetching the latest source observations…</Copy>}
     {feed.data && <>
       <Copy muted style={{ fontSize: 11 }}>Last successful batch fetch: {dateTime(feed.data.fetchedAt)} · Next eligible refresh: {dateTime(feed.data.nextRefreshAt)} · Israel time</Copy>
       {feed.data.refreshing && <Copy muted>A shared refresh is in progress. Available observations stay visible.</Copy>}
-      {feed.data.status === 'unavailable' && <Notice>The source is currently unavailable. No replacement prices have been created.</Notice>}
+      {feed.data.status === 'unavailable' && !permissionMissing && <Notice>The source is currently unavailable. No replacement prices have been created.</Notice>}
       {feed.data.stale && feed.data.status !== 'unavailable' && <Notice>Some observations are old or could not be refreshed. Check each quote’s timestamp and status.</Notice>}
       <Field label="Find a current quote" value={query} onChangeText={setQuery} placeholder="Name or symbol" />
       <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>{['all', 'TA', 'US'].map(item => <Button key={item} compact variant={market === item ? 'primary' : 'secondary'} onPress={() => setMarket(item)}>{item === 'all' ? 'All 20' : item === 'TA' ? 'Tel Aviv' : 'United States'}</Button>)}<Button compact variant="quiet" onPress={() => setDescending(value => !value)}>Daily change {descending ? '↓' : '↑'}</Button></View>

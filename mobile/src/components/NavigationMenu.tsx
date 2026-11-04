@@ -7,9 +7,8 @@ const pages = [
   { href: '/', label: 'Portfolio', group: 'INVEST', detail: 'Cash and your holdings' },
   { href: '/current-market', label: 'Current market', group: 'INVEST', detail: 'Real-world quotes · delayed data' },
   { href: '/market', label: 'Demo trading', group: 'INVEST', detail: 'Trade within the shared game period' },
-  { href: '/news', label: 'Market news', group: 'LEARN & COMPETE', detail: 'Headlines from the real world' },
   { href: '/orders', label: 'Orders', group: 'INVEST', detail: 'Pending and completed orders' },
-  { href: '/daily-review', label: 'Daily review', group: 'LEARN & COMPETE', detail: 'Your personal daily check-in' },
+  { href: '/news', label: 'News & daily question', group: 'LEARN & COMPETE', detail: 'Current headlines and a short game-day quiz' },
   { href: '/leaderboard', label: 'The league', group: 'LEARN & COMPETE', detail: 'Weekly return and stability' },
   { href: '/help', label: 'How to play', group: 'HELP', detail: 'A friendly guide to Stockyllix' },
 ];

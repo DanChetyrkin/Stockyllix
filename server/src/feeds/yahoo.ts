@@ -98,8 +98,9 @@ export function yahooRetryAfter(value: string | null, now: Date): number {
 }
 
 export async function fetchYahooCurrent(instrument: Instrument, options: {
-  fetcher?: typeof fetch; now?: () => Date; signal?: AbortSignal; timeoutMs?: number;
+  fetcher?: typeof fetch; now?: () => Date; signal?: AbortSignal; timeoutMs?: number; automatedAccessAuthorized?: boolean;
 } = {}): Promise<CurrentQuote> {
+  if (options.automatedAccessAuthorized !== true) throw new FeedProviderError('SOURCE_PERMISSION_REQUIRED', 600_000);
   const url = new URL(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(instrument.id)}`);
   url.search = new URLSearchParams({ range: '5d', interval: '1d', includePrePost: 'false' }).toString();
   const signal = AbortSignal.any([AbortSignal.timeout(options.timeoutMs ?? 8_000), ...(options.signal ? [options.signal] : [])]);

@@ -9,7 +9,7 @@ export default function HelpScreen() {
   const { isAdmin } = useGame();
   return <AppShell>
     <PageTitle title="Make your first move." subtitle="A friendly guide to your account, your portfolio and the weekly league." />
-    <View style={[ui.row, { flexWrap: 'wrap', gap: 8 }]}><GuideLink href="/">Portfolio</GuideLink><GuideLink href={'/current-market' as Href}>Current market</GuideLink><GuideLink href="/market">Demo trading</GuideLink><GuideLink href={'/news' as Href}>Market news</GuideLink><GuideLink href="/orders">Orders</GuideLink><GuideLink href="/daily-review">Daily review & quiz</GuideLink><GuideLink href="/leaderboard">The league</GuideLink></View>
+    <View style={[ui.row, { flexWrap: 'wrap', gap: 8 }]}><GuideLink href="/">Portfolio</GuideLink><GuideLink href={'/current-market' as Href}>Current market</GuideLink><GuideLink href="/market">Demo trading</GuideLink><GuideLink href={'/news' as Href}>News & daily question</GuideLink><GuideLink href="/orders">Orders</GuideLink><GuideLink href="/leaderboard">The league</GuideLink></View>
     <GuideCard title="Two market views, two different clocks">
       <Copy>Current market shows the real-world source’s latest quotes. Prices can be delayed; when a market is closed, the last session quote may remain visible. News also follows real publication time.</Copy>
       <Copy>Demo trading follows the shared game date shown above. Its price source is labelled as historical or simulated. Only those game prices and the game’s FX rate execute your orders. A current quote never changes a historical fill.</Copy>
@@ -47,11 +47,12 @@ export default function HelpScreen() {
       <GuideLink href="/leaderboard">See the league  →</GuideLink>
     </GuideCard>
     <GuideCard title="6. Learn, watch and make it yours">
-      <Copy>The daily review summarizes your latest completed portfolio. The quiz changes at midnight in the shared game’s Israel time: advancing the simulation to a new day brings the next question.</Copy>
+      <Copy>Your portfolio includes a personal daily insight. Open News for current headlines and the compact daily question. The quiz changes at midnight in the shared game’s Israel time: advancing to a new day brings the next question.</Copy>
+      <Copy muted>News filters follow TradingView’s asset classes or one selected company. They do not filter by the game date. A company with no source coverage can show an empty feed.</Copy>
       <Copy>Asset charts show known opening and closing observations through game time. Daily price change compares the latest quote with the prior trading session’s close, in the asset’s currency.</Copy>
       <Copy>Save a personal price target in the watchlist. A target is a reminder inside the app; it does not submit an order or send a notification.</Copy>
       <Copy muted>Use the circle in the header to edit your name and profile photo. Choose Auto, Light or Dark for appearance; Auto follows the real Israel clock, with dark mode from 20:00 to 07:00.</Copy>
-      <GuideLink href="/daily-review">Try today’s question  →</GuideLink>
+      <GuideLink href="/news">Try today’s question  →</GuideLink>
     </GuideCard>
     <Copy muted style={{ fontSize: 12 }}>The status button beside the game clock explains the price source and shows the latest Bank of Israel reference rate. All money is virtual.</Copy>
   </AppShell>;

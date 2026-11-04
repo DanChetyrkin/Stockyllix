@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
+import request from 'supertest';
+import { createApp } from '../src/api/app.js';
 import { MemoryStore } from '../src/data/memory-store.js';
 import { CurrentMarketService } from '../src/feeds/current-market.js';
 import { FeedProviderError } from '../src/feeds/cache.js';
 import { fetchYahooCurrent, parseYahooCurrent, yahooRetryAfter } from '../src/feeds/yahoo.js';
 import { instruments } from '../src/world/catalog.js';
+import { createDataset } from '../src/world/index.js';
+import { GameService } from '../src/services/game-service.js';
 
 const apple = instruments.find(item => item.id === 'AAPL')!;
 const leumi = instruments.find(item => item.id === 'LUMI.TA')!;
@@ -67,7 +71,7 @@ describe('current regular-session Yahoo quotes', () => {
     expect(yahooRetryAfter('120', now())).toBe(120_000);
     expect(yahooRetryAfter('Wed, 04 Nov 2026 17:10:00 GMT', now())).toBe(600_000);
     const fetcher = vi.fn<typeof fetch>(async () => new Response('', { status: 429, headers: { 'retry-after': '600' } }));
-    await expect(fetchYahooCurrent(apple, { fetcher, now })).rejects.toMatchObject({ code: 'PROVIDER_RATE_LIMIT', retryAfterMs: 600_000 });
+    await expect(fetchYahooCurrent(apple, { fetcher, now, automatedAccessAuthorized: true })).rejects.toMatchObject({ code: 'PROVIDER_RATE_LIMIT', retryAfterMs: 600_000 });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });
@@ -126,5 +130,125 @@ describe('cached current-market service', () => {
     expect(loadQuote.mock.calls.length).toBeLessThanOrEqual(3);
     await new CurrentMarketService(options).get();
     expect(loadQuote.mock.calls.length).toBeLessThanOrEqual(3);
+  });
+});
+
+describe('fixed four-symbol owner diagnostic', () => {
+  const quoteFor = (instrument: typeof apple, at = now()) => parseYahooCurrent(chart(instrument.id,
+    instrument.market === 'TA' ? 'ILA' : 'USD', instrument.market === 'TA' ? 'Asia/Jerusalem' : 'America/New_York'), instrument, at);
+
+  it('makes no source requests without actual provider permission, including diagnostic requests', async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    await expect(fetchYahooCurrent(apple, { fetcher, now })).rejects.toMatchObject({ code: 'SOURCE_PERMISSION_REQUIRED' });
+    const service = new CurrentMarketService({ store: new MemoryStore(), instruments, now, fetcher });
+    const result = await service.checkSample();
+    expect(result).toMatchObject({ status: 'unavailable', failureCode: 'SOURCE_PERMISSION_REQUIRED' });
+    expect(result.diagnostic).toMatchObject({ attemptedSymbols: [], refreshedSymbols: [], allFourRefreshed: false });
+    await service.get();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('leaves previously cached good prices visible but explicitly stale when permission is absent', async () => {
+    const store = new MemoryStore();
+    await new CurrentMarketService({ store, instruments, now, loadQuote: async instrument => quoteFor(instrument) }).get();
+    const fetcher = vi.fn<typeof fetch>();
+    const result = await new CurrentMarketService({ store, instruments, now, fetcher }).checkSample();
+    expect(result.quotes).toHaveLength(4);
+    expect(result.quotes.every(quote => quote.price !== null && quote.stale && quote.failureCode === 'SOURCE_PERMISSION_REQUIRED')).toBe(true);
+    expect(result.diagnostic).toMatchObject({ servedFromCache: true, attemptedSymbols: [], allFourRefreshed: false });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('requests only two fixed US and two fixed TASE listings, sequentially and once for concurrent callers', async () => {
+    let concurrent = 0;
+    let maximum = 0;
+    const loadQuote = vi.fn(async (instrument: typeof apple) => {
+      maximum = Math.max(maximum, ++concurrent);
+      await new Promise<void>(resolve => setImmediate(resolve));
+      concurrent -= 1;
+      return quoteFor(instrument);
+    });
+    const service = new CurrentMarketService({ store: new MemoryStore(), instruments, now, loadQuote });
+    const results = await Promise.all(Array.from({ length: 30 }, () => service.checkSample()));
+    expect(loadQuote.mock.calls.map(call => call[0].id)).toEqual(['AAPL', 'MSFT', 'LUMI.TA', 'POLI.TA']);
+    expect(maximum).toBe(1);
+    expect(results[0]?.quotes).toHaveLength(4);
+    expect(results[0]?.diagnostic).toMatchObject({ servedFromCache: false, allFourRefreshed: true,
+      requestedSymbols: ['AAPL', 'MSFT', 'LUMI.TA', 'POLI.TA'], attemptedSymbols: ['AAPL', 'MSFT', 'LUMI.TA', 'POLI.TA'] });
+  });
+
+  it('does not bypass an existing full-feed cooldown or a diagnostic failure after restart', async () => {
+    let at = now();
+    const store = new MemoryStore();
+    const loadQuote = vi.fn(async () => { throw new FeedProviderError('PROVIDER_RATE_LIMIT', 900_000); });
+    const options = { store, instruments, now: () => at, loadQuote };
+    const full = await new CurrentMarketService(options).get();
+    expect(full.failureCode).toBe('PROVIDER_RATE_LIMIT');
+    const calls = loadQuote.mock.calls.length;
+    const held = await new CurrentMarketService(options).checkSample();
+    expect(held.diagnostic).toMatchObject({ servedFromCache: true, attemptedSymbols: [], allFourRefreshed: false });
+    expect(held.nextRefreshAt).toBe(full.nextRefreshAt);
+    expect(loadQuote).toHaveBeenCalledTimes(calls);
+    at = new Date(at.getTime() + 900_001);
+    const tested = await new CurrentMarketService(options).checkSample();
+    expect(tested.diagnostic.attemptedSymbols).toEqual(['AAPL']);
+    expect(tested.failureCode).toBe('PROVIDER_RATE_LIMIT');
+    expect((await new CurrentMarketService(options).get()).nextRefreshAt).toBe(tested.nextRefreshAt);
+    expect(loadQuote).toHaveBeenCalledTimes(calls + 1);
+  });
+
+  it('reuses shared good prices and does not claim a new provider check when served from cache', async () => {
+    const store = new MemoryStore();
+    const loadQuote = vi.fn(async (instrument: typeof apple) => quoteFor(instrument));
+    const options = { store, instruments, now, loadQuote };
+    const first = await new CurrentMarketService(options).checkSample();
+    const repeat = await new CurrentMarketService(options).checkSample();
+    expect(repeat.diagnostic).toMatchObject({ servedFromCache: true, attemptedSymbols: [], refreshedSymbols: [], allFourRefreshed: false });
+    expect(repeat.fetchedAt).toBe(first.fetchedAt);
+    expect(loadQuote).toHaveBeenCalledTimes(4);
+    const full = await new CurrentMarketService(options).get();
+    expect(full.quotes.filter(quote => quote.price !== null)).toHaveLength(4);
+    expect(loadQuote).toHaveBeenCalledTimes(4);
+  });
+
+  it('preserves all other cached prices and marks their older fetches stale after a sample refresh', async () => {
+    let at = now();
+    const store = new MemoryStore();
+    const loadQuote = vi.fn(async (instrument: typeof apple) => quoteFor(instrument, at));
+    const options = { store, instruments, now: () => at, loadQuote, ttlMs: 1_000 };
+    const first = await new CurrentMarketService(options).get();
+    at = new Date(at.getTime() + 1_001);
+    const sample = await new CurrentMarketService(options).checkSample();
+    expect(sample.diagnostic.allFourRefreshed).toBe(true);
+    expect(loadQuote).toHaveBeenCalledTimes(24);
+    const full = await new CurrentMarketService(options).get();
+    expect(full.quotes).toHaveLength(20);
+    expect(full.quotes.filter(quote => quote.price !== null)).toHaveLength(20);
+    expect(full.quotes.find(quote => quote.instrumentId === 'NVDA')).toMatchObject({
+      price: first.quotes.find(quote => quote.instrumentId === 'NVDA')!.price, fetchedAt: first.fetchedAt, stale: true,
+    });
+    expect(loadQuote).toHaveBeenCalledTimes(24);
+  });
+
+  it('protects the HTTP diagnostic and rejects force, URL or symbol input before any provider call', async () => {
+    const store = new MemoryStore();
+    const loadQuote = vi.fn(async (instrument: typeof apple) => quoteFor(instrument));
+    const game = new GameService(store, createDataset('fixed-four-http-test'));
+    const world = await game.getWorld();
+    const app = createApp({ game, currentMarket: new CurrentMarketService({ store, instruments, now, loadQuote }),
+      adminUids: new Set(['admin']), currentMarketAccess: 'admin', corsOrigins: [], rateLimitEnabled: false,
+      verifyToken: async token => ({ uid: token }), logger: () => undefined });
+    const route = '/api/admin/feeds/current-market/check';
+    expect((await request(app).post(route).send({})).status).toBe(401);
+    expect((await request(app).post(route).auth('player', { type: 'bearer' }).send({})).status).toBe(403);
+    expect((await request(app).post(route).auth('admin', { type: 'bearer' }).send({ force: true })).status).toBe(400);
+    expect((await request(app).post(`${route}?symbol=OTHER`).auth('admin', { type: 'bearer' }).send({})).status).toBe(400);
+    expect((await request(app).post(route).auth('admin', { type: 'bearer' }).send({ url: 'https://example.com' })).status).toBe(400);
+    expect(loadQuote).not.toHaveBeenCalled();
+    const result = await request(app).post(route).auth('admin', { type: 'bearer' }).send({});
+    expect(result.status).toBe(200);
+    expect(result.body.diagnostic.allFourRefreshed).toBe(true);
+    expect(loadQuote).toHaveBeenCalledTimes(4);
+    expect(await game.getWorld()).toEqual(world);
   });
 });

@@ -16,15 +16,15 @@ interface Quiz {
   answer: null | { answerIndex: number; correct: boolean; correctIndex: number; explanation: string; answeredAt: string };
 }
 
-export function DailyQuiz() {
+export function DailyQuiz({ compact = false }: { compact?: boolean }) {
   const { user } = useAuth();
   const { world } = useGame();
   if (!user || !world) return null;
   if (world.status === 'advancing') return <Card style={{ gap: 12 }}><Eyebrow>The daily question</Eyebrow><Copy muted>The game clock is moving. Your question will update when it finishes.</Copy></Card>;
-  return <QuizCard key={`${user.uid}/${world.id}/${world.revision}`} uid={user.uid} worldId={world.id} revision={world.revision} />;
+  return <QuizCard key={`${user.uid}/${world.id}/${world.revision}`} uid={user.uid} worldId={world.id} revision={world.revision} compact={compact} />;
 }
 
-function QuizCard({ uid, worldId, revision }: { uid: string; worldId: string; revision: number }) {
+function QuizCard({ uid, worldId, revision, compact }: { uid: string; worldId: string; revision: number; compact: boolean }) {
   const { palette } = useTheme();
   const { refreshWorld } = useGame();
   const [quiz, setQuiz] = useState<Quiz | null>(null);
@@ -32,6 +32,7 @@ function QuizCard({ uid, worldId, revision }: { uid: string; worldId: string; re
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(!compact);
   const active = useRef(false);
   const requestNumber = useRef(0);
 
@@ -84,16 +85,17 @@ function QuizCard({ uid, worldId, revision }: { uid: string; worldId: string; re
     }
   }
 
-  return <Card style={{ gap: 18 }}>
+  return <Card style={{ gap: compact ? 10 : 18, padding: compact ? 16 : 24 }}>
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
       <Eyebrow>The daily question</Eyebrow>{quiz && <Badge>Game day · {quiz.date}</Badge>}
     </View>
-    <CardTitle>One question. A little more confidence.</CardTitle>
-    <Copy muted>A different financial question appears each game day. Everyone gets the same question, and your first answer is final. There is no cash or ranking bonus.</Copy>
+    {!compact && <><CardTitle>One question. A little more confidence.</CardTitle><Copy muted>A different financial question appears each game day. Everyone gets the same question, and your first answer is final. There is no cash or ranking bonus.</Copy></>}
     {loading && !quiz && <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}><ActivityIndicator color={palette.green} /><Copy muted>Loading today’s question…</Copy></View>}
     {error && <Notice tone="error" action={<Button compact variant="secondary" loading={loading} onPress={() => { void refresh(); }}>Refresh question</Button>}>{error}</Notice>}
     {quiz && <>
-      <Text accessibilityRole="header" style={{ color: palette.ink, fontSize: 20, fontWeight: '600', lineHeight: 29 }}>{quiz.question.prompt}</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}><Text accessibilityRole="header" style={{ flex: 1, minWidth: 200, color: palette.ink, fontSize: compact ? 16 : 20, fontWeight: '600', lineHeight: compact ? 24 : 29 }}>{quiz.question.prompt}</Text>{compact && <Button compact variant="secondary" label={expanded ? 'Hide daily question answers' : 'Show daily question answers'} onPress={() => setExpanded(value => !value)}>{expanded ? 'Close' : quiz.answer ? 'View answer' : 'Answer'}</Button>}</View>
+      {expanded && <>
+      {compact && <Copy muted style={{ fontSize: 11 }}>Changes with each game day · First answer is final · No ranking or cash bonus</Copy>}
       <View accessibilityRole="radiogroup" accessibilityLabel="Daily quiz answers" style={{ gap: 10 }}>
         {quiz.question.options.map((option, index) => {
           const chosen = selected === index;
@@ -116,6 +118,7 @@ function QuizCard({ uid, worldId, revision }: { uid: string; worldId: string; re
       </View> : <View style={{ gap: 10, alignItems: 'flex-start' }}>
         <Button disabled={selected === null || loading} loading={submitting} onPress={() => { void submit(); }}>Check my answer</Button>
       </View>}
+      </>}
     </>}
   </Card>;
 }
