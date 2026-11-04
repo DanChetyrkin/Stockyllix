@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { useApi } from '@/hooks/use-api';
-import { Button, Card, CardTitle, Copy, DataState, Metric, useThemedStyles } from './ui/kit';
+import { Button, CardTitle, Copy, DataState, Metric, useThemedStyles } from './ui/kit';
 import { dateTime, money, number, percent } from '@/utils/format';
 
 interface Performance {
@@ -13,9 +13,9 @@ interface Performance {
 
 export function PortfolioPerformance() {
   const [open, setOpen] = useState(false);
-  return <Card style={{ gap: 16 }}><View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-    <CardTitle>Your performance</CardTitle><Button compact variant="secondary" onPress={() => setOpen(value => !value)}>{open ? 'Hide report' : 'Show performance'}</Button>
-  </View><Copy muted>Realized and unrealized profit, with a SPY comparison over the same game period.</Copy>{open && <PerformanceReport />}</Card>;
+  return <View style={{ gap: 16 }}><View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+    <CardTitle>Performance</CardTitle><Button compact variant="secondary" onPress={() => setOpen(value => !value)}>{open ? 'Hide report' : 'Show report'}</Button>
+  </View><Copy muted>Realized and unrealized profit, with a SPY comparison over the same game period.</Copy>{open && <PerformanceReport />}</View>;
 }
 
 function PerformanceReport() {

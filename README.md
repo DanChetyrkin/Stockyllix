@@ -68,11 +68,13 @@ The local seed creates `admin@example.test` and `player@example.test`, password 
 
 Do not start a second emulator if the ports are already occupied. Local emulator state is temporary unless explicitly exported/imported. If `java` is missing from PATH, add your installed Java 21 `bin` directory to that terminal's `$env:PATH`; no system setting needs to change.
 
-## Advance the shared clock
+## Shared clock and administrator controls
 
-Sign in with an administrator UID configured in the API. Open **World controls**, choose the next event or an ISO timestamp, then **Advance clock**. Processing starts automatically through bounded requests. If interrupted or paused, reopen controls and choose **Resume & process**. A long advance may require another resume after the client reaches its processing limit. Players keep their last completed data; a newly opened screen explains that processing is paused instead of showing an endless loader. Open **How to play** in the menu for a first-order walkthrough.
+Historical game time advances at **1× server time**, retaining the original price dates. The app shows both current Israel time and the historical game clock. Render Free can sleep; the next authenticated request resumes bounded, persisted processing. The browser never decides execution time. Prices and balances are published only after the corresponding event work completes.
 
-Reset is administrator-only and requires typing `RESET`. It creates a new world; it does not delete the old world or cancel an in-progress job. All players then initialize once in the new world.
+Sign in with a server-configured administrator UID and open **World controls**. Pause/resume playback, set a forward custom ISO time, or choose **Next trading event**. Forward jumps process intermediate events and weekly standings exactly once. If processing is interrupted, use **Resume synchronization**. Backward time changes require a separate world. Realtime trading is explicitly unavailable without verified current execution-price/FX data; it never changes or disables this historical world.
+
+Use **Open isolated test world** for demonstrations that change money/time. This admin-only scope has its own portfolios and clock and does not affect the shared league. A new-world action requires typing `RESET` and preserves previous records in the selected scope. See [incident, clock and recovery details](docs/trading-clock-release.md).
 
 ## Decisions and trade-offs
 

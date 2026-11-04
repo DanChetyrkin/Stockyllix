@@ -43,7 +43,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         await api('/me/initialize', { method: 'POST', body: { displayName: name.trim().length >= 2 ? name : 'Investor' } });
         if (generation.current === currentGeneration) setInitialized(true);
       } catch (cause) {
-        if (generation.current === currentGeneration) setError(cause instanceof ApiError && cause.code === 'WORLD_ADVANCING' ? null : errorMessage(cause));
+        if (generation.current === currentGeneration) setError(cause instanceof ApiError && ['WORLD_ADVANCING', 'CLOCK_SYNCING'].includes(cause.code) ? null : errorMessage(cause));
       } finally {
         if (generation.current === currentGeneration) setInitializing(false);
         if (initialization.current?.generation === currentGeneration && initialization.current.uid === current.uid) initialization.current = null;

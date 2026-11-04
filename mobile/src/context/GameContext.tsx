@@ -1,5 +1,8 @@
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState } from 'react-native';
 import { api, ApiError, errorMessage } from '@/api/client';
+import { setTestRealm } from '@/api/realm';
 import { World } from '@/api/types';
 import { RequestCoordinator } from '@/hooks/request-state';
 import { useAuth } from './AuthContext';
@@ -11,6 +14,8 @@ interface GameValue {
   refreshing: boolean;
   refreshWorld(): Promise<void>;
   refreshKey: number;
+  testRealm: boolean;
+  switchRealm(testing: boolean): Promise<void>;
 }
 
 const GameContext = createContext<GameValue | null>(null);
@@ -19,25 +24,38 @@ export function GameProvider({ children }: PropsWithChildren) {
   const { user, initialized, retryInitialization } = useAuth();
   const uid = user?.uid;
   const displayName = user?.displayName || user?.email?.split('@')[0] || 'Investor';
-  const [snapshot, setSnapshot] = useState<{ uid: string; world: World; isAdmin: boolean } | null>(null);
+  const [realm, setRealm] = useState<{ uid: string; testing: boolean } | null>(null);
+  const testRealm = Boolean(realm && realm.uid === uid && realm.testing);
+  const realmReady = !uid || realm?.uid === uid;
+  const [snapshot, setSnapshot] = useState<{ uid: string; testing: boolean; world: World; isAdmin: boolean } | null>(null);
   const [request, setRequest] = useState<{ uid: string; loading: boolean; error: string | null } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [requests] = useState(() => new RequestCoordinator());
   const currentWorldId = useRef<string | null>(null);
   const initializedRef = useRef(initialized);
   const notifyResources = useRef(false);
+  const scope = `${uid}/${testRealm ? 'test' : 'shared'}`;
+  const activeScope = useRef(scope);
 
+  useEffect(() => { activeScope.current = scope; }, [scope]);
   useEffect(() => { initializedRef.current = initialized; }, [initialized]);
   useEffect(() => {
     currentWorldId.current = null;
     notifyResources.current = false;
-    return () => requests.cancel();
+    setTestRealm(uid || null, false);
+    let active = true;
+    if (uid) void AsyncStorage.getItem(`stockyllix.realm.${uid}`).then(saved => {
+      if (!active) return;
+      setTestRealm(uid, saved === 'test');
+      setRealm({ uid, testing: saved === 'test' });
+    }).catch(() => { if (active) setRealm({ uid, testing: false }); });
+    return () => { active = false; requests.cancel(); };
   }, [uid, requests]);
 
   const loadWorld = useCallback(async (notify: boolean) => {
-    if (!uid) return;
+    if (!uid || !realmReady || activeScope.current !== scope) return;
     if (notify) notifyResources.current = true;
-    return requests.run(uid, async (signal, isCurrent) => {
+    return requests.run(scope, async (signal, isCurrent) => {
       if (!isCurrent()) return;
       setRequest({ uid, loading: true, error: null });
       try {
@@ -53,13 +71,13 @@ export function GameProvider({ children }: PropsWithChildren) {
             }
             else if (currentWorldId.current !== data.world.id) await api('/me/initialize', { method: 'POST', body: { displayName: displayName.trim().length >= 2 ? displayName : 'Investor' }, signal });
           } catch (cause) {
-            if (!(cause instanceof ApiError) || cause.code !== 'WORLD_ADVANCING') throw cause;
+            if (!(cause instanceof ApiError) || !['WORLD_ADVANCING', 'CLOCK_SYNCING'].includes(cause.code)) throw cause;
             data = await api('/world', { signal });
           }
         }
         if (!isCurrent()) return;
         if (data.world.status === 'idle') currentWorldId.current = data.world.id;
-        setSnapshot({ uid, world: data.world, isAdmin: data.isAdmin });
+        setSnapshot({ uid, testing: testRealm, world: data.world, isAdmin: data.isAdmin });
         if (notifyResources.current) setRefreshKey(key => key + 1);
       } catch (cause) {
         if (isCurrent()) setRequest({ uid, loading: false, error: errorMessage(cause) });
@@ -70,29 +88,42 @@ export function GameProvider({ children }: PropsWithChildren) {
         }
       }
     });
-  }, [uid, displayName, requests, retryInitialization]);
+  }, [uid, realmReady, testRealm, scope, displayName, requests, retryInitialization]);
 
   const refreshWorld = useCallback(() => loadWorld(true), [loadWorld]);
-  const ownSnapshot = snapshot && snapshot.uid === uid ? snapshot : null;
+  const ownSnapshot = snapshot && snapshot.uid === uid && snapshot.testing === testRealm ? snapshot : null;
   const world = ownSnapshot?.world ?? null;
   const isAdmin = ownSnapshot?.isAdmin ?? false;
+  const switchRealm = useCallback(async (testing: boolean) => {
+    if (!uid || (testing && !isAdmin)) throw new Error('An administrator is required for a test world.');
+    await AsyncStorage.setItem(`stockyllix.realm.${uid}`, testing ? 'test' : 'shared');
+    requests.cancel();
+    currentWorldId.current = null;
+    activeScope.current = `${uid}/${testing ? 'test' : 'shared'}`;
+    setTestRealm(uid, testing);
+    setSnapshot(null);
+    setRequest(null);
+    setRealm({ uid, testing });
+    setRefreshKey(key => key + 1);
+  }, [uid, isAdmin, requests]);
 
   useEffect(() => {
     const timer = setTimeout(() => { void loadWorld(false); }, 0);
     return () => clearTimeout(timer);
   }, [loadWorld]);
 
-  // background polls share one request and do not refresh screen resources.
+  // polling asks the server to synchronize; the device never executes an order.
   useEffect(() => {
-    if (world?.status !== 'advancing') return;
-    const timer = setInterval(() => { void loadWorld(false); }, 3500);
-    return () => clearInterval(timer);
-  }, [world?.status, loadWorld]);
+    if (!uid || !realmReady) return;
+    const timer = setInterval(() => { if (AppState.currentState === 'active') void loadWorld(false); }, world?.status === 'advancing' || world?.clock?.syncing ? 3000 : 15000);
+    const subscription = AppState.addEventListener('change', state => { if (state === 'active') void loadWorld(false); });
+    return () => { clearInterval(timer); subscription.remove(); };
+  }, [uid, realmReady, world?.status, world?.clock?.syncing, loadWorld]);
 
   const currentRequest = request && request.uid === uid ? request : null;
   const error = currentRequest?.error ?? null;
   const refreshing = currentRequest?.loading ?? false;
-  const value = useMemo(() => ({ world, isAdmin, error, refreshing, refreshWorld, refreshKey }), [world, isAdmin, error, refreshing, refreshWorld, refreshKey]);
+  const value = useMemo(() => ({ world, isAdmin, error, refreshing, refreshWorld, refreshKey, testRealm, switchRealm }), [world, isAdmin, error, refreshing, refreshWorld, refreshKey, testRealm, switchRealm]);
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
 }
 

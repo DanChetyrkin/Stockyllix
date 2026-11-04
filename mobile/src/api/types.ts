@@ -26,6 +26,18 @@ export interface World {
   weekId: string;
   nextEvent: { at: string; kind: string; market?: Market } | null;
   job: ClockJob | null;
+  clock?: {
+    mode: 'historical' | 'custom' | 'realtime';
+    running: boolean;
+    serverNow: string;
+    targetNow: string;
+    syncing: boolean;
+    finished: boolean;
+    realtimeAvailable: boolean;
+    realtimeUnavailableReason: string;
+    autoProgresses: boolean;
+    error: string | null;
+  };
 }
 
 export interface Instrument {
@@ -59,6 +71,7 @@ export interface Portfolio {
   reservedCashAgorot: number;
   holdings: Record<string, { units: string; reservedUnits: string }>;
   pendingOrderIds: string[];
+  pendingBuyAgorot?: Record<string, number>;
   week: { eligible: boolean; weekId: string; startValueILS: string; mddRatio: string };
   joinedAt: string;
 }
@@ -90,7 +103,7 @@ export interface PortfolioResponse {
   worldId: string;
   revision: number;
   portfolio: Portfolio;
-  summary: { valueILS: string; cashILS: string; cashWeightPct: string; reservedCashILS: string; availableCashILS: string; weeklyReturnPct: string; mddPct: string; eligible: boolean; holdings: HoldingSummary[] };
+  summary: { valueILS: string; cashILS: string; holdingsValueILS?: string; cashWeightPct: string; reservedCashILS: string; availableCashILS: string; weeklyReturnPct: string; mddPct: string; eligible: boolean; holdings: HoldingSummary[] };
   dailyReview: DailyReview;
 }
 

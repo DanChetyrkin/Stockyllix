@@ -18,7 +18,7 @@ export function Eyebrow({ children }: PropsWithChildren) {
 export function PageTitle({ title, subtitle, action }: { title: string; subtitle: string; action?: React.ReactNode }) {
   const ui = useThemedStyles();
   const compact = useWindowDimensions().width < 600;
-  return <View style={[ui.pageHeading, compact && { flexDirection: 'column', alignItems: 'stretch' }]}><View style={{ flex: 1, gap: 8 }}><Text accessibilityRole="header" style={[ui.title, compact && { fontSize: 28, letterSpacing: -0.8 }]}>{title}</Text><Copy muted>{subtitle}</Copy></View>{action && <View style={{ alignSelf: 'flex-start' }}>{action}</View>}</View>;
+  return <View style={[ui.pageHeading, compact && { flexDirection: 'column', alignItems: 'stretch' }]}><View style={{ flex: 1, gap: 6 }}><Text accessibilityRole="header" style={[ui.title, compact && { fontSize: 28, letterSpacing: -0.6 }]}>{title}</Text><Copy muted>{subtitle}</Copy></View>{action && <View style={{ alignSelf: 'flex-start' }}>{action}</View>}</View>;
 }
 
 export function Card({ children, style, dark = false }: PropsWithChildren<{ style?: ViewStyle | ViewStyle[]; dark?: boolean }>) {
@@ -98,23 +98,23 @@ export function DataState({ loading, error, retry, children, hasData }: PropsWit
 function createStyles(palette: ThemePalette) {
   return StyleSheet.create({
   copy: { color: palette.ink, fontSize: 14, lineHeight: 22 },
-  eyebrow: { fontSize: 11, fontWeight: '700', letterSpacing: 1.6, color: palette.green, textTransform: 'uppercase' },
-  title: { fontSize: 32, fontWeight: '700', color: palette.ink, letterSpacing: -1.1 },
-  pageHeading: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 16, marginBottom: 12 },
-  card: { backgroundColor: palette.paper, borderRadius: 16, borderWidth: 1, borderColor: palette.line, padding: 24 },
+  eyebrow: { fontSize: 11, fontWeight: '700', letterSpacing: 1.1, color: palette.green, textTransform: 'uppercase' },
+  title: { fontSize: 32, fontWeight: '700', color: palette.ink, letterSpacing: -0.8 },
+  pageHeading: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 16, marginBottom: 4 },
+  card: { backgroundColor: palette.paper, borderRadius: 14, padding: 24 },
   cardTitle: { color: palette.ink, fontWeight: '700', fontSize: 18, letterSpacing: -0.4 },
   button: { backgroundColor: palette.primary, minHeight: 46, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 9, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 9 },
   buttonText: { color: palette.onPrimary, fontSize: 13, fontWeight: '700' },
-  secondaryButton: { backgroundColor: palette.paper, borderColor: palette.line, borderWidth: 1 },
+  secondaryButton: { backgroundColor: palette.soft },
   quietButton: { backgroundColor: 'transparent' },
   fieldLabel: { color: palette.ink, fontSize: 13, fontWeight: '600' },
   input: { backgroundColor: palette.paper, minHeight: 48, borderWidth: 1, borderColor: palette.inputBorder, paddingHorizontal: 14, paddingVertical: 12, color: palette.ink, fontSize: 15, borderRadius: 9 },
   badge: { alignSelf: 'flex-start', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 6 },
   badgeText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
-  notice: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, padding: 16, backgroundColor: palette.soft, borderRadius: 10, borderWidth: 1, borderColor: palette.line },
+  notice: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, padding: 16, backgroundColor: palette.soft, borderRadius: 10 },
   metricLabel: { fontSize: 12, color: palette.muted, fontWeight: '600' },
-  metricValue: { fontSize: 29, color: palette.ink, fontWeight: '700', letterSpacing: -1.1, fontVariant: ['tabular-nums'] },
-  metricDetail: { fontSize: 11, color: palette.muted },
+  metricValue: { fontSize: 29, color: palette.ink, fontWeight: '700', letterSpacing: -0.7, fontVariant: ['tabular-nums'] },
+  metricDetail: { fontSize: 12, lineHeight: 18, color: palette.muted },
   metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   split: { flexDirection: 'row', flexWrap: 'wrap', gap: 20, alignItems: 'flex-start' },
@@ -140,7 +140,7 @@ export function ThemePicker() {
     { value: 'auto', label: 'Auto' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' },
   ];
   return <View style={{ gap: 5, alignItems: 'flex-start' }}>
-    <View accessibilityLabel="Appearance" style={{ flexDirection: 'row', gap: 3, padding: 3, backgroundColor: palette.soft, borderRadius: 9, borderWidth: 1, borderColor: palette.line }}>
+    <View accessibilityLabel="Appearance" style={{ flexDirection: 'row', gap: 3, padding: 3, backgroundColor: palette.soft, borderRadius: 9 }}>
       {choices.map(choice => <Pressable key={choice.value} accessibilityRole="button" accessibilityLabel={`${choice.label} appearance${choice.value === 'auto' ? ', dark from 8 PM to 7 AM Israel time' : ''}`} accessibilityState={{ selected: preference === choice.value }} onPress={() => setPreference(choice.value)} style={({ pressed }) => ({ minHeight: 36, paddingHorizontal: 12, justifyContent: 'center', borderRadius: 6, backgroundColor: preference === choice.value ? palette.primary : 'transparent', opacity: pressed ? 0.75 : 1 })}>
         <Text style={{ fontSize: 11, fontWeight: '600', color: preference === choice.value ? palette.onPrimary : palette.muted }}>{choice.label}</Text>
       </Pressable>)}

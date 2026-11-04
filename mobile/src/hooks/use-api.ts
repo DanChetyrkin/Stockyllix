@@ -7,7 +7,7 @@ import { RequestCoordinator, resourceView, type RequestState } from './request-s
 
 export function useApi<T>(path: string) {
   const { user, initialized, error: authError, retryInitialization } = useAuth();
-  const { world, error: worldError, refreshWorld, refreshKey } = useGame();
+  const { world, error: worldError, refreshWorld, refreshKey, testRealm } = useGame();
   const [result, setResult] = useState<{ scope: string; data: T } | null>(null);
   const [request, setRequest] = useState<RequestState>({ scope: '', loading: false, error: null });
   const [requests] = useState(() => new RequestCoordinator());
@@ -16,8 +16,9 @@ export function useApi<T>(path: string) {
   const worldId = world?.id;
   const revision = world?.revision;
   const status = world?.status;
-  const scope = `${uid || ''}/${worldId || ''}/${path}`;
-  const ready = Boolean(initialized && uid && worldId && status === 'idle');
+  const syncing = world?.clock?.syncing;
+  const scope = `${uid || ''}/${testRealm ? 'test' : 'shared'}/${worldId || ''}/${path}`;
+  const ready = Boolean(initialized && uid && worldId && status === 'idle' && !syncing);
   const requestKey = `${scope}/${revision}/${refreshKey}`;
 
   const refresh = useCallback(async () => {
@@ -36,7 +37,7 @@ export function useApi<T>(path: string) {
         setResult({ scope, data });
       } catch (cause) {
         if (!isCurrent() || (cause instanceof ApiError && cause.code === 'CANCELLED')) return;
-        if (cause instanceof ApiError && ['WORLD_ADVANCING', 'WORLD_CHANGED', 'PLAYER_NOT_INITIALIZED'].includes(cause.code)) {
+        if (cause instanceof ApiError && ['WORLD_ADVANCING', 'CLOCK_SYNCING', 'WORLD_CHANGED', 'PLAYER_NOT_INITIALIZED'].includes(cause.code)) {
           const recoveryKey = `${scope}/${revision}/${cause.code}`;
           if (recoveryAttempt.current !== recoveryKey) {
             recoveryAttempt.current = recoveryKey;
@@ -59,7 +60,7 @@ export function useApi<T>(path: string) {
     return () => { clearTimeout(timer); requests.cancel(); };
   }, [refresh, requests]));
 
-  const pauseReason = status === 'advancing'
+  const pauseReason = status === 'advancing' || syncing
     ? 'The shared world is advancing. Data refresh resumes when processing finishes.'
     : !initialized ? 'Your portfolio is being prepared.' : 'Connecting to the shared world.';
   return { ...resourceView({ scope, result, request, ready, pauseReason, prerequisiteError: !initialized ? authError : !worldId ? worldError : null }), refresh };
