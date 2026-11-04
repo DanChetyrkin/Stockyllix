@@ -89,7 +89,7 @@ export function DataState({ loading, error, retry, children, hasData }: PropsWit
   const { palette } = useTheme();
   const { world } = useGame();
   const ui = useThemedStyles();
-  const paused = world?.status === 'advancing';
+  const paused = world?.status === 'advancing' || world?.clock?.syncing;
   return <>{error && <Notice tone="error" action={<Button compact variant="secondary" onPress={retry}>Retry</Button>}>{error}</Notice>}
     {!hasData && paused ? <View style={ui.loading}><Copy muted style={{ textAlign: 'center', maxWidth: 450 }}>Game time is updating. Your data will appear when processing finishes.</Copy></View> : loading && !hasData ? <View style={ui.loading}><ActivityIndicator color={palette.green} /><Copy muted>Loading your latest game data…</Copy></View> : children}
   </>;

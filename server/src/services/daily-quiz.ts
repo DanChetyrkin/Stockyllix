@@ -72,9 +72,14 @@ function questionFor(worldId: string, date: string) {
 
 export class DailyQuizService {
   private readonly now: () => Date;
+  private readonly gameTime: (world: World, tx: Transaction) => string | Promise<string>;
 
-  constructor(private readonly store: DocumentStore, options: { now?: () => Date } = {}) {
+  constructor(private readonly store: DocumentStore, options: {
+    now?: () => Date;
+    gameTime?: (world: World, tx: Transaction) => string | Promise<string>;
+  } = {}) {
     this.now = options.now ?? (() => new Date());
+    this.gameTime = options.gameTime ?? (world => world.now);
   }
 
   private async world(tx: Transaction): Promise<World> {
@@ -85,13 +90,12 @@ export class DailyQuizService {
     return world;
   }
 
-  private day(world: World) {
-    const date = DateTime.fromISO(world.now).setZone('Asia/Jerusalem').toISODate()!;
+  private async day(world: World, tx: Transaction) {
+    const date = DateTime.fromISO(await this.gameTime(world, tx)).setZone('Asia/Jerusalem').toISODate()!;
     return { date, question: questionFor(world.id, date) };
   }
 
-  private view(world: World, saved?: SavedAnswer): QuizView {
-    const day = this.day(world);
+  private view(world: World, day: { date: string; question: Question }, saved?: SavedAnswer): QuizView {
     const { id, prompt, options, correctIndex, explanation } = day.question;
     const current = saved?.date === day.date && saved.questionId === id ? saved : undefined;
     return {
@@ -103,15 +107,16 @@ export class DailyQuizService {
   async get(uid: string): Promise<QuizView> {
     return this.store.transaction(async tx => {
       const world = await this.world(tx);
+      const day = await this.day(world, tx);
       const saved = await tx.get<SavedAnswer>(`worlds/${world.id}/players/${uid}/quiz/current`);
-      return this.view(world, saved);
+      return this.view(world, day, saved);
     });
   }
 
   async answer(uid: string, input: { worldId: string; date: string; questionId: string; answerIndex: number }): Promise<QuizView> {
     return this.store.transaction(async tx => {
       const world = await this.world(tx);
-      const day = this.day(world);
+      const day = await this.day(world, tx);
       if (input.worldId !== world.id || input.date !== day.date || input.questionId !== day.question.id) {
         throw new GameError('QUIZ_EXPIRED', 'The game day changed. Refresh to answer the current question.', 409, true);
       }
@@ -120,11 +125,11 @@ export class DailyQuizService {
       }
       const path = `worlds/${world.id}/players/${uid}/quiz/current`;
       const existing = await tx.get<SavedAnswer>(path);
-      if (existing?.date === day.date && existing.questionId === day.question.id) return this.view(world, existing);
+      if (existing?.date === day.date && existing.questionId === day.question.id) return this.view(world, day, existing);
       // the next game day replaces this one document; there is no question history.
       const saved = { date: day.date, questionId: day.question.id, answerIndex: input.answerIndex, answeredAt: this.now().toISOString() };
       tx.set(path, saved);
-      return this.view(world, saved);
+      return this.view(world, day, saved);
     });
   }
 }

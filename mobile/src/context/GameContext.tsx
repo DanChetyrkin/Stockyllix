@@ -59,8 +59,9 @@ export function GameProvider({ children }: PropsWithChildren) {
       if (!isCurrent()) return;
       setRequest({ uid, loading: true, error: null });
       try {
-        let data = await api<{ world: World; isAdmin: boolean }>('/world', { signal });
+        let data = await api<{ world: World; isAdmin: boolean; testRealm?: boolean }>('/world', { signal });
         if (!isCurrent()) return;
+        if (testRealm && data.testRealm !== true) throw new ApiError('TEST_WORLD_UNAVAILABLE', 'The server has not confirmed an isolated test world. Return to the shared world and finish the server update.', 503);
         if (data.world.status === 'idle') {
           try {
             if (!initializedRef.current) {
@@ -96,6 +97,7 @@ export function GameProvider({ children }: PropsWithChildren) {
   const isAdmin = ownSnapshot?.isAdmin ?? false;
   const switchRealm = useCallback(async (testing: boolean) => {
     if (!uid || (testing && !isAdmin)) throw new Error('An administrator is required for a test world.');
+    if (testing && !world?.clock?.autoProgresses) throw new Error('Update the server before opening an isolated test world.');
     await AsyncStorage.setItem(`stockyllix.realm.${uid}`, testing ? 'test' : 'shared');
     requests.cancel();
     currentWorldId.current = null;
@@ -105,7 +107,7 @@ export function GameProvider({ children }: PropsWithChildren) {
     setRequest(null);
     setRealm({ uid, testing });
     setRefreshKey(key => key + 1);
-  }, [uid, isAdmin, requests]);
+  }, [uid, isAdmin, world?.clock?.autoProgresses, requests]);
 
   useEffect(() => {
     const timer = setTimeout(() => { void loadWorld(false); }, 0);

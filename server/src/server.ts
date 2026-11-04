@@ -13,6 +13,7 @@ import { NewsService } from './feeds/news.js';
 import { WorldClockService } from './services/world-clock.js';
 import { scopedStore } from './data/scoped-store.js';
 import type { DocumentStore } from './data/store.js';
+import { clockPath, clockTarget, type WorldClock } from './domain/clock.js';
 
 const config = readConfig();
 const firebase = connectFirebase(config);
@@ -21,7 +22,12 @@ const dataset = datasets.get(datasets.defaultId);
 function gameServices(store: DocumentStore): GameServices {
   const game = new GameService(store, datasets);
   return { game, clock: new WorldClockService(store, game, datasets, { autostart: config.WORLD_CLOCK_AUTOSTART === 'true' }),
-    insights: new MarketInsightsService(store, datasets), quiz: new DailyQuizService(store),
+    insights: new MarketInsightsService(store, datasets), quiz: new DailyQuizService(store, {
+      gameTime: async (world, tx) => {
+        const clock = await tx.get<WorldClock>(clockPath(world.id));
+        return clock ? clockTarget(clock, world, datasets.get(world.datasetId).endsAt, Date.now()) : world.now;
+      },
+    }),
     performance: new PerformanceService(store, datasets) };
 }
 const services = gameServices(firebase.store);
