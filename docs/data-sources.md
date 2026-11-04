@@ -21,7 +21,7 @@ Other requested candidates were screened without adding services:
 
 ## Current news
 
-The supplied Alpha Vantage free key was exercised once without logging it. `NEWS_SENTIMENT` returned HTTP 200 with a Premium requirement and zero articles, matching the [current endpoint documentation](https://www.alphavantage.co/documentation/#news-sentiment). The implemented adapter stores only title, source, publication time, related catalog IDs and HTTPS article URL. It strips bodies/images/sentiment, uses a six-hour shared cache and persistent request budget, and reports entitlement/quota failures without leaking provider URLs or secrets.
+The supplied Alpha Vantage free key was tested locally without logging it. `NEWS_SENTIMENT` returned HTTP 200 with a Premium requirement and zero articles, matching the [current endpoint documentation](https://www.alphavantage.co/documentation/#news-sentiment). The implemented adapter stores only title, source, publication time, related catalog IDs and HTTPS article URL. It strips bodies/images/sentiment, uses a six-hour shared cache and persistent request budget, and reports entitlement/quota failures without leaking provider URLs or secrets.
 
 [EODHD News](https://eodhd.com/financial-apis/stock-market-financial-news-api) offers a free allowance, but its [personal-use terms](https://eodhd.com/financial-apis/terms-conditions) do not permit displaying the data to others. No second news API was connected. Reddit requires approved/OAuth access and represents community posts, while new StockTwits API registration is currently closed; neither is presented as verified news. The public News page instead embeds the official TradingView feed. It follows real publication time, independently of demo time.
 

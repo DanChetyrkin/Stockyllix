@@ -6,6 +6,7 @@ This handoff distinguishes code readiness from a verified cloud connection. No p
 
 - Web release `d4a287990dd838fe` serves all 39 exact export files and the new SPA routes. External-widget rendering still needs a browser check.
 - Render now runs version `1.1.0` / `market-feeds-v1`. Authenticated quote requests reached the new API, but Yahoo returned HTTP 429 from that environment: twenty entries, zero available prices, explicit `PROVIDER_RATE_LIMIT`. A repeated request reused the recorded failure/cooldown. No source limit was bypassed.
+- One normal retry about five minutes later also returned provider-rate-limited, with its next eligible retry saved. No alternate host, proxy, IP or forced refresh was used.
 - Local HTTP with Firebase Auth/Firestore emulators returned twenty real quotes. A second request and an API restart retained the original Firestore cache and timestamps. The public world's clock/data were unchanged by the cloud checks.
 - Alpha Vantage News is not configured on Render (`NEWS_NOT_CONFIGURED`). The supplied local free key returned Premium-required; copying the same key to Render cannot resolve the endpoint entitlement.
 - All three [CI jobs for the code release](https://github.com/DanChetyrkin/Stockyllix/actions/runs/41816092379) passed. The repository collaborator check returned `read` for `rotemyavne7`; accepted write access is still required for submission.
