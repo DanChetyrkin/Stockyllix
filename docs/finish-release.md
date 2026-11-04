@@ -2,6 +2,22 @@
 
 This handoff distinguishes code readiness from a verified cloud connection. No payment card, paid subscription, new service or active-world reset is required for the current release.
 
+## Verified status on November 4
+
+- Web release `d4a287990dd838fe` serves all 39 exact export files and the new SPA routes. External-widget rendering still needs a browser check.
+- Render now runs version `1.1.0` / `market-feeds-v1`. Authenticated quote requests reached the new API, but Yahoo returned HTTP 429 from that environment: twenty entries, zero available prices, explicit `PROVIDER_RATE_LIMIT`. A repeated request reused the recorded failure/cooldown. No source limit was bypassed.
+- Local HTTP with Firebase Auth/Firestore emulators returned twenty real quotes. A second request and an API restart retained the original Firestore cache and timestamps. The public world's clock/data were unchanged by the cloud checks.
+- Alpha Vantage News is not configured on Render (`NEWS_NOT_CONFIGURED`). The supplied local free key returned Premium-required; copying the same key to Render cannot resolve the endpoint entitlement.
+- All three [CI jobs for the code release](https://github.com/DanChetyrkin/Stockyllix/actions/runs/41816092379) passed. The repository collaborator check returned `read` for `rotemyavne7`; accepted write access is still required for submission.
+
+## What to do next
+
+1. Open Current market and Market news on the public site in your browser and on a phone. Check both market groups, all symbols, source attribution and links. Report whether the external panels render; do not send environment screenshots or passwords.
+2. Sign in as the administrator and inspect Owner data preview. In the current Render environment it can correctly show source-unavailable until the provider permits a refresh. Do not change public-use flags, reset the world or redeploy repeatedly to work around HTTP 429.
+3. For a custom public quote API, obtain a source arrangement that explicitly permits this educational public display/cache and access from the deployed host, covering both exchanges. Current Yahoo technical access is proven locally, not from Render. A provider key or local success alone is insufficient. The existing adapter/cache/UI are ready to reuse once that dependency is resolved.
+4. A public real-history replay additionally needs permission to store/display the historical dataset. Its candidate and isolated trading smoke already work; preserve the current world until the new-source activation is reviewed.
+5. Grant `rotemyavne7` write access in repository settings and verify it is accepted. Keep administrator credentials private.
+
 ## Deploy the existing Render service
 
 1. Open the existing **stockyllix-api** service in Render. Keep **Free**, the existing Firebase secret, `DATASET_SEED`, `FX_DATA_PATH`, administrator UIDs and CORS origins unchanged.
@@ -37,7 +53,7 @@ Before activating a real-data world, verify one buy before opening, one during t
 
 ## Remaining submission checks
 
-- Complete the authenticated quote fetch **from Render**, not only locally.
+- Resolve the provider's HTTP 429 response and verify twenty valid quotes **from Render**, not only locally.
 - Complete a cloud trade/clock scenario using an agreed demo world; avoid altering someone else's portfolio unexpectedly.
 - Check a second physical device and Render cold start.
 - Verify GitHub CI ran and `rotemyavne7` has accepted write access.
