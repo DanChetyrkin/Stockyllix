@@ -1,0 +1,172 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { randomUUID } from 'expo-crypto';
+import { Link } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, Text, useWindowDimensions, View } from 'react-native';
+import { api, ApiError, errorMessage } from '@/api/client';
+import { Instrument, MarketResponse, Order, OrderInput, PortfolioResponse, Side } from '@/api/types';
+import { AppShell } from '@/components/AppShell';
+import { InstrumentInsights } from '@/components/market/InstrumentInsights';
+import { WatchlistPanel } from '@/components/market/WatchlistPanel';
+import { MarketModes } from '@/components/market/MarketModes';
+import { Badge, Button, Card, CardTitle, Copy, DataState, Empty, Eyebrow, Field, Notice, PageTitle, useThemedStyles } from '@/components/ui/kit';
+import { useAuth } from '@/context/AuthContext';
+import { useGame } from '@/context/GameContext';
+import { useTheme } from '@/context/ThemeContext';
+import { useApi } from '@/hooks/use-api';
+import { dateTime, money, number, observationDate } from '@/utils/format';
+import { dailyChangeValue, sortMarketAssets, type MarketSort, type SortDirection } from '@/utils/market-sort';
+
+interface SavedRequest { key: string; input: OrderInput }
+
+export default function MarketScreen() {
+  const { palette } = useTheme();
+  const ui = useThemedStyles();
+  const market = useApi<MarketResponse>('/market');
+  const portfolio = useApi<PortfolioResponse>('/portfolio');
+  const { world, refreshWorld } = useGame();
+  const { user } = useAuth();
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [sortBy, setSortBy] = useState<MarketSort>('name');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [side, setSide] = useState<Side>('buy');
+  const [amount, setAmount] = useState('');
+  const [reviewing, setReviewing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<Order | null>(null);
+  const [saved, setSaved] = useState<SavedRequest | null>(null);
+  const [loadedStorageKey, setLoadedStorageKey] = useState<string | null>(null);
+  const inFlight = useRef(false);
+  const wide = useWindowDimensions().width >= 1200;
+  const storageKey = `stockyllix.pending-order.${user?.uid || 'signed-out'}`;
+  const storageReady = loadedStorageKey === storageKey;
+  const assets = market.data?.instruments || [];
+  const selected = assets.find(item => item.id === (saved?.input.instrumentId || selectedId)) || assets[0];
+  const filtered = sortMarketAssets(assets.filter(item => (filter === 'all' || item.market === filter) && `${item.name} ${item.symbol} ${item.sector}`.toLowerCase().includes(query.toLowerCase())), sortBy, sortDirection);
+  const directionLabel = sortBy === 'name' ? sortDirection === 'asc' ? 'A → Z' : 'Z → A' : sortDirection === 'asc' ? 'Low → high' : 'High → low';
+  const holding = portfolio.data?.summary.holdings.find(item => item.instrumentId === selected?.id);
+  const hasPendingSell = side === 'sell' && Number(holding?.reservedUnits || '0') > 0;
+
+  useEffect(() => {
+    let active = true;
+    if (!user) return;
+    AsyncStorage.getItem(storageKey).then(value => {
+      if (!active) return;
+      if (value) {
+        const draft = JSON.parse(value) as SavedRequest;
+        if (typeof draft.key !== 'string' || !draft.input?.worldId || !draft.input.instrumentId || !['buy', 'sell'].includes(draft.input.side)) throw new Error('Saved request is not valid.');
+        setSaved(draft);
+        setSelectedId(draft.input.instrumentId);
+        setAmount(draft.input.amountILS);
+        setSide(draft.input.side);
+      } else setSaved(null);
+      setLoadedStorageKey(storageKey);
+    }).catch(() => { if (active) setError('Could not read saved order state. Reload before submitting another order.'); });
+    return () => { active = false; };
+  }, [storageKey, user]);
+
+  async function sendOrder() {
+    if (inFlight.current || !selected || !world || !storageReady) return;
+    inFlight.current = true;
+    setBusy(true);
+    setError(null);
+    setSuccess(null);
+    let request = saved;
+    try {
+      if (!request) {
+        request = { key: randomUUID(), input: { worldId: world.id, instrumentId: selected.id, side, amountILS: amount } };
+        // save the request before sending so a restart can retry the same order.
+        await AsyncStorage.setItem(storageKey, JSON.stringify(request));
+        setSaved(request);
+      }
+      const result = await api<{ order: Order }>('/orders', { method: 'POST', body: request.input, requestKey: request.key });
+      setSuccess(result.order);
+      setReviewing(false);
+      setAmount('');
+      await AsyncStorage.removeItem(storageKey);
+      setSaved(null);
+      await refreshWorld();
+    } catch (cause) {
+      setError(errorMessage(cause));
+      // a definite client rejection has no unknown network outcome.
+      if (cause instanceof ApiError && cause.status >= 400 && cause.status < 500 && cause.code !== 'WORLD_ADVANCING') {
+        try { await AsyncStorage.removeItem(storageKey); setSaved(null); setReviewing(false); }
+        catch { setError('The request was rejected, but its saved state could not be cleared. Reload and retry the same request.'); }
+      }
+    } finally { inFlight.current = false; setBusy(false); }
+  }
+
+  function reviewOrder() {
+    setError(null);
+    setSuccess(null);
+    if (!/^(?:0|[1-9]\d{0,12})(?:\.\d{1,2})?$/.test(amount) || Number(amount) <= 0) { setError('Enter a positive shekel amount with up to two decimal places.'); return; }
+    setReviewing(true);
+  }
+
+  return <AppShell>
+    <MarketModes />
+    <PageTitle title="Your demo market." subtitle="Trade 20 assets using the shared game date. Current market quotes never set these execution prices." />
+    {world && <Badge>{world.source === 'historical' ? 'Real historical prices' : 'Simulated demo prices'} · {dateTime(world.now)} · Israel time</Badge>}
+    {world && !world.nextEvent && <Notice>The demo has reached the end of its price period. New orders need a future execution event. An administrator can start a new world from World controls.</Notice>}
+    {market.data && <View style={[ui.row, { flexWrap: 'wrap', justifyContent: 'space-between' }]}><Copy muted style={{ fontSize: 12 }}>Prices as of {dateTime(market.data.asOf)} · Israel time</Copy><Copy muted style={{ fontSize: 11 }}>USD / ILS {number(market.data.fx, 6)} · Rate date: {observationDate(market.data.fxAsOf)}</Copy></View>}
+    <DataState loading={market.loading} error={market.error} hasData={!!market.data} retry={() => void market.refresh()}>
+      <View style={[ui.split, !wide && { flexDirection: 'column' }]}>
+        <View style={{ flex: wide ? 1 : undefined, width: wide ? undefined : '100%', gap: 18, minWidth: 0 }}>
+          <Field label="Find an asset" placeholder="Search by name, symbol or sector" value={query} onChangeText={setQuery} autoCapitalize="none" autoCorrect={false} />
+          <View style={[ui.row, { flexWrap: 'wrap', gap: 8 }]}>{[{ key: 'all', label: 'All assets' }, { key: 'TA', label: 'Tel Aviv' }, { key: 'US', label: 'United States' }].map(item => <Button compact key={item.key} variant={filter === item.key ? 'primary' : 'secondary'} onPress={() => setFilter(item.key)}>{item.label}</Button>)}</View>
+          {selected && <InstrumentInsights key={selected.id} instrument={selected} />}
+          <View style={{ gap: 7 }}>
+            <View style={[ui.row, { flexWrap: 'wrap', gap: 8 }]}>
+              <Copy muted style={{ fontSize: 11 }}>Sort by</Copy>
+              {([{ key: 'name', label: 'Name' }, { key: 'dailyChange', label: 'Daily change' }] as const).map(item => <Button compact key={item.key} label={`Sort by ${item.label.toLowerCase()}${sortBy === item.key ? ', selected' : ''}`} variant={sortBy === item.key ? 'primary' : 'secondary'} onPress={() => { setSortBy(item.key); setSortDirection(item.key === 'name' ? 'asc' : 'desc'); }}>{item.label}</Button>)}
+              <Button compact variant="secondary" label={`Sort direction: ${directionLabel}. Reverse direction`} onPress={() => setSortDirection(value => value === 'asc' ? 'desc' : 'asc')}>{directionLabel}</Button>
+            </View>
+            <Copy muted style={{ fontSize: 10 }}>Daily change · asset currency · versus prior session close. — means unavailable.</Copy>
+          </View>
+          <View style={{ gap: 10 }}>
+            {!filtered.length && <Card><Empty title="No matching assets." detail="Try another name or switch markets." /></Card>}
+            {filtered.map(asset => <AssetRow key={asset.id} asset={asset} selected={selected?.id === asset.id} disabled={!!saved || busy} onPress={() => { setSelectedId(asset.id); setReviewing(false); setSuccess(null); setError(null); }} />)}
+          </View>
+        </View>
+        <View style={{ width: wide ? 360 : '100%', gap: 16 }}>
+          <Card style={{ gap: 20 }}>
+            <Eyebrow>Your next decision</Eyebrow>
+            {selected ? <>
+              <View style={{ gap: 6 }}><Text style={{ fontSize: 27, fontWeight: '700', color: palette.ink }}>{selected.symbol}</Text><Copy muted>{selected.name}</Copy><Badge tone={selected.marketOpen ? 'positive' : 'neutral'}>{selected.marketOpen ? 'Market open' : 'Market closed'} · {selected.market === 'TA' ? 'Tel Aviv' : 'US'}</Badge></View>
+              <View style={ui.divider} />
+              <View style={{ flexDirection: 'row', gap: 8 }}>{(['buy', 'sell'] as Side[]).map(option => <View key={option} style={{ flex: 1 }}><Button compact variant={side === option ? 'primary' : 'secondary'} disabled={!!saved || busy || reviewing} onPress={() => setSide(option)}>{option === 'buy' ? 'Buy' : 'Sell'}</Button></View>)}</View>
+              <Field label="Amount in shekels (ILS)" placeholder="e.g. 25,000" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" editable={!saved && !busy && !reviewing} hint="Enter digits and a decimal point; do not use commas." />
+              <View style={{ gap: 9 }}><Detail label="Available cash" value={money(portfolio.data?.summary.availableCashILS)} /><Detail label="Your units" value={number(holding?.units || '0', 6)} />{side === 'sell' && <Detail label="Maximum at last price" value={money(holding?.maxSellAmountILS)} />}<Detail label="Current price in ILS" value={money(selected.priceILS)} /><Detail label="Scheduled execution" value={selected.nextExecutionKind === 'MARKET_CLOSE' ? 'Today’s close' : selected.nextExecutionKind === 'MARKET_OPEN' ? 'Next opening' : 'No event left'} /><Detail label="Execution time (Israel)" value={dateTime(selected.nextExecutionAt)} /></View>
+              <Copy muted style={{ fontSize: 11, lineHeight: 18 }}>The final price is set at execution, including the available USD/ILS rate for US assets. Fractional units are supported. {side === 'buy' ? 'A buy may be rejected if the total position exceeds 20% at execution.' : 'The quoted maximum is an estimate. A lower execution price can reject the sell. Your existing units are reserved while it waits.'}</Copy>
+              {error && <Notice tone="error">{error}</Notice>}
+              {saved && !busy && <Notice>Check the outcome of your previous order request. Retrying is safe and will not create a duplicate.</Notice>}
+              {hasPendingSell && !saved && <Notice>This holding has units reserved by a pending sell. Wait for that order to finish before sending another sell.</Notice>}
+              {success && <Notice tone="success">{success.status === 'pending' ? `Order submitted. Execution: ${dateTime(success.executeAt)} (Israel).` : `Order is ${success.status}.`} <Link href="/orders" style={{ color: palette.green, fontWeight: '700' }}>View orders →</Link></Notice>}
+              {reviewing && !saved && <Notice tone="warning">Confirm {side} of {money(amount)} in {selected.symbol}. Once sent, this order cannot be cancelled.</Notice>}
+              {saved ? <Button loading={busy} disabled={world?.status === 'advancing'} onPress={() => void sendOrder()}>Retry saved request safely</Button> : reviewing ? <><Button loading={busy} disabled={world?.status === 'advancing' || !selected.nextExecutionAt || hasPendingSell} onPress={() => void sendOrder()}>Confirm & send order</Button><Button variant="quiet" disabled={busy} compact onPress={() => setReviewing(false)}>Back to editing</Button></> : <Button disabled={!storageReady || world?.status === 'advancing' || !selected.nextExecutionAt || hasPendingSell} onPress={reviewOrder}>Review {side} order  →</Button>}
+            </> : <Copy muted>Select an asset to explore your next investment.</Copy>}
+          </Card>
+          {selected && <WatchlistPanel key={selected.id} instrument={selected} selectionDisabled={!!saved || busy} onSelect={id => { setSelectedId(id); setReviewing(false); setSuccess(null); setError(null); }} />}
+          <Card style={{ gap: 9, backgroundColor: palette.soft }}><CardTitle>One thoughtful step.</CardTitle><Copy muted style={{ fontSize: 12 }}>An open market order executes at that session’s close. When the market is closed, it waits for the next opening. You can always see the planned time before sending.</Copy></Card>
+        </View>
+      </View>
+    </DataState>
+  </AppShell>;
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'space-between' }}><Copy muted style={{ fontSize: 11, flex: 1 }}>{label}</Copy><Copy style={{ fontSize: 11, fontWeight: '600', textAlign: 'right', flex: 1 }}>{value}</Copy></View>;
+}
+
+function AssetRow({ asset, selected, disabled, onPress }: { asset: Instrument; selected: boolean; disabled: boolean; onPress(): void }) {
+  const { palette } = useTheme();
+  const dailyChange = dailyChangeValue(asset.dailyChangePct);
+  return <Pressable accessibilityRole="button" accessibilityLabel={`Trade ${asset.name}`} accessibilityState={{ selected, disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 15, backgroundColor: selected ? palette.mint : palette.paper, borderRadius: 12, padding: 18, borderWidth: 1, borderColor: selected ? palette.green : palette.line }, pressed && { opacity: 0.8 }]}>
+    <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: selected ? palette.mint : palette.background, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 16, color: palette.green, fontWeight: '700' }}>{asset.symbol.slice(0, 1)}</Text></View>
+    <View style={{ flex: 1, gap: 4 }}><Text style={{ fontSize: 14, color: palette.ink, fontWeight: '700' }}>{asset.symbol}</Text><Copy muted style={{ fontSize: 11 }}>{asset.name}</Copy><Copy muted style={{ fontSize: 9 }}>{asset.market === 'TA' ? 'TEL AVIV' : 'UNITED STATES'} · {asset.sector.toUpperCase()}</Copy></View>
+    <View style={{ alignItems: 'flex-end', gap: 7 }}><Text style={{ fontSize: 16, fontWeight: '700', color: palette.ink }}>{asset.currency === 'USD' ? '$' : '₪'}{number(asset.price)}</Text><Text style={{ fontSize: 11, fontWeight: '600', color: dailyChange === null ? palette.muted : dailyChange < 0 ? palette.red : palette.green }}>Daily {dailyChange === null ? '—' : `${dailyChange > 0 ? '+' : ''}${dailyChange.toFixed(2)}%`}</Text><Badge tone={asset.marketOpen ? 'positive' : 'neutral'}>{asset.marketOpen ? 'Open' : 'Closed'}</Badge></View>
+  </Pressable>;
+}

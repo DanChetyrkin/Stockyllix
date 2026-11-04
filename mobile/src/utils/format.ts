@@ -24,3 +24,18 @@ export function day(value: string | undefined) {
   if (!value) return '—';
   return new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Jerusalem' }).format(new Date(value));
 }
+
+export function clockTime(value: string | undefined) {
+  if (!value || Number.isNaN(new Date(value).getTime())) return '—';
+  return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Jerusalem', hour12: false }).format(new Date(value));
+}
+
+export function observationDate(value: string | undefined) {
+  if (!value) return '—';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const observed = new Date(`${value}T00:00:00Z`);
+    if (Number.isNaN(observed.getTime())) return '—';
+    return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(observed);
+  }
+  return dateTime(value);
+}

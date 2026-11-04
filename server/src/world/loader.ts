@@ -3,10 +3,21 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Dataset } from '../domain/model.js';
 import { createDataset, validateDataset, validateFxRows, type FxRow } from './index.js';
+import { DatasetRegistry } from './registry.js';
 
 export async function readPrivateDataset(path: string): Promise<Dataset> {
   const raw: unknown = JSON.parse(await readFile(resolve(path), 'utf8'));
   return validateDataset(raw);
+}
+
+export async function loadDatasetRegistry(): Promise<DatasetRegistry> {
+  const active = await loadDataset();
+  const candidatePath = process.env.HISTORICAL_DATASET_PATH;
+  if (!candidatePath) return new DatasetRegistry(active);
+  // selecting an existing private file neither fetches data nor grants a source licence.
+  const candidate = await readPrivateDataset(candidatePath);
+  if (candidate.source !== 'historical') throw new Error('The optional replay dataset must contain historical prices');
+  return new DatasetRegistry(active, [candidate]);
 }
 
 export async function loadDataset(): Promise<Dataset> {

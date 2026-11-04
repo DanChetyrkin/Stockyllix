@@ -2,7 +2,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { readConfig } from '../config.js';
 import { connectFirebase } from '../data/firebase.js';
 import { GameService } from '../services/game-service.js';
-import { loadDataset } from '../world/loader.js';
+import { loadDatasetRegistry } from '../world/loader.js';
 
 const config = readConfig();
 if (config.NODE_ENV === 'production' || config.FIREBASE_PROJECT_ID !== 'demo-stockyllix'
@@ -11,7 +11,7 @@ if (config.NODE_ENV === 'production' || config.FIREBASE_PROJECT_ID !== 'demo-sto
   throw new Error('seed:local only works with both loopback emulators and project demo-stockyllix');
 }
 const { store } = connectFirebase(config);
-const game = new GameService(store, await loadDataset());
+const game = new GameService(store, await loadDatasetRegistry());
 const auth = getAuth();
 for (const user of [
   { uid: 'demo-admin', email: 'admin@example.test', displayName: 'Demo Administrator' },

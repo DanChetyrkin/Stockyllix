@@ -8,6 +8,7 @@ import { executeOrder, parseAmount, reserveOrder } from '../domain/trading.js';
 import { decimal, formatDecimal, instrumentPriceILS, portfolioSummary, portfolioValue, sampleWeek, weeklyReturn } from '../domain/valuation.js';
 import { getWeekId, isEligibleJoin, isMarketOpen, nextExecution } from '../world/index.js';
 import { previousSessionClose, priceChangePct } from '../world/price-change.js';
+import { DatasetRegistry, datasetRegistry } from '../world/registry.js';
 
 const PAGE_SIZE = 25;
 const RANKING_PAGE_BATCH = 100;
@@ -33,15 +34,18 @@ export class GameService {
   private readonly now: () => Date;
   private readonly leaseMs: number;
   private readonly batchSize: number;
+  private readonly datasets: DatasetRegistry;
 
-  constructor(private readonly store: DocumentStore, private readonly dataset: Dataset, options: { now?: () => Date; leaseMs?: number; batchSize?: number } = {}) {
+  constructor(private readonly store: DocumentStore, dataset: Dataset | DatasetRegistry, options: { now?: () => Date; leaseMs?: number; batchSize?: number } = {}) {
+    this.datasets = datasetRegistry(dataset);
     this.now = options.now ?? (() => new Date());
     this.leaseMs = options.leaseMs ?? 60_000;
     this.batchSize = options.batchSize ?? 25;
   }
 
-  private freshWorld(id: string): World {
-    return { id, now: this.dataset.startsAt, revision: 0, status: 'idle', snapshot: this.dataset.initialSnapshot, datasetId: this.dataset.id, job: null, leaderboardGeneration: null, weekId: getWeekId(this.dataset.startsAt) };
+  private freshWorld(id: string, datasetId = this.listDatasets()[0]!.id): World {
+    const dataset = this.datasets.get(datasetId);
+    return { id, now: dataset.startsAt, revision: 0, status: 'idle', snapshot: dataset.initialSnapshot, datasetId: dataset.id, job: null, leaderboardGeneration: null, weekId: getWeekId(dataset.startsAt) };
   }
 
   private async current(): Promise<World> {
@@ -50,7 +54,7 @@ export class GameService {
       if (pointer) {
         const world = await tx.get<World>(worldPath(pointer.worldId));
         if (!world) throw new GameError('WORLD_NOT_FOUND', 'The world is not available.', 503, true);
-        if (world.datasetId !== this.dataset.id) throw new GameError('DATASET_MISMATCH', 'The server dataset does not match this world.', 503);
+        this.datasets.get(world.datasetId);
         return world;
       }
       const world = this.freshWorld(`world-${randomUUID()}`);
@@ -61,7 +65,8 @@ export class GameService {
   }
 
   private publicWorld(world: World) {
-    const nextEvent = this.dataset.events.find((event) => Date.parse(event.at) > Date.parse(world.now));
+    const dataset = this.datasets.get(world.datasetId);
+    const nextEvent = dataset.events.find((event) => Date.parse(event.at) > Date.parse(world.now));
     const job = world.job && {
       id: world.job.id, target: world.job.target, completedEvents: world.job.completedEvents,
       totalEvents: world.job.totalEvents, processedPortfolios: world.job.processedPortfolios,
@@ -70,8 +75,9 @@ export class GameService {
     };
     return {
       id: world.id, now: world.now, revision: world.revision, status: world.status, datasetId: world.datasetId,
-      weekId: world.weekId, job, startsAt: this.dataset.startsAt, endsAt: this.dataset.endsAt,
-      source: this.dataset.source, sourceDescription: this.dataset.sourceDescription,
+      weekId: world.weekId, job, startsAt: dataset.startsAt, endsAt: dataset.endsAt,
+      source: dataset.source, sourceDescription: dataset.sourceDescription,
+      finished: Date.parse(world.now) >= Date.parse(dataset.endsAt),
       nextEvent: nextEvent ? { at: nextEvent.at, kind: nextEvent.kind, ...(nextEvent.market ? { market: nextEvent.market } : {}) } : null,
     };
   }
@@ -91,10 +97,16 @@ export class GameService {
     if (!pointer || (expectedId && pointer.worldId !== expectedId)) throw new GameError('WORLD_CHANGED', 'The world was reset. Refresh and try again.', 409, true);
     const world = await tx.get<World>(worldPath(pointer.worldId));
     if (!world) throw new GameError('WORLD_NOT_FOUND', 'The world is not available.', 503, true);
+    this.datasets.get(world.datasetId);
     return world;
   }
 
   async getWorld() { return this.publicWorld(await this.current()); }
+  listDatasets() {
+    const available = this.datasets.summaries();
+    const historical = available.filter(dataset => dataset.source === 'historical');
+    return historical.length ? historical : available;
+  }
 
   async initialize(uid: string, displayName: string) {
     const initial = await this.current();
@@ -116,15 +128,16 @@ export class GameService {
 
   async getPortfolio(uid: string) {
     const world = await this.current();
+    const dataset = this.datasets.get(world.datasetId);
     this.requireIdle(world);
     const portfolio = await this.store.get<Portfolio>(playerPath(world.id, uid));
     if (!portfolio) throw new GameError('PLAYER_NOT_INITIALIZED', 'Create your player profile first.', 404);
     const realDate = this.realDate();
     const review = await this.store.get<ReviewRecord>(`${playerPath(world.id, uid)}/reviews/${realDate}`);
     const activity = review ? undefined : await this.store.get<VisitRecord>(`${playerPath(world.id, uid)}/activity/current`);
-    const summary = portfolioSummary(this.dataset, world.snapshot, portfolio);
+    const summary = portfolioSummary(dataset, world.snapshot, portfolio);
     const baseline = review?.baselineValueILS ?? activity?.lastValueILS ?? '1000000';
-    const valueChangeILS = formatDecimal(portfolioValue(this.dataset, world.snapshot, portfolio).sub(baseline), 2);
+    const valueChangeILS = formatDecimal(portfolioValue(dataset, world.snapshot, portfolio).sub(baseline), 2);
     const largest = [...summary.holdings].sort((a, b) => decimal(b.valueILS).cmp(a.valueILS))[0];
     await this.checkRead(world);
     return {
@@ -143,17 +156,18 @@ export class GameService {
 
   async getMarket() {
     const world = await this.current();
+    const dataset = this.datasets.get(world.datasetId);
     this.requireIdle(world);
     const previousCloses = {
-      TA: previousSessionClose(this.dataset, 'TA', world.now),
-      US: previousSessionClose(this.dataset, 'US', world.now),
+      TA: previousSessionClose(dataset, 'TA', world.now),
+      US: previousSessionClose(dataset, 'US', world.now),
     };
-    const instruments = this.dataset.instruments.map((instrument) => {
-      const next = nextExecution(this.dataset, instrument.id, world.now);
+    const instruments = dataset.instruments.map((instrument) => {
+      const next = nextExecution(dataset, instrument.id, world.now);
       return {
-        ...instrument, price: world.snapshot.prices[instrument.id]!, priceILS: instrumentPriceILS(this.dataset, world.snapshot, instrument.id).toFixed(8),
+        ...instrument, price: world.snapshot.prices[instrument.id]!, priceILS: instrumentPriceILS(dataset, world.snapshot, instrument.id).toFixed(8),
         dailyChangePct: priceChangePct(world.snapshot.prices[instrument.id]!, previousCloses[instrument.market]?.snapshot.prices[instrument.id]),
-        marketOpen: isMarketOpen(this.dataset, instrument.market, world.now), nextExecutionAt: next?.at ?? null,
+        marketOpen: isMarketOpen(dataset, instrument.market, world.now), nextExecutionAt: next?.at ?? null,
         nextExecutionKind: next?.kind ?? null,
       };
     });
@@ -163,6 +177,7 @@ export class GameService {
 
   async getOrders(uid: string, beforeSequence?: number) {
     const world = await this.current();
+    const dataset = this.datasets.get(world.datasetId);
     this.requireIdle(world);
     const rows = await this.store.list<Order>(`${playerPath(world.id, uid)}/orders`, {
       orderBy: 'sequence', direction: 'desc', limit: PAGE_SIZE + 1,
@@ -171,7 +186,7 @@ export class GameService {
     await this.checkRead(world);
     const orders = rows.slice(0, PAGE_SIZE).map((row) => ({
       ...row.data,
-      currency: this.dataset.instruments.find((instrument) => instrument.id === row.data.instrumentId)!.currency,
+      currency: dataset.instruments.find((instrument) => instrument.id === row.data.instrumentId)!.currency,
     }));
     return { worldId: world.id, revision: world.revision, orders, hasMore: rows.length > PAGE_SIZE, nextBeforeSequence: orders.at(-1)?.sequence ?? null };
   }
@@ -200,6 +215,7 @@ export class GameService {
     await this.current();
     return this.store.transaction(async (tx) => {
       const world = await this.txWorld(tx, input.worldId);
+      const dataset = this.datasets.get(world.datasetId);
       const path = playerPath(world.id, uid);
       const portfolio = await tx.get<Portfolio>(path);
       const id = requestId(key);
@@ -210,15 +226,15 @@ export class GameService {
       }
       this.requireIdle(world);
       if (!portfolio) throw new GameError('PLAYER_NOT_INITIALIZED', 'Create your player profile first.', 404);
-      if (!this.dataset.instruments.some((instrument) => instrument.id === input.instrumentId)) throw new GameError('UNKNOWN_INSTRUMENT', 'Unknown instrument.', 400);
-      const event = nextExecution(this.dataset, input.instrumentId, world.now);
-      if (!event || Date.parse(event.at) > Date.parse(this.dataset.endsAt)) throw new GameError('DATASET_FINISHED', 'No execution event remains for this instrument.');
+      if (!dataset.instruments.some((instrument) => instrument.id === input.instrumentId)) throw new GameError('UNKNOWN_INSTRUMENT', 'Unknown instrument.', 400);
+      const event = nextExecution(dataset, input.instrumentId, world.now);
+      if (!event || Date.parse(event.at) > Date.parse(dataset.endsAt)) throw new GameError('DATASET_FINISHED', 'No execution event remains for this instrument.');
       const order: Order = {
         id, uid, worldId: world.id, instrumentId: input.instrumentId, side: input.side, amountAgorot,
         sequence: portfolio.nextSequence, status: 'pending', submittedAt: world.now, createdAt: this.now().toISOString(),
         executeEventId: event.id, executeAt: event.at, requestKey: key,
       };
-      const next = reserveOrder(this.dataset, portfolio, order, input, world.snapshot);
+      const next = reserveOrder(dataset, portfolio, order, input, world.snapshot);
       tx.set(path, next);
       tx.set(`${path}/orders/${id}`, order);
       return order;
@@ -232,6 +248,7 @@ export class GameService {
     const initial = await this.current();
     await this.store.transaction(async (tx) => {
       const world = await this.txWorld(tx, expectedWorldId ?? initial.id);
+      const dataset = this.datasets.get(world.datasetId);
       const requestPath = `${worldPath(world.id)}/advanceRequests/${requestId(key)}`;
       const existing = await tx.get<{ target: string; jobId: string }>(requestPath);
       if (existing) {
@@ -239,12 +256,12 @@ export class GameService {
         return;
       }
       this.requireIdle(world);
-      if (timestamp <= Date.parse(world.now) || timestamp > Date.parse(this.dataset.endsAt)) throw new GameError('INVALID_TIME', 'Target must be after the world clock and within the dataset.', 400);
-      const eventIndex = this.dataset.events.findIndex((event) => Date.parse(event.at) > Date.parse(world.now));
-      const totalEvents = this.dataset.events.filter((event) => Date.parse(event.at) > Date.parse(world.now) && Date.parse(event.at) <= timestamp).length;
+      if (timestamp <= Date.parse(world.now) || timestamp > Date.parse(dataset.endsAt)) throw new GameError('INVALID_TIME', 'Target must be after the world clock and within the dataset.', 400);
+      const eventIndex = dataset.events.findIndex((event) => Date.parse(event.at) > Date.parse(world.now));
+      const totalEvents = dataset.events.filter((event) => Date.parse(event.at) > Date.parse(world.now) && Date.parse(event.at) <= timestamp).length;
       const job: ClockJob = {
         id: randomUUID(), target: new Date(timestamp).toISOString(), requestKey: key, fence: 0, leaseOwner: null, leaseUntil: 0,
-        eventIndex: eventIndex === -1 ? this.dataset.events.length : eventIndex, afterUid: null,
+        eventIndex: eventIndex === -1 ? dataset.events.length : eventIndex, afterUid: null,
         stage: totalEvents ? 'events' : 'leaderboard', completedEvents: 0, totalEvents, processedPortfolios: 0, lastError: null, createdAt: this.now().toISOString(),
       };
       tx.set(worldPath(world.id), { ...world, status: 'advancing', job });
@@ -290,8 +307,9 @@ export class GameService {
   }
 
   private async processEventBatch(claimed: World, owner: string, fence: number) {
+    const dataset = this.datasets.get(claimed.datasetId);
     const job = claimed.job!;
-    const event = this.dataset.events[job.eventIndex];
+    const event = dataset.events[job.eventIndex];
     if (!event || Date.parse(event.at) > Date.parse(job.target)) throw new Error('invalid clock event cursor');
     const players = await this.store.list<Portfolio>(`${worldPath(claimed.id)}/players`, { orderBy: 'uid', limit: this.batchSize, ...(job.afterUid ? { startAfter: job.afterUid } : {}) });
     const started = Date.now();
@@ -320,6 +338,7 @@ export class GameService {
   private async processPlayerEvent(worldId: string, uid: string, event: WorldEvent, jobId: string, owner: string, fence: number) {
     await this.store.transaction(async (tx) => {
       const world = await this.txWorld(tx, worldId);
+      const dataset = this.datasets.get(world.datasetId);
       this.requireLease(world, jobId, owner, fence);
       const path = playerPath(worldId, uid);
       let portfolio = await tx.get<Portfolio>(path);
@@ -328,16 +347,16 @@ export class GameService {
       if (pending.some((order) => !order)) throw new GameError('DATA_INTEGRITY', 'A reserved order is missing. The clock is paused for investigation.', 503);
       const changed: Order[] = [];
       if (event.kind === 'WEEK_START') {
-        const value = portfolioValue(this.dataset, event.snapshot, portfolio).toFixed(12);
+        const value = portfolioValue(dataset, event.snapshot, portfolio).toFixed(12);
         portfolio = { ...portfolio, week: { weekId: event.weekId, startValueILS: value, peakValueILS: value, mddRatio: '0', eligible: true } };
       }
       const due = pending.filter((order): order is Order => Boolean(order && order.status === 'pending' && order.executeEventId === event.id)).sort((a, b) => a.sequence - b.sequence || a.id.localeCompare(b.id));
       for (const order of due) {
-        const result = executeOrder(this.dataset, portfolio, order, event);
+        const result = executeOrder(dataset, portfolio, order, event);
         portfolio = result.portfolio;
         changed.push(result.order);
       }
-      const value = portfolioValue(this.dataset, event.snapshot, portfolio);
+      const value = portfolioValue(dataset, event.snapshot, portfolio);
       portfolio = { ...portfolio, lastEventId: event.id, week: sampleWeek(portfolio.week, value) };
       if (event.kind === 'WEEK_END') portfolio.week = { ...portfolio.week, finalValueILS: value.toFixed(12) };
       const valuation: Valuation = { uid, eventId: event.id, at: event.at, valueILS: value.toFixed(12), weekId: portfolio.week.weekId, weeklyReturnPct: formatDecimal(weeklyReturn(value, portfolio.week), 12), mddPct: formatDecimal(decimal(portfolio.week.mddRatio).mul(100), 12) };
@@ -359,13 +378,14 @@ export class GameService {
   }
 
   private async processRankingBatch(claimed: World, owner: string, fence: number) {
+    const dataset = this.datasets.get(claimed.datasetId);
     const job = claimed.job!;
-    const rows = rankPortfolios(this.dataset, claimed.snapshot, await this.allPlayers(claimed.id));
+    const rows = rankPortfolios(dataset, claimed.snapshot, await this.allPlayers(claimed.id));
     const generation = `${job.id}-${job.eventIndex}`;
     const pageCount = Math.ceil(rows.length / PAGE_SIZE);
     const nextPage = job.afterUid ? Number(job.afterUid.slice(5)) : 1;
     const lastPage = Math.min(pageCount, nextPage + RANKING_PAGE_BATCH - 1);
-    const isWeeklyEnd = this.dataset.events[job.eventIndex - 1]?.kind === 'WEEK_END';
+    const isWeeklyEnd = dataset.events[job.eventIndex - 1]?.kind === 'WEEK_END';
     await this.store.transaction(async (tx) => {
       const world = await this.txWorld(tx, claimed.id);
       const current = this.requireLease(world, job.id, owner, fence);
@@ -387,21 +407,34 @@ export class GameService {
     });
   }
 
-  async reset(key: string, expectedWorldId?: string) {
+  async reset(key: string, expectedWorldId?: string, datasetId?: string) {
     this.validateKey(key);
+    if (datasetId && !this.datasets.summaries().some(item => item.id === datasetId)) throw new GameError('UNKNOWN_DATASET', 'Choose an available demonstration dataset.', 400);
+    const request = { worldId: expectedWorldId ?? null, datasetId: datasetId ?? null };
     const world = await this.store.transaction(async (tx) => {
       const path = `adminRequests/${requestId(key)}`;
-      const existing = await tx.get<{ worldId: string }>(path);
+      const existing = await tx.get<{ worldId: string; request?: typeof request }>(path);
       const existingWorld = existing ? await tx.get<World>(worldPath(existing.worldId)) : undefined;
-      if (existingWorld) return existingWorld;
+      if (existingWorld) {
+        if (existing?.request ? existing.request.worldId !== request.worldId || existing.request.datasetId !== request.datasetId : Boolean(datasetId && datasetId !== existingWorld.datasetId)) {
+          throw new GameError('IDEMPOTENCY_CONFLICT', 'This reset request key was already used for another world or dataset.', 409);
+        }
+        return existingWorld;
+      }
       const pointer = await tx.get<Pointer>('system/current');
       if (expectedWorldId && pointer?.worldId !== expectedWorldId) throw new GameError('WORLD_CHANGED', 'The world was reset. Refresh and try again.', 409, true);
       const active = pointer ? await tx.get<World>(worldPath(pointer.worldId)) : undefined;
       if (active) this.requireIdle(active);
-      const created = this.freshWorld(`world-${randomUUID()}`);
+      const choices = this.listDatasets();
+      if (datasetId && !choices.some(dataset => dataset.id === datasetId)) {
+        throw new GameError('HISTORICAL_DATA_REQUIRED', 'Start a new world with an available real historical dataset.', 400);
+      }
+      const currentChoice = choices.find(dataset => dataset.id === active?.datasetId);
+      const selected = datasetId ?? currentChoice?.id ?? choices[0]!.id;
+      const created = this.freshWorld(`world-${randomUUID()}`, selected);
       tx.set(worldPath(created.id), created);
       tx.set('system/current', { worldId: created.id });
-      tx.set(path, { worldId: created.id });
+      tx.set(path, { worldId: created.id, request });
       return created;
     });
     return this.publicWorld(world);
@@ -414,6 +447,7 @@ export class GameService {
     const realDate = this.realDate();
     return this.store.transaction(async (tx) => {
       const world = await this.txWorld(tx, initial.id);
+      const dataset = this.datasets.get(world.datasetId);
       const path = playerPath(world.id, uid);
       const portfolio = await tx.get<Portfolio>(path);
       const existing = await tx.get<ReviewRecord>(`${path}/reviews/${realDate}`);
@@ -425,7 +459,7 @@ export class GameService {
         realDate, worldDate: DateTime.fromISO(world.now).setZone('Asia/Jerusalem').toISODate()!,
         firstSeenAt: this.now().toISOString(), returnedOnLaterRealDay: Boolean(visit && visit.firstRealDate < realDate),
         baselineValueILS: visit?.lastValueILS ?? '1000000.000000000000', previousReviewDate: visit?.lastRealDate ?? null,
-        viewedValueILS: portfolioValue(this.dataset, world.snapshot, portfolio).toFixed(12),
+        viewedValueILS: portfolioValue(dataset, world.snapshot, portfolio).toFixed(12),
       };
       tx.set(`${path}/reviews/${realDate}`, review);
       tx.set(`${path}/activity/current`, { lastRealDate: realDate, firstRealDate: visit?.firstRealDate ?? realDate, distinctRealDays: (visit?.distinctRealDays ?? 0) + 1, lastValueILS: review.viewedValueILS });

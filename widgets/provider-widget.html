@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Stockyllix market source</title><style>html,body{margin:0;height:100%;font:13px system-ui,sans-serif} .tradingview-widget-container{height:calc(100% - 4px);width:100%}.tradingview-widget-container__widget{height:calc(100% - 28px)}.tradingview-widget-copyright{padding:5px;text-align:center;font-size:11px}a{color:#35745d}#failure{padding:20px;display:none}html.news .tradingview-widget-container,html.news .tradingview-widget-container__widget{height:100%}tv-news-feed{display:block;height:100%;width:100%}</style></head>
+<body><div id="failure" role="status">The source panel could not load. Try reloading or open TradingView directly.</div><div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div><div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/" target="_blank" rel="noopener nofollow">Market data by TradingView</a></div></div>
+<script>
+  // official widgets stay isolated from account storage; no news is extracted.
+  const params = new URLSearchParams(location.search);
+  const news = params.get('kind') === 'news';
+  const colorTheme = params.get('theme') === 'dark' ? 'dark' : 'light';
+  document.body.style.background = colorTheme === 'dark' ? '#15241e' : '#ffffff';
+  document.body.style.color = colorTheme === 'dark' ? '#eaf1ec' : '#153c32';
+  document.documentElement.style.colorScheme = colorTheme;
+  document.querySelector('.tradingview-widget-copyright a').style.color = colorTheme === 'dark' ? '#a5dfbc' : '#35745d';
+  const ta = [['LUMI','Bank Leumi'],['POLI','Bank Hapoalim'],['MZTF','Mizrahi Tefahot'],['DSCT','Discount Bank'],['BEZQ','Bezeq'],['AZRG','Azrieli'],['ESLT','Elbit Systems'],['ICL','ICL'],['TEVA','Teva'],['NICE','NICE']];
+  const us = [['NASDAQ:AAPL','Apple'],['NASDAQ:MSFT','Microsoft'],['NASDAQ:AMZN','Amazon'],['NASDAQ:GOOGL','Alphabet'],['NASDAQ:NVDA','NVIDIA'],['NASDAQ:META','Meta'],['NYSE:JPM','JPMorgan'],['NYSE:JNJ','Johnson & Johnson'],['NYSE:KO','Coca-Cola'],['AMEX:SPY','S&P 500 ETF']];
+  const fail = () => { document.getElementById('failure').style.display = 'block'; };
+  const script = document.createElement('script');
+  if (news) {
+    document.documentElement.classList.add('news');
+    // the news component already includes its native TradingView attribution.
+    document.querySelector('.tradingview-widget-copyright').remove();
+    const allowedSymbols = [...ta.map(([symbol]) => `TASE:${symbol}`), ...us.map(([symbol]) => symbol)];
+    const symbol = allowedSymbols.includes(params.get('symbol')) ? params.get('symbol') : '';
+    const markets = ['all','stocks','forex','indices','crypto','futures'];
+    const market = markets.includes(params.get('market')) ? params.get('market') : 'all';
+    const feed = document.createElement('tv-news-feed');
+    feed.setAttribute('theme', colorTheme);
+    feed.setAttribute('assets-type', symbol ? 'stocks' : market);
+    feed.setAttribute('news-type', 'all');
+    feed.setAttribute('layout-mode', 'flow');
+    // normal stories wrap headlines on narrow screens; compact uses one line.
+    const narrow = window.matchMedia('(max-width: 600px)');
+    const updateStorySize = () => feed.setAttribute('item-size', narrow.matches ? 'normal' : 'compact');
+    updateStorySize();
+    narrow.addEventListener('change', updateStorySize);
+    if (symbol) feed.setAttribute('symbol', symbol);
+    feed.textContent = 'Loading headlines from TradingView…';
+    document.querySelector('.tradingview-widget-container__widget').appendChild(feed);
+    script.type = 'module';
+    script.src = 'https://widgets.tradingview-widget.com/w/en/tv-news-feed.js';
+  } else {
+    const config = {title:'Current markets',width:'100%',height:'100%',locale:'en',colorTheme,showSymbolLogo:true,symbolsGroups:[{name:'Tel Aviv · ILA (agorot)',symbols:ta.map(([symbol,name])=>({name:`TASE:${symbol}`,displayName:name}))},{name:'United States · USD',symbols:us.map(([name,displayName])=>({name,displayName}))}]};
+    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-market-quotes.js';
+    script.async = true;
+    script.textContent = JSON.stringify(config);
+  }
+  script.onerror = fail;
+  document.querySelector('.tradingview-widget-container').appendChild(script);
+</script></body></html>

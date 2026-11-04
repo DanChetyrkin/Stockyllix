@@ -8,7 +8,7 @@ export interface ClockJob {
   completedEvents: number;
   totalEvents: number;
   processedPortfolios: number;
-  leaseUntil: number;
+  leaseExpiresAt?: string;
   lastError: string | null;
 }
 
@@ -17,8 +17,10 @@ export interface World {
   now: string;
   revision: number;
   status: 'idle' | 'advancing';
-  dataMode: 'simulated' | 'historical';
+  source: 'simulated' | 'historical';
   sourceDescription: string;
+  datasetId?: string;
+  finished?: boolean;
   startsAt: string;
   endsAt: string;
   weekId: string;
@@ -35,6 +37,7 @@ export interface Instrument {
   sector: string;
   price: string;
   priceILS: string;
+  dailyChangePct: string | null;
   marketOpen: boolean;
   nextExecutionAt: string | null;
   nextExecutionKind: string | null;
@@ -61,23 +64,39 @@ export interface Portfolio {
 }
 
 export interface DailyReview {
-  date: string;
+  worldDate: string;
+  realDate: string;
+  seenToday: boolean;
+  returnedOnLaterRealDay: boolean;
+  headline: string;
+  insight: string;
+  largestHolding: HoldingSummary | null;
   valueChangeILS: string;
-  executedOrders: number;
+  previousReviewDate: string | null;
   pendingOrders: number;
-  lesson: string;
+}
+
+export interface HoldingSummary {
+  instrumentId: string;
+  units: string;
+  reservedUnits: string;
+  priceILS: string;
+  valueILS: string;
+  weightPct: string;
+  maxSellAmountILS?: string;
 }
 
 export interface PortfolioResponse {
   worldId: string;
   revision: number;
   portfolio: Portfolio;
-  summary: { valueILS: string; availableCashILS: string; weeklyReturnPct: string; mddPct: string };
+  summary: { valueILS: string; cashILS: string; cashWeightPct: string; reservedCashILS: string; availableCashILS: string; weeklyReturnPct: string; mddPct: string; eligible: boolean; holdings: HoldingSummary[] };
   dailyReview: DailyReview;
 }
 
 export interface Order {
   id: string;
+  currency?: 'ILS' | 'USD';
   instrumentId: string;
   side: Side;
   amountAgorot: number;
