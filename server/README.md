@@ -2,7 +2,7 @@
 
 Node / Express / TypeScript enforces the game behind Firebase ID tokens. All game documents live in Firestore; the client cannot set balances, execution prices, FX or time. The existing public API is `https://stockyllix-api.onrender.com/api`.
 
-Source release being prepared: **1.4.0 / demo-controls-v4**. Verify the deployed version, release and exact commit at `/health`; a package version or successful build does not prove deployment. Actual checks are in [verification](../docs/verification.md).
+Deployed API: **1.4.0 / demo-controls-v4**, server commit `b0b0c8eab717eabf64b614a4de8032a8f5ba21b5`. Exact health, authenticated cloud trading and an actual Render restart were verified; measured results are in [verification](../docs/verification.md). Continue checking `/health` after future deployments: a package version or successful build alone does not prove the running commit.
 
 ## Existing Render Free setup
 

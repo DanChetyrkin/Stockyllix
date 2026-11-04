@@ -45,6 +45,6 @@ We omitted a second Web app, store builds, push, company fundamentals, annualize
 - [1.4.0 deployment checklist](docs/finish-release.md)
 - [Learning and interview questions](docs/learning.md)
 
-Source release being prepared: **1.4.0 / demo-controls-v4**. Deployment and acceptance are recorded separately; the version label does not claim completed cloud QA.
+Deployed release: **1.4.0 / demo-controls-v4**, server `b0b0c8e`, final Web client `7ad8335`. Cloud trading acceptance, service restart and manual public-browser buy/direct-fill/sell passed while preserving shared and previous test games. Public phone-width/calendar/theme/news checks passed; all **38/38** final Hosting files matched. All three final CI jobs, **47** client checks, Web/Android exports and HTTPS/CORS release checks passed. [Verification](docs/verification.md) distinguishes browser evidence from build/delivery checks. Physical Expo Go use remains unverified.
 
-Submission needs accepted **Write** access for `rotemyavne7` (last verified: Read), the public link and private reviewer credentials. Physical Expo Go use remains distinct from browser/mobile-width checks and native bundle compilation.
+Submission still needs accepted **Write** access for `rotemyavne7`; the owner deferred this to final handover, and the last verified permission remains Read. Share the public link and reviewer password privately as agreed; only the administrator email is public. Physical Expo Go use remains distinct from browser/mobile-width checks and native bundle compilation.

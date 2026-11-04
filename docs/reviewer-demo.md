@@ -51,7 +51,7 @@ Open News & quiz for the daily finance question. Its day follows the game in Isr
 
 ## Additional checks when time permits
 
-- **Custom date:** use Date and Time · Israel (24h), then **Apply time and pause**. Pick a forward time inside the available period; no ISO string is needed. Moving to an earlier date requires a new game.
+- **Custom date:** click/tap **Date** to open the calendar, select a day and set **Time · Israel (24h)**, then **Apply time and pause**. Pick a forward time inside the available period; no ISO string is needed. Moving to an earlier date requires a new game. The verification record identifies the calendar client's current publication/QA status.
 - **Weekly transition:** choose a later Monday within coverage, allow intermediate events/weekly summaries to complete, then inspect The league. Cash/holdings carry forward; weekly statistics restart.
 - **End of period:** jump only to the displayed final boundary. Further orders without an execution event are blocked with a reason. Use a new game to restart; no automatic account reset or invented future price occurs.
 - **March 2027 test:** in the isolated realm create a **Simulated test prices** game with the selected March date. Check the visible source/range; these stock prices and FX are generated for testing, while shared real history stays unchanged.

@@ -71,7 +71,7 @@ Keep Metro running, connect phone/computer to the same reachable network and sca
 
 ## Clock and safe demonstrations
 
-Use the [3–5 minute walkthrough](reviewer-demo.md). Administrators sign in through normal Firebase Auth and open World controls. Current Israel time is separate from game time; all date/time entry is interpreted as `Asia/Jerusalem`, with DST validation.
+Use the [3–5 minute walkthrough](reviewer-demo.md). Administrators sign in through normal Firebase Auth and open World controls. Click/tap **Date** to open the calendar and select a day, then choose **Time · Israel (24h)**; no ISO string or UTC-offset calculation is needed. Current Israel time is separate from game time; the server interprets date/time as `Asia/Jerusalem` and validates DST. Consult verification for the published calendar-client status.
 
 A running clock persists a game/server anchor in Firestore and advances at 1× server time. Due events are processed in bounded requests. A paused clock stays fixed. A custom forward date/time, next pending-order execution or next market event processes all intermediate events once. A forward jump can include multiple weekly summaries; it is not just a UI date change.
 
@@ -142,10 +142,10 @@ Do not recreate service credentials for a routine deploy. If setup is missing on
 ### Release procedure
 
 1. Review the exact diff and staged files for secrets/private future data. Run all required checks and inspect all three CI jobs on the exact commit.
-2. Deploy the reviewed server commit manually. Verify `version`, `release` and exact `commit` in `/health`; do not equate the repository head with the running server.
-3. Build the client using ignored production settings with real Firebase Web config, the HTTPS Render `/api` URL and emulators false. Preserve `.env.local` used by Expo Go; inspect which env mode the export actually loads.
+2. Deploy Render manually **only when server runtime code, dependencies or build configuration changed**. Verify `version`, `release` and exact `commit` in `/health`; never equate repository head with the running server. Client-only and documentation-only commits need no Render deployment; keep the existing healthy server and record its separate SHA.
+3. If the client changed, build using ignored production settings with real Firebase Web config, the HTTPS Render `/api` URL and emulators false. Preserve `.env.local` used by Expo Go; inspect the env mode actually loaded. Markdown-only documentation changes need no Web export or Hosting publication.
 4. From `mobile`, run `npm run build:web` then `npm run check:release`. This checks health/config/CORS, not an authenticated trade.
-5. From `server`, publish only the existing Hosting sites:
+5. For app/provider-wrapper changes, publish the relevant existing Hosting sites from `server`:
 
 ```powershell
 npx firebase deploy --only hosting --config ../firebase.json --project stockyllix
@@ -154,7 +154,7 @@ npx firebase deploy --only hosting --config ../firebase.json --project stockylli
 Rules/index deployments are separate reviewed changes. Current Rules deny direct access; do not overwrite unrelated Firebase data access. Wrapper-only releases can use `--only hosting:stockyllix-panels`.
 
 6. Verify app bytes/internal routes and normal sign-in. Use a separate test realm for trades/time. Compare the unchanged public baseline before/after; run the reviewer flow on mobile width and check actual native/device behavior separately.
-7. Restart Render, confirm world/cash/orders survive, and retry a saved request without duplicate fill. Record measured evidence in verification.md. No new configuration flag grants market-data rights.
+7. For a server/clock/data change, restart Render, confirm world/cash/orders survive and retry a saved request without duplicate fill. An unchanged server need not restart for a client/docs-only release. Record the checks relevant to the actual change in verification.md. No new configuration flag grants market-data rights.
 
 ## Source integrations and import safety
 
