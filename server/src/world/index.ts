@@ -110,11 +110,11 @@ export function validateFxRows(rows: FxRow[]): FxRow[] {
   return result.sort((a, b) => Date.parse(a.availableAt) - Date.parse(b.availableAt) || a.date.localeCompare(b.date));
 }
 
-function simulatedFx(seed: string): FxRow[] {
+function simulatedFx(seed: string, firstDate = '2026-10-02', lastDate = DATA_LAST_DATE): FxRow[] {
   const rows: FxRow[] = [];
   let rate = new Decimal('3.65');
-  let date = DateTime.fromISO('2026-10-02', { zone: WORLD_ZONE });
-  const last = DateTime.fromISO(DATA_LAST_DATE, { zone: WORLD_ZONE });
+  let date = DateTime.fromISO(firstDate, { zone: WORLD_ZONE });
+  const last = DateTime.fromISO(lastDate, { zone: WORLD_ZONE });
   while (date <= last) {
     if (date.weekday <= 5) {
       rate = rate.mul(new Decimal(1).plus(noise(seed, `fx:${date.toISODate()}`) * 0.004));
@@ -132,19 +132,20 @@ function compareEvents(a: Pick<WorldEvent, 'at' | 'kind' | 'id'>, b: Pick<WorldE
   return Date.parse(a.at) - Date.parse(b.at) || EVENT_ORDER[a.kind] - EVENT_ORDER[b.kind] || a.id.localeCompare(b.id);
 }
 
-export function createDataset(seed: string, suppliedFxRows?: FxRow[]): Dataset {
+export function createDataset(seed: string, suppliedFxRows?: FxRow[], testRange?: { startDate: string; days: 28 }): Dataset {
   if (!seed.trim()) throw new Error('A private dataset seed is required');
-  const start = DateTime.fromISO(DATA_START, { zone: WORLD_ZONE });
+  const start = DateTime.fromISO(testRange?.startDate ?? DATA_START, { zone: WORLD_ZONE });
+  const lastDate = testRange ? start.plus({ days: testRange.days }).minus({ milliseconds: 1 }).toISODate()! : DATA_LAST_DATE;
   const startsAt = utc(start);
-  const endsAt = buildSession(DATA_LAST_DATE, 'US')!.closesAt;
-  const rows = validateFxRows(suppliedFxRows ?? simulatedFx(seed));
+  const endsAt = testRange ? utc(start.plus({ days: testRange.days }).minus({ milliseconds: 1 })) : buildSession(DATA_LAST_DATE, 'US')!.closesAt;
+  const rows = validateFxRows(suppliedFxRows ?? (testRange ? simulatedFx(seed, start.minus({ days: 3 }).toISODate()!, lastDate) : simulatedFx(seed)));
   const initialFx = rows.filter((row) => Date.parse(row.availableAt) <= Date.parse(startsAt)).at(-1);
   if (!initialFx) throw new Error('FX data needs a rate available before world start');
   const sessions: TradingSession[] = [];
   const drafts: DraftEvent[] = [];
   const lastClose = { ...initialPrices };
   let day = start;
-  while (day.toISODate()! <= DATA_LAST_DATE) {
+  while (day.toISODate()! <= lastDate) {
     const date = day.toISODate()!;
     if (day.weekday === 1 || day.weekday === 6) {
       const kind: EventKind = day.weekday === 1 ? 'WEEK_START' : 'WEEK_END';
@@ -192,8 +193,9 @@ export function createDataset(seed: string, suppliedFxRows?: FxRow[]): Dataset {
     : rows.every((row) => row.source === 'ecb') ? 'real historical ECB reference FX; available from the following Israel calendar day' : 'simulated FX, not market exchange rates';
   const contentHash = createHash('sha256').update(JSON.stringify({ initialSnapshot, events })).digest('hex').slice(0, 12);
   const dataset: Dataset = {
-    id: `demo-oct2026-${contentHash}`, startsAt, endsAt, source: 'simulated',
-    sourceDescription: `Real instrument names; simulated stock prices (including the October 2 baseline), ${fxSource}. Assignment weekday hours; no exchange-holiday claims.`,
+    id: testRange ? `test-sim-v1-${testRange.startDate}-${contentHash}` : `demo-oct2026-${contentHash}`, startsAt, endsAt, source: 'simulated',
+    sourceDescription: testRange ? `Isolated test simulation from ${testRange.startDate}: all stock prices and USD/ILS rates are simulated, including the starting values. Assignment weekday hours; no actual exchange-holiday or corporate-action claims.`
+      : `Real instrument names; simulated stock prices (including the October 2 baseline), ${fxSource}. Assignment weekday hours; no exchange-holiday claims.`,
     instruments: instruments.map((instrument) => ({ ...instrument })), sessions, initialSnapshot, events,
   };
   validateDataset(dataset);

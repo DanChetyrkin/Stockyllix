@@ -55,10 +55,9 @@ export function AppShell({ children }: PropsWithChildren) {
   </>;
 
   return <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-    {!compact && pageHeader}
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
-      {/* the mobile header scrolls with the page instead of covering its content. */}
-      {compact && pageHeader}
+      {/* the full header scrolls with the page on every screen size. */}
+      {pageHeader}
       <View style={[styles.content, compact && { padding: 20 }]}>
       <View style={styles.contentInner}>
         {game.testRealm && <Notice tone="neutral" action={<Button compact variant="secondary" onPress={() => void game.switchRealm(false)}>Return to shared world</Button>}>Isolated administrator test world. Shared players and balances are unaffected.</Notice>}

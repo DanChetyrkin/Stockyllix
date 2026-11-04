@@ -14,30 +14,38 @@ import { WorldClockService } from './services/world-clock.js';
 import { scopedStore } from './data/scoped-store.js';
 import type { DocumentStore } from './data/store.js';
 import { clockPath, clockTarget, type WorldClock } from './domain/clock.js';
+import { TestSimulationService } from './services/test-simulation-service.js';
+import type { DatasetRegistry } from './world/registry.js';
 
 const config = readConfig();
 const firebase = connectFirebase(config);
 const datasets = await loadDatasetRegistry();
 const dataset = datasets.get(datasets.defaultId);
-function gameServices(store: DocumentStore): GameServices {
-  const game = new GameService(store, datasets);
-  return { game, clock: new WorldClockService(store, game, datasets, { autostart: config.WORLD_CLOCK_AUTOSTART === 'true' }),
-    insights: new MarketInsightsService(store, datasets), quiz: new DailyQuizService(store, {
+function gameServices(store: DocumentStore, registry: DatasetRegistry = datasets): GameServices {
+  const game = new GameService(store, registry);
+  return { game, clock: new WorldClockService(store, game, registry, { autostart: config.WORLD_CLOCK_AUTOSTART === 'true' }),
+    insights: new MarketInsightsService(store, registry), quiz: new DailyQuizService(store, {
       gameTime: async (world, tx) => {
         const clock = await tx.get<WorldClock>(clockPath(world.id));
-        return clock ? clockTarget(clock, world, datasets.get(world.datasetId).endsAt, Date.now()) : world.now;
+        return clock ? clockTarget(clock, world, registry.get(world.datasetId).endsAt, Date.now()) : world.now;
       },
     }),
-    performance: new PerformanceService(store, datasets) };
+    performance: new PerformanceService(store, registry) };
 }
 const services = gameServices(firebase.store);
 const game = services.game;
 const profile = new ProfileService(firebase.store);
-const testRealms = new Map<string, GameServices>();
-function testRealmServices(uid: string): GameServices {
+const testRealms = new Map<string, Promise<GameServices>>();
+function testRealmServices(uid: string): Promise<GameServices> {
   let services = testRealms.get(uid);
   if (!services) {
-    services = gameServices(scopedStore(firebase.store, `testRealms/${uid}/`));
+    services = (async () => {
+      const store = scopedStore(firebase.store, `testRealms/${uid}/`);
+      const registry = datasets.fork();
+      const simulations = new TestSimulationService(store, registry);
+      await simulations.hydrate();
+      return { ...gameServices(store, registry), simulations };
+    })().catch(error => { testRealms.delete(uid); throw error; });
     testRealms.set(uid, services);
   }
   return services;

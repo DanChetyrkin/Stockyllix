@@ -69,7 +69,7 @@ export default function PortfolioScreen() {
         <View style={{ flex: 1, width: compact ? '100%' : undefined, gap: 10 }}><CardTitle>Portfolio insight</CardTitle><Copy muted>{portfolio.data?.dailyReview.insight || 'Review your available cash and positions before placing an order.'}</Copy><Link href="/news" asChild><Button compact variant="quiet" onPress={() => undefined}>News & daily question →</Button></Link></View>
         <View style={{ flex: 1, width: compact ? '100%' : undefined, gap: 10 }}><CardTitle>Weekly league</CardTitle><Copy muted>85% return ranking · 15% stability ranking. Compare your portfolio with the league over the same game week.</Copy><Link href="/leaderboard" asChild><Button compact variant="quiet" onPress={() => undefined}>Open league →</Button></Link></View>
       </View>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}><Copy muted style={{ fontSize: 12 }}>20% maximum per asset at purchase · No leverage · No short selling</Copy><Badge>{world?.source === 'historical' ? 'Historical prices' : 'Simulation prices'}</Badge></View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}><Copy muted style={{ fontSize: 12 }}>20% maximum per asset at purchase · No leverage · No short selling</Copy><Badge>{world?.source === 'historical' ? 'Real historical prices' : 'Simulated prices'}</Badge></View>
     </DataState>
   </AppShell>;
 }

@@ -1,133 +1,162 @@
 # Operations and handover
 
-## Boundaries
+This is the current operating guide for the 1.4.0 / demo-controls-v4 source release. Consult [verification](verification.md) before assuming that a source change has passed cloud acceptance. Older dated evidence is kept in [the archive](archive/verification-through-v1.3.md).
 
-The browser authenticates with Firebase. Every game read and write goes through the API. Firestore rules deny direct client access. The Admin SDK bypasses those rules, so server validation and IAM are essential. Never put a service-account private key, generator seed or private dataset in the app bundle, public GitHub, logs or `EXPO_PUBLIC_*` variables.
+## Production boundaries and data
 
-Production refuses emulator variables. Local emulator use requires the `demo-stockyllix` project and both Auth/Firestore emulator settings. The API defaults to loopback locally. Authentication and game initialization are separate operations: retry initialization after a network failure; do not create another account.
+- App: **https://stockyllix.web.app**. API: **https://stockyllix-api.onrender.com/api**. Health: **https://stockyllix-api.onrender.com/health**.
+- Firebase Hosting serves `mobile/dist` as a static SPA; internal routes rewrite to `index.html`. A second static Hosting site, `stockyllix-panels.web.app`, contains only the provider wrapper from `widgets/`. Third-party scripts cannot access the application origin's Firebase session.
+- Firebase Authentication supplies identity. Every game read/write goes through the token-verifying API. Firestore Rules deny direct client access; Admin SDK access bypasses Rules and is checked by server authorization and IAM.
+- Shared real replay: `historical-8c9e717c12d59090`, October 19–November 2, 2026, twenty instruments, real BOI execution FX, conservative next-day FX availability. Preserve the exact private file and all legacy datasets still referenced by worlds.
+- Administrator-only test scope uses `X-Stockyllix-Test: true` and storage under `testRealms/<authenticatedUid>/`. Its new simulated games have an explicit selected date and simulated prices/FX. They never change the shared world's source, cash, users or pointer. Prior test games are also preserved.
 
-## Free deployment, without a card
+No service-account key, private dataset, generator seed, `.env`, emulator export or `node_modules` belongs in Git, a client bundle, screenshots or logs. Public Firebase Web config is client configuration, not an administrator credential.
 
-1. Keep Firebase on Spark. Do not enable Blaze, Functions, App Hosting or paid backups.
-2. Register a Render **Free** Node web service using `render.yaml`. Stop if the account flow requires a card; do not start a paid trial. No account-specific deployment success is implied by the manifest.
-3. Set `FIREBASE_SERVICE_ACCOUNT` as a Render secret, using a dedicated project service account with the minimum required Firestore permissions. Set `ADMIN_UIDS`, exact HTTPS `CORS_ORIGINS` and a private random `DATASET_SEED` of at least32 characters. Keep the seed and exact FX/dataset version fixed across releases. No credentials belong in YAML.
-4. Build runs `npm ci --include=dev` (the compiler/import tools are development dependencies), imports public ECB reference rates, then compiles TypeScript. Startup validates the dataset. Runtime trades make no external market-data calls. Keep a private copy of the exact FX/dataset and its dataset ID: historical source revisions can change the ID even with the same seed. A mismatched world fails closed. If the ECB download fails, retry the build; do not silently replace real FX with generated numbers.
-5. Put the real Firebase Web config and deployed API URL in the build environment for Expo. `EXPO_PUBLIC_USE_EMULATORS=false`. Public Firebase config is not an Admin credential.
-6. Run `npx expo export --platform web` from `mobile`. The root Firebase configuration serves `mobile/dist` and rewrites SPA routes to index.html.
-7. After the Firebase CLI is authenticated to the intended project, deploy the prepared rules/indexes and Hosting. First inspect the existing rules and confirm the project contains only this game's intended data; these rules deny every direct client read/write. Do not overwrite unrelated application access.
-8. Check browser registration, token verification, initial money, an order, clock execution, reload at an internal URL, and a server restart. Test a regular account cannot call admin routes. Set up the reviewer's agreed administrator UID before handoff.
+## Local Windows setup
 
-From `server`, Firebase CLI commands use `--config ../firebase.json --project stockyllix`; do not confuse this with emulator commands using `--project demo-stockyllix`. Firebase CLI login is interactive and should be completed by the account owner. A service-account key is needed for an externally hosted API, not for the browser or ordinary local emulator tests.
+Use Node 26.13.0 and Java 21 for the emulators. The Firebase emulator project must be `demo-stockyllix`; never use a real service-account key there.
 
-The static Firebase Hosting URL and Render API URL must be recorded only after successful deployment. If Render cannot be opened without billing, evaluate Vercel Hobby for this personal, noncommercial assignment and use the same API/service layer. Do not migrate data or create paid resources as an automatic fallback.
+```powershell
+Set-Location -LiteralPath "C:\Users\danch\OneDrive\Desktop\House of Finance Project\Stockyllix\server"
+npm ci
+if (-not (Test-Path -LiteralPath ".env")) { Copy-Item -LiteralPath ".env.example" -Destination ".env" }
+```
 
-### Owner setup and future deployments
+Fill the local `.env` from its placeholders: emulator project/hosts, `ADMIN_UIDS=demo-admin` and a private `DATASET_SEED`. Import the fixed historical ECB FX if no private dataset/FX file is already configured:
 
-Render and Firebase Hosting were deployed on November 4. The API is `https://stockyllix-api.onrender.com/api` and the game is `https://stockyllix.web.app`. Cloud billing was checked and is disabled. The steps below describe initial setup and handover; the current owner CLI is already authenticated.
+```powershell
+npm run import:ecb
+npx firebase emulators:start --only auth,firestore --project demo-stockyllix --config ../firebase.json
+```
 
-1. Sign up/sign in to Render yourself, selecting the free Hobby workspace and a **Free Web Service**. Do not add a payment method. Connect only the Stockyllix repository. The current source must first be reviewed and published to the intended branch; a local untracked file cannot be deployed from GitHub. Use the settings in `render.yaml`, with automatic deployment disabled.
-2. In the Firebase console for `stockyllix`, open **Project settings → Service accounts**. The Admin SDK setup describes **Generate New Private Key**. Creating this JSON creates a persistent credential: complete it yourself, keep it outside the repository/OneDrive sharing, and never paste it into chat. Prefer a dedicated service account limited to the needed Firestore data access; do not grant project Owner/Editor merely to resolve an access error. Put the JSON only in the server's `FIREBASE_SERVICE_ACCOUNT` secret. The browser Web config is a different, public configuration.
-3. In **Authentication → Users**, create the intended administrator account yourself and copy its UID into server-only `ADMIN_UIDS`. Local `demo-admin` and emulator passwords do not exist in the cloud. Keep Email/Password enabled. Verify **Authentication → Settings → Password policy** before launch: the current form requires 8+ characters, a letter and a number, but the cloud policy has not been inspected. Enforce supported length/numeric criteria there; any additional lowercase, uppercase or symbol requirement must also be stated in the form hint. Client validation alone is not a project-wide authentication policy.
-4. Authenticate the existing CLI from PowerShell and verify that `stockyllix` appears. No global install or new Firebase project is needed:
+Leave that terminal running. In a second terminal from `server`:
 
-   ```powershell
-   Set-Location -LiteralPath "C:\Users\danch\OneDrive\Desktop\House of Finance Project\Stockyllix\server"
-   npx firebase login
-   npx firebase projects:list
-   ```
+```powershell
+npm run seed:local
+npm run dev
+```
 
-   If the normal localhost callback is unavailable, the official CLI also supports `npx firebase login --no-localhost`. Complete account/authorization prompts yourself; do not share the resulting codes or credentials.
-5. Deploy the API with the server settings above and verify `/health`. Use its actual HTTPS base URL plus `/api` for `EXPO_PUBLIC_API_URL` in the ignored production client settings. Set `CORS_ORIGINS` to the exact Hosting origins that will be used, such as `https://stockyllix.web.app` and `https://stockyllix.firebaseapp.com`; verify the actual site ID first.
-6. After reviewing existing cloud rules/data, build the client, run the release gate, then deploy the already prepared Hosting/rules/index configuration from `server`:
+The local seed creates `admin@example.test` and `player@example.test`, both with password `stockyllix-local-demo`, in the **emulator only**. Seeding again does not replenish an existing portfolio. Do not start duplicate emulators on occupied ports. Their state is temporary unless explicitly exported/imported.
 
-   ```powershell
-   Set-Location -LiteralPath "C:\Users\danch\OneDrive\Desktop\House of Finance Project\Stockyllix\mobile"
-   npx expo export --platform web
-   npm run check:release
-   Set-Location -LiteralPath "C:\Users\danch\OneDrive\Desktop\House of Finance Project\Stockyllix\server"
-   npx firebase deploy --only hosting,firestore:rules,firestore:indexes --config ../firebase.json --project stockyllix
-   ```
+From a third terminal:
 
-The Hosting configuration publishes two static sites in the same Spark project: **stockyllix** contains the app; **stockyllix-panels** contains only the third-party widget wrapper. Keep the wrapper off the app origin so its scripts cannot access authentication storage. For a fresh Firebase project, create both Hosting sites first; the existing project already has both. Wrapper-only updates use `firebase deploy --only hosting:stockyllix-panels --config ../firebase.json --project stockyllix`. No second Node service or billing upgrade is needed.
+```powershell
+Set-Location -LiteralPath "C:\Users\danch\OneDrive\Desktop\House of Finance Project\Stockyllix\mobile"
+npm ci
+if (-not (Test-Path -LiteralPath ".env.local")) { Copy-Item -LiteralPath ".env.example" -Destination ".env.local" }
+npx expo start --web
+```
 
-7. Complete the authenticated cloud smoke in step 8 above, including a second phone/browser, an internal-route reload and Render wake-up. Only this establishes the public submission URL. Firebase Hosting serves the phone browser too; no App Store or Play Store install is required.
+For this local mode, set project `demo-stockyllix`, API key `demo-key`, app ID `demo-app`, `EXPO_PUBLIC_USE_EMULATORS=true`, API `http://localhost:3000/api`, and auth emulator `http://127.0.0.1:9099`. Restart Expo after changing env values. Preserve existing env settings before switching modes.
 
-Official references checked November 4: [Firebase CLI login](https://firebase.google.com/docs/cli#sign-in-test-cli), [Admin SDK server credentials](https://firebase.google.com/docs/admin/setup#initialize_the_sdk_in_non-google_environments), [Render Node deployment](https://render.com/docs/deploy-node-express-app) and [Free limitations](https://render.com/docs/free). A working free plan in documentation does not verify the owner's signup/anti-abuse flow.
+## Expo Go against the deployed game
 
-## Release procedure
+This requires no emulator or locally running API. In ignored `mobile/.env.local`, use the genuine public Firebase client config already used for Hosting and:
 
-- Use the existing checkout and preserve user changes. Review the diff and secret exclusions before any commit or push.
-- CI runs unit/API tests, emulator integration, lint, TypeScript and web export. Pull-request jobs have no deployment secrets.
-- From `mobile`, run `npm run check:release` with production settings. Production uses `https://stockyllix-api.onrender.com/api`; Hosting is live at `https://stockyllix.web.app`. Deploy with the owner's authenticated CLI, then repeat public-file, route and authenticated smoke checks.
-- Deploy only a checked commit. Automatic Render deployment is disabled in the manifest so incomplete pushes do not become releases.
-- Deploy server-compatible API changes before the client that needs them. Prefer additive DTO changes during the assignment.
-- Record the commit, build result and smoke-test outcome. Roll back to a previously checked Render deployment and Firebase Hosting release if behaviour regresses. A code rollback does not reverse executed trades.
+```dotenv
+EXPO_PUBLIC_API_URL=https://stockyllix-api.onrender.com/api
+EXPO_PUBLIC_USE_EMULATORS=false
+EXPO_PUBLIC_FIREBASE_PROJECT_ID=stockyllix
+EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=stockyllix.firebaseapp.com
+```
 
-## Clock recovery
+Set `EXPO_PUBLIC_FIREBASE_API_KEY` and `EXPO_PUBLIC_FIREBASE_APP_ID` from that same public config. Remove `EXPO_PUBLIC_AUTH_EMULATOR_URL`. Back up earlier emulator settings to an ignored file such as `.env.local.emulators.backup` that Expo does not automatically load; check the actual ignore rule before saving it.
 
-`idle` means all published state is coherent. `advancing` means accounts may be at different processing checkpoints and the API intentionally blocks game reads/writes. The world status endpoint remains available.
+```powershell
+Set-Location -LiteralPath "C:\Users\danch\OneDrive\Desktop\House of Finance Project\Stockyllix\mobile"
+npx expo start --go --clear
+```
 
-1. Open World controls and review the target, progress and last error. **Advance clock** starts automatic processing immediately; ordinary users do not need to copy internal IDs.
-2. Let an active lease finish. If a request or worker died, wait for lease expiry and resume the same job.
-3. Each player/event transaction saves results and its processed-event marker together. A cursor can lag after a crash, so replay is safe. Never manually increment a cursor to bypass an account.
-4. An older worker cannot commit after a newer fencing token is issued. Do not remove lease checks to resolve a busy message.
-5. A failed business rule rejects just that order with its reservation released. Missing data, quota or database failures leave work resumable instead.
-6. Reset is allowed only when idle. It changes the active-world pointer, retains the old world, and requires users to initialize in the new world. It is a demo action, not trade cancellation.
+Keep Metro running, connect phone/computer to the same reachable network and scan the QR with a compatible Expo Go. Loopback on a phone means the phone. If testing local emulators instead, use the computer's LAN address for **both** API and Auth emulator and configure matching origins. A web-width test or Android export does not prove a physical Expo Go run.
 
-Automatic processing is a client-driven loop of at most 200 bounded step requests. Pause stops future requests after the current step; leaving the page also stops the loop. If the loop reaches its limit, the screen explicitly asks the operator to resume. Reload and choose **Resume & process** for existing work, not a replacement advance. A newly signed-in administrator can open controls even while their portfolio initialization waits for the active job. Logs retain request/world/job identifiers for diagnosis, while the normal UI shows friendly status.
+## Clock and safe demonstrations
 
-Game requests distinguish waiting, loading and failure. Clock polling must not continually cancel an in-flight portfolio request. A paused screen shows its last completed data or a neutral waiting message; actual network/authentication failures remain visible with retry. The compact header status opens source/clock details; How to play provides user instructions.
+Use the [3–5 minute walkthrough](reviewer-demo.md). Administrators sign in through normal Firebase Auth and open World controls. Current Israel time is separate from game time; all date/time entry is interpreted as `Asia/Jerusalem`, with DST validation.
 
-Render Free can sleep after15 minutes and may need about a minute to wake. Its filesystem is ephemeral. No job relies on process memory, a timer, or continued work after an HTTP response. Another authorized operator can resume work when the original owner is absent.
+A running clock persists a game/server anchor in Firestore and advances at 1× server time. Due events are processed in bounded requests. A paused clock stays fixed. A custom forward date/time, next pending-order execution or next market event processes all intermediate events once. A forward jump can include multiple weekly summaries; it is not just a UI date change.
 
-## Incident guide
+The processed event time can precede the displayed game target when no event occurred between them. Do not change price timestamps to match the display. The quiz follows the logical game day; prices change only at their declared events.
 
-| Symptom | Check and action |
+Render Free sleeps after inactivity and has ephemeral local disk. No job depends on a browser timer, process-local interval, disk or background work after a response. On the next authenticated request, persisted anchors and jobs catch up. During synchronization, keep the last completed portfolio visible and disable unsafe new trading with a reason. Cold start or a reached job can require a short wait; it is not proof of lost money.
+
+Use a separate **Simulation** test game for March 2027 or earlier-time experiments. Its date range and generated source are disclosed. Do not move an existing world backwards, relabel history, replace datasets under holdings or reset someone else's money. At the period end, explicitly create another game rather than looping or automatically crediting balances. Realtime execution is unavailable until appropriate current execution prices and FX are verified.
+
+### Recovery and diagnosis
+
+Normal users do not need worker-step controls. Use the status and advanced diagnostics only if synchronization does not finish:
+
+1. Record the request ID, world/job ID and error code from server diagnostics; do not expose IDs as ordinary player labels.
+2. Let an active lease finish. If a worker died, wait for the lease expiry and retry the **same saved job**. Respect `Retry-After` for a busy job or quota limit.
+3. A player/event transaction commits outcomes and a processed marker together. The durable cursor may lag after a crash; safe replay is expected. Never manually advance the cursor or remove fencing checks.
+4. Business-rule rejection releases that order's reservation. Missing source data, database failure or exhausted quota leaves processing resumable rather than turning it into a business rejection.
+5. Do not start a replacement advance, reset the world or add money merely to clear a loading state.
+
+| Symptom | Action |
 | --- | --- |
-| Cold API / timeout | Wake `/health`; keep the same idempotency key when retrying orders. Never create a new request to resolve an unknown outcome. |
-| 401 | Check project ID, emulator settings and Firebase session. Sign in again; never disable token verification. |
-| 403 | Check the authenticated UID against server `ADMIN_UIDS`, or browser origin against CORS. Rules denial for direct client access is expected. |
-| WORLD_ADVANCING | Check the admin job and resume it. Do not render newly fetched partial account data. |
-| DATASET_MISMATCH | Restore the correct seed/dataset version used by this world. Do not attach a new price world to existing portfolios. |
-| Missing price/FX | Correct the private source data and restart with the same validated dataset. Do not use a future rate or zero. |
-| Quota exhausted | Stop repeated retries; inspect usage and wait for reset. Spark has no automatic paid overflow. Record affected job for resumption. |
-| Wrong balance report | Trace request ID → order → event valuation/marker. Do not manually add cash to compensate without understanding the transaction. |
-| Failed ECB import | Check public API availability and retry. An explicit simulated-FX mode is possible only with corresponding public labelling. |
-| BOI reference unavailable | The optional `/api/reference/fx` request is separate from execution. Check its stale marker/provider availability; do not change the active world's FX to repair this panel. |
-| Stock import refuses to start | Confirm the provider key, all required listings, history, storage/display rights and no-card limits. Do not bypass the confirmation gate or claim a fixture test proves provider access. |
+| Slow initial load / network timeout | Check `/health`, allow Render to wake, retry with the original order request key. A working internet connection does not mean the API is awake. |
+| Pending buy, unchanged total value | Inspect reserved/available cash and expected event. A pending ₪50,000 buy reserves money; execution exchanges it for holdings. |
+| Buy unavailable | Read the reason: not initialized, synchronization, no remaining event, period ended, insufficient available cash, concentration or an unresolved saved request. Use the corresponding initialize/wait/retry/new-test-game action. |
+| Unknown order response | Keep the UUID and exact payload; retry that request. Clearing a local unaccepted draft never cancels a server order. |
+| 401 / 403 | Check sign-in, project/env mode, admin UID and exact origin. Never disable token verification to fix access. |
+| WORLD_ADVANCING / CLOCK_SYNCING | Wait for bounded processing; inspect the saved job if it stalls. Do not render partial new account data. |
+| JOB_BUSY / lease held | Wait and resume the same job; another synchronization request may legitimately own it. |
+| DATASET_MISMATCH | Restore the original file/version. Never point existing portfolios at another price series. |
+| Price or FX missing | Preserve the job and fix the exact private input; do not use zero, a future rate or generated replacement in real history. |
+| Quota reached | Stop repeated retries, check Firebase/Render usage and wait for reset. Spark has no automatic paid overflow. |
+| BOI reference/feed unavailable | Optional current-reference/display failure does not change historical execution FX. Keep old observations explicitly labelled stale. |
 
-HTTP JSON logs include request ID, path, status and duration; clock logs include job ID. Tokens/passwords are never logged. Unexpected error details are not returned to the client. Provider log retention is not a backup strategy.
+Logs contain request IDs, path/status/duration and clock stage/error identifiers, without passwords/tokens. Provider logging is not a backup plan. A code rollback uses the last reviewed compatible commit; keep immutable datasets and seed unchanged. If a rollback cannot understand a newly persisted test descriptor version, leave that test game preserved and restore the compatible server rather than rewriting it.
 
-## Import staging
+## Existing free deployment
 
-The market-data release adds administrator previews `/api/market/current` and `/api/news`, plus `/api/admin/datasets`. Quote/news source reads are independent of the game clock, and their Firestore cache is private. Default access is `admin`; `public` additionally requires the corresponding explicit source-rights confirmation. No flag grants a licence. Read [finish-release](finish-release.md) before deployment or historical activation.
+The service already exists. Keep repository `DanChetyrkin/Stockyllix`, branch `codex/render-free-deploy`, Blueprint Path `render.yaml`, root `server`, **Free** plan and auto-deploy off. The manifest creates one Node service, no database/disk. Do not enable Blaze, Functions, App Hosting, paid backups, a trial requiring a card or a new worker.
 
-Quotes have a ten-minute shared refresh and bounded provider work, with persisted last-good state/lease/fencing and process-local single flight. A restart resumes from Firestore rather than trusting ephemeral disk. Alpha Vantage News has a six-hour shared cache, a persistent UTC-day request budget and long backoff for Premium denial. Changing its key changes its private cache scope. Neither endpoint accepts arbitrary provider URLs or client-set prices.
+| Server setting | Preserve/configure |
+| --- | --- |
+| `FIREBASE_PROJECT_ID` | `stockyllix` |
+| `FIREBASE_SERVICE_ACCOUNT` | Existing server-only secret containing the dedicated credential JSON; never a local Windows path |
+| `ADMIN_UIDS` | Existing authorized Firebase UIDs; frontend visibility is not authorization |
+| `CORS_ORIGINS` | Exact HTTPS origins, including `https://stockyllix.web.app` and alternate Hosting origin if used; no trailing slash/path |
+| `DATASET_SEED` | Existing private seed; do not rotate it as part of a code release |
+| `HISTORICAL_DATASET_PATH` | `/etc/secrets/yahoo-world.json`, with the existing Render secret file |
+| `DATASET_PATH` / `FX_DATA_PATH` | Preserve existing values and exact referenced data |
+| `WORLD_CLOCK_AUTOSTART` | Existing configuration; defaults true for normal 1× playback |
+| `YAHOO_AUTOMATED_ACCESS_AUTHORIZED` | False/unset without actual supplier permission |
+| `CURRENT_MARKET_ACCESS` / `NEWS_ACCESS` | Keep existing guarded settings; these are separate from public TradingView embeds |
 
-`npm run import:yahoo` consumes an ignored Python report, BOI history and a reviewed holiday file to create `server/data/yahoo-world.json`. Set `YAHOO_REPORT_PATH`, `YAHOO_CALENDAR_PATH` and `YAHOO_OUTPUT_PATH` only for this staging command. The registry keeps immutable datasets by ID, and reset can select a verified available dataset only for a new world. Back up every exact dataset still referenced by a world; removing the current world's data intentionally prevents startup.
+Build: `npm ci --include=dev && npm run import:ecb && npm run build && npm prune --omit=dev`; start: `npm start`; health: `/health`. The ECB file keeps legacy simulated worlds readable; installed historical replay uses its own BOI observations. A historical file in Secret Files is deployment configuration, not ephemeral runtime storage. Ordinary trades do not fetch provider prices.
 
-`import:boi` stages a separate private history file; the verified local import contains 21 observations. The active replay continues to use its existing ECB dataset. `import:market` is a prepared Twelve Data/BOI historical pipeline, not an exercised real-stock connection: no key/access was available. See [data sources](data-sources.md) for environment settings and the coverage/rights gate. Never overwrite the active file or switch an existing world to a different dataset. Preserve the exact current data and plan any approved activation as a new world.
+Do not recreate service credentials for a routine deploy. If setup is missing on a fresh environment, the owner creates a dedicated least-privilege server credential and enters it privately in Render. Firebase CLI login is separate; it is already configured for the owner's existing Hosting workflow. Check `stockyllix` in `npx firebase projects:list` before deploying.
 
-## Capacity and free-tier limits
+### Release procedure
 
-Checked in planning on2026-11-03: Firestore Spark has50k reads/20k writes per day and1GiB storage; Hosting has360MB/day transfer; Render Free has one instance, sleep and workspace quotas. Recheck provider dashboards before submission. Managed backups/PITR are not part of the no-billing setup.
+1. Review the exact diff and staged files for secrets/private future data. Run all required checks and inspect all three CI jobs on the exact commit.
+2. Deploy the reviewed server commit manually. Verify `version`, `release` and exact `commit` in `/health`; do not equate the repository head with the running server.
+3. Build the client using ignored production settings with real Firebase Web config, the HTTPS Render `/api` URL and emulators false. Preserve `.env.local` used by Expo Go; inspect which env mode the export actually loads.
+4. From `mobile`, run `npm run build:web` then `npm run check:release`. This checks health/config/CORS, not an authenticated trade.
+5. From `server`, publish only the existing Hosting sites:
 
-One thousand portfolios ×5 valuation events ×2 writes already uses roughly10k writes before orders, ranking and review tracking. The emulator and memory benchmark are not evidence of cloud throughput. The serialized memory store is test-only and is never selected by production startup. Ranking is globally computed, so all-player reads and the shared clock remain known bottlenecks. Production at thousands would need measured quotas/capacity and a worker strategy; no Kubernetes claim is made.
+```powershell
+npx firebase deploy --only hosting --config ../firebase.json --project stockyllix
+```
 
-The measured 1,000-player week scenario used 132,575 adapter reads and 58,223 writes, including initialization, two competing buy submissions per player, settlement, valuations and rankings. Completing that whole jump on one real day would exceed Spark's 50k/20k daily limits. Advance short intervals and monitor actual usage; resumable jobs protect correctness but cannot create more quota. Profile-photo reads, quiz answers and optional performance-ledger reports also consume quota. The performance report is loaded only on request and supports at most 1,000 orders. A production launch for thousands needs a separately funded capacity plan, outside this no-card demo.
+Rules/index deployments are separate reviewed changes. Current Rules deny direct access; do not overwrite unrelated Firebase data access. Wrapper-only releases can use `--only hosting:stockyllix-panels`.
 
-The coarse IP guard allows 180 unsuccessful requests per minute and decrements successful responses. In-flight requests count until completion, so a large simultaneous burst behind a shared NAT can still receive429. After token verification, ordinary traffic has a separate 180/minute UID bucket. Only verified administrators using the exact POST clock-step route get a separate 3,000/minute bucket; clock processing does not consume their ordinary allowance. Counters are in memory and reset on restart. This guard protects one free API process; it is not a distributed traffic-control guarantee. Respect Retry-After and measure real traffic before changing these limits.
+6. Verify app bytes/internal routes and normal sign-in. Use a separate test realm for trades/time. Compare the unchanged public baseline before/after; run the reviewer flow on mobile width and check actual native/device behavior separately.
+7. Restart Render, confirm world/cash/orders survive, and retry a saved request without duplicate fill. Record measured evidence in verification.md. No new configuration flag grants market-data rights.
 
-## Dependency audit
+## Source integrations and import safety
 
-On 2026-11-03, server `npm audit --omit=dev` reported 4 moderate findings; full server audit reported 25 moderate. Client `--omit=dev` reported 8 moderate findings in the Expo/build dependency chain. No high/critical finding was reported. The server runtime-installed chain is Firestore API → google-gax 5 → rimraf 5 → glob 10 → minimatch 9. Compatible releases do not remove the findings. Major-version overrides and the audit's suggested old Expo/Firebase CLI downgrades were not applied.
+TradingView is source-owned display with attribution and supported filters/themes; its data is not scraped or copied into game fills. Latest BOI `/api/reference/fx` has a separate reference cache. Guarded Yahoo quotes have a shared persistent cache/lease/cooldown but no working cloud stock feed; prior Render requests received 429, and new collection is disabled absent source permission. Alpha Vantage News keeps metadata only with a six-hour shared cache/request budget; the tested free key returned Premium-required.
 
-The [glob advisory](https://github.com/isaacs/node-glob/security/advisories/GHSA-3g3m-2fjr-6pw4) and [minimatch advisory](https://github.com/isaacs/minimatch/security/advisories/GHSA-g3hv-75wg-m249) concern resource consumption. The application exposes no user-supplied glob-pattern feature; this is not proof that upstream dependencies are risk-free. Keep public APIs input-bounded, avoid passing request data into filesystem patterns, and recheck supported Firebase/Expo releases before public release. Updating dependencies requires the app checks and emulator tests again.
+The existing historical snapshot was built privately from already downloaded observations, reviewed calendar and BOI history. Loading it makes no new Yahoo request. Historical storage/display permission remains unverified. Do not rerun an acquisition tool as a routine build step. The prepared Twelve Data importer is not verified access to twenty symbols or public display. See [data-source evidence](data-sources.md) and [tools](../tools/README.md).
 
-## Submission checklist
+## Capacity and outstanding handover
 
-- Public GitHub repo includes source, lockfiles and docs; no `.env`, private FX/dataset or service-account JSON.
-- Give `rotemyavne7` write access and verify the accepted permission separately; an invitation is not proof of accepted access.
-- Verify the actual public browser URL without local services running.
-- Provide the agreed reviewer admin access outside public docs and rehearse clock advancement.
-- Capture measured checks in verification.md; distinguish local checks from cloud smoke tests.
+Dated planning limits: Firestore Spark 50k reads/20k writes per day and 1GiB storage; Hosting 360MB/day transfer; Render Free one sleeping instance. Recheck dashboards/provider docs before capacity changes. The isolated 1,000-player memory week used 132,575 adapter reads and 58,223 writes in 84.9 seconds; that one-day jump would exceed Spark quotas. It is not Firestore/Render load proof. Shared clock processing, global ranking, per-player valuations and profile/quiz reads remain limits.
+
+Rate guards are process-local: ordinary authenticated traffic 180/minute per UID, a coarse unsuccessful-IP guard, and a separate authorized clock-step bucket. Respect backoff. Resumability protects correctness, not unlimited quota. No production support for thousands is claimed.
+
+The November 3 dependency audit reported only moderate findings: server runtime 4, full development tree 25, client runtime-installed tree 8. Those are dated results, not a fresh clean audit. Avoid unreviewed major overrides; rerun appropriate tests when updating dependencies.
+
+Before submission: verify accepted `rotemyavne7` **Write** (last checked Read), share only the administrator email publicly, provide its password privately, confirm Firebase password policy matches the form, and finish physical Expo Go/second-device checks. Client sign-up requires a 2–40 character display name, an email address and an 8+ character password including a letter and number; sign-in errors do not reveal email existence.

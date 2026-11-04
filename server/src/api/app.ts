@@ -14,6 +14,7 @@ import type { BankIsraelService } from '../services/bank-israel.js';
 import type { CurrentMarketService } from '../feeds/current-market.js';
 import type { NewsService } from '../feeds/news.js';
 import type { WorldClockService } from '../services/world-clock.js';
+import type { TestSimulationService } from '../services/test-simulation-service.js';
 
 export interface GameServices {
   game: GameService;
@@ -21,11 +22,12 @@ export interface GameServices {
   quiz?: DailyQuizService;
   performance?: PerformanceService;
   clock?: WorldClockService;
+  simulations?: TestSimulationService;
 }
 
 interface AppOptions extends GameServices {
   profile?: ProfileService;
-  testRealmServices?: (uid: string) => GameServices;
+  testRealmServices?: (uid: string) => GameServices | Promise<GameServices>;
   bankIsrael?: BankIsraelService;
   currentMarket?: Pick<CurrentMarketService, 'get'> & Partial<Pick<CurrentMarketService, 'checkSample'>>;
   news?: Pick<NewsService, 'get'>;
@@ -55,9 +57,14 @@ const instrumentIdInput = z.string().min(1).max(40).regex(/^[a-zA-Z0-9_.-]+$/);
 const watchInput = z.object({ instrumentId: instrumentIdInput, targetPrice: z.string().max(30), direction: z.enum(['at_or_below', 'at_or_above']) }).strict();
 const quizInput = z.object({ worldId: worldIdInput, date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), questionId: z.string().min(1).max(60), answerIndex: z.number().int().min(0).max(3) }).strict();
 const advanceInput = z.object({ worldId: worldIdInput, target: z.iso.datetime({ offset: true }) }).strict();
-const clockInput = z.object({ worldId: worldIdInput, action: z.enum(['pause', 'resume', 'historical', 'realtime', 'set', 'next']), target: z.iso.datetime({ offset: true }).optional() }).strict()
-  .refine(input => (input.action === 'set') === (input.target !== undefined), { message: 'Only set requires a target date.' });
-const resetInput = z.object({ worldId: worldIdInput, confirmation: z.literal('RESET'), datasetId: z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/).optional() }).strict();
+const clockInput = z.object({ worldId: worldIdInput, action: z.enum(['pause', 'resume', 'historical', 'realtime', 'set', 'next', 'next_order']),
+  target: z.iso.datetime({ offset: true }).optional(),
+  targetIsrael: z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), time: z.string().regex(/^\d{2}:\d{2}$/) }).strict().optional(),
+}).strict().refine(input => input.action === 'set' ? Number(input.target !== undefined) + Number(input.targetIsrael !== undefined) === 1
+  : input.target === undefined && input.targetIsrael === undefined, { message: 'Set needs exactly one target date.' });
+const resetInput = z.object({ worldId: worldIdInput, confirmation: z.literal('RESET'), datasetId: z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/).optional(),
+  simulation: z.object({ startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).strict().optional(),
+}).strict().refine(input => !(input.datasetId && input.simulation), { message: 'Choose historical data or a separate simulated test world.' });
 
 function requestKey(request: Request) {
   return z.string().uuid().parse(request.get('Idempotency-Key'));
@@ -97,7 +104,7 @@ export function createApp(options: AppOptions) {
   // a resized profile photo fits here without raising limits for trading routes.
   app.use('/api/me/profile', express.json({ limit: '64kb' }));
   app.use(express.json({ limit: '12kb' }));
-  app.get('/health', (_request, response) => response.json({ status: 'ok', version: '1.3.0', release: 'clock-trading-v3',
+  app.get('/health', (_request, response) => response.json({ status: 'ok', version: '1.4.0', release: 'demo-controls-v4',
     commit: /^[a-f0-9]{40}$/i.test(process.env.RENDER_GIT_COMMIT ?? '') ? process.env.RENDER_GIT_COMMIT : null }));
 
   const router = express.Router();
@@ -141,12 +148,13 @@ export function createApp(options: AppOptions) {
     if (test) {
       if (!response.locals.isAdmin) throw new GameError('FORBIDDEN', 'An administrator is required to use an isolated test world.', 403);
       if (!options.testRealmServices) throw new GameError('TEST_WORLD_UNAVAILABLE', 'Isolated test worlds are not configured.', 503);
-      response.locals.gameServices = options.testRealmServices(uid(response));
+      response.locals.gameServices = await options.testRealmServices(uid(response));
     }
     response.locals.testRealm = Boolean(test);
     const independent = /^\/(?:me\/profile|market\/current|news|reference\/fx|admin\/feeds)(?:\/|$)/.test(request.path);
     const worker = /^\/admin\/clock\/jobs\//.test(request.path);
-    if (!independent && !worker) await selected(response).clock?.synchronize();
+    const receipt = request.method === 'GET' && /^\/admin\/clock\/requests\//.test(request.path);
+    if (!independent && !worker && !receipt) await selected(response).clock?.synchronize();
     next();
   });
   router.post('/me/initialize', async (request, response) => {
@@ -264,6 +272,18 @@ export function createApp(options: AppOptions) {
     if (!clock) throw new GameError('CLOCK_UNAVAILABLE', 'Clock audit is not configured.', 503);
     response.json(await clock.audit());
   });
+  router.get('/admin/clock/targets', async (_request, response) => {
+    const clock = selected(response).clock;
+    if (!clock) throw new GameError('CLOCK_UNAVAILABLE', 'Clock targets are not configured.', 503);
+    response.json(await clock.targets());
+  });
+  router.get('/admin/clock/requests/:key', async (request, response) => {
+    const key = z.string().uuid().parse(request.params.key);
+    const worldId = request.query.worldId === undefined ? undefined : worldIdInput.parse(request.query.worldId);
+    const clock = selected(response).clock;
+    if (!clock) throw new GameError('CLOCK_UNAVAILABLE', 'Clock receipts are not configured.', 503);
+    response.json(await clock.requestStatus(key, worldId));
+  });
   router.post('/admin/clock/advance', async (request, response) => {
     const input = advanceInput.parse(request.body);
     const services = selected(response);
@@ -278,11 +298,17 @@ export function createApp(options: AppOptions) {
   router.post('/admin/reset', async (request, response) => {
     const input = resetInput.parse(request.body);
     const services = selected(response);
-    const world = await services.game.reset(requestKey(request), input.worldId, input.datasetId);
+    if (input.simulation && (!response.locals.testRealm || !services.simulations)) throw new GameError('TEST_SIMULATION_ONLY', 'Simulated prices are available only in your isolated administrator test world.', 403);
+    const choices = services.game.listDatasets();
+    if (!response.locals.testRealm && (input.datasetId ? choices.find(dataset => dataset.id === input.datasetId)?.source !== 'historical' : !choices.some(dataset => dataset.source === 'historical'))) {
+      throw new GameError('HISTORICAL_DATA_REQUIRED', 'The shared game must use an available real historical dataset.', 400);
+    }
+    const world = input.simulation ? await services.simulations!.create(services.game, uid(response), requestKey(request), input.worldId, input.simulation.startDate)
+      : await services.game.reset(requestKey(request), input.worldId, input.datasetId);
     services.clock?.invalidate();
     response.status(201).json(world);
   });
-  router.get('/admin/datasets', (_request, response) => response.json({ datasets: selected(response).game.listDatasets() }));
+  router.get('/admin/datasets', (_request, response) => response.json({ datasets: selected(response).game.listDatasets(), simulationAllowed: Boolean(response.locals.testRealm && selected(response).simulations) }));
   app.use('/api', router);
   app.use((_request, _response) => { throw new GameError('NOT_FOUND', 'This endpoint does not exist.', 404); });
 

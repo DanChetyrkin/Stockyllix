@@ -31,6 +31,10 @@ interface ReviewRecord {
 }
 interface VisitRecord { lastRealDate: string; firstRealDate: string; distinctRealDays: number; lastValueILS: string }
 
+export function createWorld(dataset: Dataset, id: string): World {
+  return { id, now: dataset.startsAt, revision: 0, status: 'idle', snapshot: dataset.initialSnapshot, datasetId: dataset.id, job: null, leaderboardGeneration: null, weekId: getWeekId(dataset.startsAt) };
+}
+
 export class GameService {
   private readonly now: () => Date;
   private readonly leaseMs: number;
@@ -46,7 +50,7 @@ export class GameService {
 
   private freshWorld(id: string, datasetId = this.listDatasets()[0]!.id): World {
     const dataset = this.datasets.get(datasetId);
-    return { id, now: dataset.startsAt, revision: 0, status: 'idle', snapshot: dataset.initialSnapshot, datasetId: dataset.id, job: null, leaderboardGeneration: null, weekId: getWeekId(dataset.startsAt) };
+    return createWorld(dataset, id);
   }
 
   private async current(): Promise<World> {
@@ -114,6 +118,7 @@ export class GameService {
   }
 
   async getWorld() { return this.publicWorld(await this.current()); }
+  describeWorld(world: World) { return this.publicWorld(world); }
   listDatasets() {
     const available = this.datasets.summaries();
     const historical = available.filter(dataset => dataset.source === 'historical');
@@ -427,9 +432,10 @@ export class GameService {
     const request = { worldId: expectedWorldId ?? null, datasetId: datasetId ?? null };
     const world = await this.store.transaction(async (tx) => {
       const path = `adminRequests/${requestId(key)}`;
-      const existing = await tx.get<{ worldId: string; request?: typeof request }>(path);
+      const existing = await tx.get<{ worldId: string; request?: typeof request; simulationInput?: unknown }>(path);
       const existingWorld = existing ? await tx.get<World>(worldPath(existing.worldId)) : undefined;
       if (existingWorld) {
+        if (existing?.simulationInput) throw new GameError('IDEMPOTENCY_CONFLICT', 'This request already created a simulated test world.', 409);
         if (existing?.request ? existing.request.worldId !== request.worldId || existing.request.datasetId !== request.datasetId : Boolean(datasetId && datasetId !== existingWorld.datasetId)) {
           throw new GameError('IDEMPOTENCY_CONFLICT', 'This reset request key was already used for another world or dataset.', 409);
         }

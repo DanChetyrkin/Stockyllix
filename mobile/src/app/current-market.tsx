@@ -15,8 +15,8 @@ export default function CurrentMarketScreen() {
   const [preview, setPreview] = useState(false);
   return <AppShell>
     <MarketModes />
-    <PageTitle title="The market, today." subtitle="Real-world prices and daily moves. Your demo portfolio follows its own historical game clock." />
-    <Card style={{ gap: 14 }}><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}><Badge>TradingView</Badge><Badge tone="warning">Delayed data</Badge><Badge>Market watch · no orders</Badge></View><Copy muted>Prices are supplied by the source and may be delayed or show the last session close. Source delay and session labels apply. Tel Aviv quotes in this panel use ILA (agorot): 100 ILA = ₪1.</Copy><ProviderWidget kind="markets" /></Card>
+    <PageTitle title="Current market" subtitle="TradingView market watch. These quotes do not execute game orders." />
+    <Card style={{ gap: 14 }}><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}><Badge>TradingView</Badge><Badge tone="warning">May be delayed</Badge><Badge>Display only · no trading</Badge></View><Copy muted>Source prices may be delayed or show the last session close; the source’s session and delay labels apply. Game orders use the active game’s dated prices and currency rates, never this panel. Tel Aviv quotes here use ILA (agorot): 100 ILA = ₪1.</Copy><ProviderWidget kind="markets" /></Card>
     {isAdmin && <View style={{ gap: 12, alignItems: 'flex-start' }}><Button compact variant="quiet" onPress={() => setPreview(value => !value)}>{preview ? 'Hide server quote diagnostics' : 'Server quote diagnostics'}</Button>{preview && <Card style={{ gap: 12, width: '100%' }}><Copy muted style={{ fontSize: 12 }}>Separate server observations and cache status. These never set historical execution prices.</Copy><ServerQuotes /></Card>}</View>}
   </AppShell>;
 }

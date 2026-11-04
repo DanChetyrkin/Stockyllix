@@ -9,6 +9,7 @@ import { AppShell } from '@/components/AppShell';
 import { InstrumentInsights } from '@/components/market/InstrumentInsights';
 import { WatchlistPanel } from '@/components/market/WatchlistPanel';
 import { MarketModes } from '@/components/market/MarketModes';
+import { ExecutionTiming } from '@/components/market/ExecutionTiming';
 import { Badge, Button, Card, CardTitle, Copy, DataState, Empty, Eyebrow, Field, Notice, PageTitle, useThemedStyles } from '@/components/ui/kit';
 import { useAuth } from '@/context/AuthContext';
 import { useGame } from '@/context/GameContext';
@@ -123,8 +124,8 @@ export default function MarketScreen() {
 
   return <AppShell>
     <MarketModes />
-    <PageTitle title="Market" subtitle="Historical trading · orders use game time, not the current market display." />
-    {world && <Badge>{world.source === 'historical' ? 'Real historical prices' : 'Simulated demo prices'} · {dateTime(world.clock?.targetNow || world.now)} · Israel time</Badge>}
+    <PageTitle title="Market" subtitle={world?.source === 'simulated' ? 'Test game · simulated prices and currency rates, separate from the shared game.' : 'Game trading · real historical prices and currency rates from the covered period.'} />
+    {world && <Badge>{world.source === 'historical' ? 'Real historical prices' : 'Simulated prices'} · {dateTime(world.clock?.targetNow || world.now)} · Israel time</Badge>}
     {world && !world.nextEvent && <Notice>The demo has reached the end of its price period. New orders need a future execution event. An administrator can start a new world from World controls.</Notice>}
     {market.data && <View style={[ui.row, { flexWrap: 'wrap', justifyContent: 'space-between' }]}><Copy muted style={{ fontSize: 12 }}>Prices as of {dateTime(market.data.asOf)} · Israel time</Copy><Copy muted style={{ fontSize: 11 }}>USD / ILS {number(market.data.fx, 6)} · Rate date: {observationDate(market.data.fxAsOf)}</Copy></View>}
     <DataState loading={market.loading} error={market.error} hasData={!!market.data} retry={() => void market.refresh()}>
@@ -154,7 +155,8 @@ export default function MarketScreen() {
               <View style={ui.divider} />
               <View style={{ flexDirection: 'row', gap: 8 }}>{(['buy', 'sell'] as Side[]).map(option => <View key={option} style={{ flex: 1 }}><Button compact variant={side === option ? 'primary' : 'secondary'} disabled={!!saved || busy || reviewing} onPress={() => setSide(option)}>{option === 'buy' ? 'Buy' : 'Sell'}</Button></View>)}</View>
               <Field label="Amount in shekels (ILS)" placeholder="e.g. 25000" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" editable={!saved && !busy && !reviewing} hint="Enter digits and a decimal point; do not use commas." />
-              <View style={{ gap: 9 }}><Detail label="Available cash" value={money(portfolio.data?.summary.availableCashILS)} /><Detail label="Your units" value={number(holding?.units || '0', 6)} />{side === 'sell' && <Detail label="Maximum at last price" value={money(holding?.maxSellAmountILS)} />}<Detail label="Current price in ILS" value={money(selected.priceILS)} /><Detail label="Scheduled execution" value={selected.nextExecutionKind === 'MARKET_CLOSE' ? 'Today’s close' : selected.nextExecutionKind === 'MARKET_OPEN' ? 'Next opening' : 'No event left'} /><Detail label="Execution time (Israel)" value={dateTime(selected.nextExecutionAt)} /></View>
+              <ExecutionTiming at={outcome?.status === 'pending' ? outcome.executeAt : selected.nextExecutionAt} kind={outcome?.status === 'pending' ? null : selected.nextExecutionKind} market={selected.market} pending={outcome?.status === 'pending'} />
+              <View style={{ gap: 9 }}><Detail label="Available cash" value={money(portfolio.data?.summary.availableCashILS)} /><Detail label="Your units" value={number(holding?.units || '0', 6)} />{side === 'sell' && <Detail label="Maximum at last price" value={money(holding?.maxSellAmountILS)} />}<Detail label="Last known price in ILS" value={money(selected.priceILS)} /></View>
               <Copy muted style={{ fontSize: 11, lineHeight: 18 }}>The final price is set at execution, including the available USD/ILS rate for US assets. Fractional units are supported. {side === 'buy' ? 'A buy may be rejected if the total position exceeds 20% at execution.' : 'The quoted maximum is an estimate. A lower execution price can reject the sell. Your existing units are reserved while it waits.'}</Copy>
               {error && <Notice tone="error">{error}</Notice>}
               {saved && !busy && <Notice>Check the outcome of your previous order request. Retrying is safe and will not create a duplicate.</Notice>}
