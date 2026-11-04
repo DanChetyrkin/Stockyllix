@@ -23,7 +23,7 @@ The build installs locked dependencies, imports historical ECB USD/ILS rates, co
 
 Game data persists in Firestore. Render's local disk is temporary, so do not store portfolios or credentials in uploaded files there. Keep a private copy of the exact price dataset, FX file and seed; a changed dataset intentionally cannot take over an existing world.
 
-The repository also includes Firebase rules that deny direct client access: all game reads/writes go through the authenticated API. Review existing cloud data/rules before deploying these with Firebase CLI. Uploading this Blueprint does not deploy Firebase rules, Hosting or the mobile app. The updated local client is a separate publication step.
+The repository also includes Firebase rules that deny direct client access: all game reads/writes go through the authenticated API. Review existing cloud data/rules before deploying these with Firebase CLI. Uploading this Blueprint does not deploy Firebase rules, Hosting or the mobile app. The Web client has been published separately to Firebase Hosting; future client updates also require a separate Hosting deployment.
 
 ## Local checks
 

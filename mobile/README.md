@@ -48,7 +48,7 @@ The header's status button explains simulated/historical price data without repe
 
 The daily quiz follows the shared game date at midnight Israel time; appearance follows the real Israel clock. Real-day review visits are measured separately in the backend. The latest Bank of Israel reference-rate panel is separate from the historical FX used by the game and does not change order execution.
 
-`check:release` currently fails because production `EXPO_PUBLIC_API_URL` is blank. Once configured, it checks a public HTTPS API health response and the intended Hosting origin's CORS access. It does not replace an authenticated cloud smoke test or prove a public deployment already exists.
+The published client uses `EXPO_PUBLIC_API_URL=https://stockyllix-api.onrender.com/api` and is available at [stockyllix.web.app](https://stockyllix.web.app). `check:release` checks the configured public HTTPS API health response and the intended Hosting origin's CORS access. It does not replace an authenticated cloud smoke test; see the repository verification notes for completed checks and remaining limits.
 
 The small Firebase type augmentation matches the installed SDK's native export, which is absent from its shared declaration entry. The gRPC v1 override patches a transitive Firebase dependency; the client itself only imports Firebase App and Auth. Remaining dependency-audit findings in the Expo/lint toolchain must be reviewed separately; passing app checks does not imply a clean dependency audit.
 
