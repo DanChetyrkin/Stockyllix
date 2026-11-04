@@ -2,7 +2,15 @@
 
 This is a noncommercial educational interview demonstration with virtual money. Source terms and technical availability are separate. No payment card, paid plan, new service or data deletion is required for the historical replay.
 
-## Deploy the prepared server and private real history
+## Verified release status
+
+- The owner installed the private historical file and deployed **5b54aef**, version **1.2.0 / historical-news-v2**. The following setup instructions are retained for reproduction; no repeat upload is needed.
+- Actual Render HTTP acceptance passed: all twenty initial prices, two opening buys, two closing sells, execution FX, idempotency, concentration refusal, changing valuations, two weekly rankings and end-of-period refusal. The previous world, administrator portfolio and order hashes were unchanged.
+- A fresh historical world was created at the beginning of the covered period. After the owner restarted Render, its world/cash/holdings/orders fingerprint remained exactly unchanged.
+- The four-symbol Render diagnostic correctly returned SOURCE_PERMISSION_REQUIRED with zero provider attempts. This is not a working current-price API. The separate BOI endpoint returned the November 3 representative rate, 3.157 ILS per USD, fetched November 4.
+- The new TradingView feed now renders actual headlines, matching Light/Dark, asset-class and symbol filters. Apple stories and the explicit Leumi empty state were checked in the public browser. Narrow-width headlines use the official Normal setting for multiple lines. Internal source scrolling remains within the fixed-height provider panel.
+
+## Reproduce the server and private-history setup
 
 1. In the existing Render **stockyllix-api** service, keep **Free**, repository **DanChetyrkin/Stockyllix**, branch **codex/render-free-deploy**, and root directory **server**.
 2. Open **Environment → Secret Files → Add Secret File**. Use filename **yahoo-world.json**. Paste the contents of local **server/data/yahoo-world.json**, not a service-account key. Do not put this file in Git or a public URL: it contains unrevealed future game prices.
@@ -13,7 +21,7 @@ This is a noncommercial educational interview demonstration with virtual money. 
 
 Render makes secret files available at `/etc/secrets/<filename>`. The candidate is about 42KB, below the combined 1MB limit. See [official secret-file instructions](https://render.com/docs/configure-environment-variables#secret-files). The file survives process restarts as deployment configuration; no runtime-local disk is used for balances, jobs or caches.
 
-Browser automation could read Chrome's accessibility tree but could not target its window reliably (coordinate geometry unavailable; capture showed a different app). No alternative session/cookie extraction was attempted. The account-bound Render upload and deployment remain an operator step.
+The owner completed the account-bound Render upload, deployment and restart. Browser automation could not reliably target that native Chrome window; it was used successfully for the public game through the in-app browser. No account cookies or sessions were extracted.
 
 ## What the historical world contains
 
@@ -45,9 +53,9 @@ No additional free account was identified that verifiably supplies these twenty 
 - [Current market](https://stockyllix.web.app/current-market): source-owned TradingView display, potentially delayed. ILA is explicitly agorot, not ILS. No current quote executes a historical order.
 - The mobile header and clock scroll away with page content. Desktop retains the existing layout.
 
-External panels remain sandboxed without access to account storage. Only the app-owned wrapper's outer height is measured. Provider content/shadow roots are not scraped, restyled or exported; attribution stays visible.
+External scripts run only on **stockyllix-panels.web.app**, a separate static Hosting origin with no application/Auth SDK or game data. The wrapper lives in **widgets/provider-widget.html**; it is deliberately absent from the app export. The cross-origin iframe remains sandboxed; allow-same-origin is needed by the provider's nested origin-checked handshake, and does not grant access to the game origin. Native attribution stays visible. No provider content/shadow roots are scraped or restyled. Both static sites share the same Spark project and quota; deploy all Hosting sites through firebase.json, or only hosting:stockyllix-panels for wrapper-only changes.
 
-## Final acceptance still required in the deployed real world
+## Reviewer checklist and remaining scope
 
 1. Sign in, create the separate historical world, initialize one million once and verify twenty prices/source/date.
 2. Buy before opening and while open; retry an identical request; verify opening/closing execution, USD FX, holdings/cash and the 20% rejection.

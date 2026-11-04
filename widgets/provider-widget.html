@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Stockyllix market source</title><style>html,body{margin:0;height:100%;font:13px system-ui,sans-serif} .tradingview-widget-container{height:calc(100% - 4px);width:100%}.tradingview-widget-container__widget{height:calc(100% - 28px)}.tradingview-widget-copyright{padding:5px;text-align:center;font-size:11px}a{color:#35745d}#failure{padding:20px;display:none}html.news,html.news body{height:auto}html.news .tradingview-widget-container,html.news .tradingview-widget-container__widget{height:auto}tv-news-feed{display:block;min-height:320px;width:100%}</style></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Stockyllix market source</title><style>html,body{margin:0;height:100%;font:13px system-ui,sans-serif} .tradingview-widget-container{height:calc(100% - 4px);width:100%}.tradingview-widget-container__widget{height:calc(100% - 28px)}.tradingview-widget-copyright{padding:5px;text-align:center;font-size:11px}a{color:#35745d}#failure{padding:20px;display:none}html.news .tradingview-widget-container,html.news .tradingview-widget-container__widget{height:100%}tv-news-feed{display:block;height:100%;width:100%}</style></head>
 <body><div id="failure" role="status">The source panel could not load. Try reloading or open TradingView directly.</div><div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div><div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/" target="_blank" rel="noopener nofollow">Market data by TradingView</a></div></div>
 <script>
   // official widgets stay isolated from account storage; no news is extracted.
@@ -17,6 +17,8 @@
   const script = document.createElement('script');
   if (news) {
     document.documentElement.classList.add('news');
+    // the news component already includes its native TradingView attribution.
+    document.querySelector('.tradingview-widget-copyright').remove();
     const allowedSymbols = [...ta.map(([symbol]) => `TASE:${symbol}`), ...us.map(([symbol]) => symbol)];
     const symbol = allowedSymbols.includes(params.get('symbol')) ? params.get('symbol') : '';
     const markets = ['all','stocks','forex','indices','crypto','futures'];
@@ -26,22 +28,16 @@
     feed.setAttribute('assets-type', symbol ? 'stocks' : market);
     feed.setAttribute('news-type', 'all');
     feed.setAttribute('layout-mode', 'flow');
-    feed.setAttribute('item-size', 'compact');
+    // normal stories wrap headlines on narrow screens; compact uses one line.
+    const narrow = window.matchMedia('(max-width: 600px)');
+    const updateStorySize = () => feed.setAttribute('item-size', narrow.matches ? 'normal' : 'compact');
+    updateStorySize();
+    narrow.addEventListener('change', updateStorySize);
     if (symbol) feed.setAttribute('symbol', symbol);
     feed.textContent = 'Loading headlines from TradingView…';
     document.querySelector('.tradingview-widget-container__widget').appendChild(feed);
     script.type = 'module';
     script.src = 'https://widgets.tradingview-widget.com/w/en/tv-news-feed.js';
-    // measure our wrapper only, never the provider's closed shadow content.
-    let previousHeight = 0;
-    const reportSize = () => {
-      const height = Math.ceil(document.body.getBoundingClientRect().height);
-      if (height !== previousHeight && height >= 120 && height <= 20000) {
-        previousHeight = height;
-        parent.postMessage({type:'stockyllix-widget-size',height}, '*');
-      }
-    };
-    new ResizeObserver(reportSize).observe(document.body);
   } else {
     const config = {title:'Current markets',width:'100%',height:'100%',locale:'en',colorTheme,showSymbolLogo:true,symbolsGroups:[{name:'Tel Aviv · ILA (agorot)',symbols:ta.map(([symbol,name])=>({name:`TASE:${symbol}`,displayName:name}))},{name:'United States · USD',symbols:us.map(([name,displayName])=>({name,displayName}))}]};
     script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-market-quotes.js';

@@ -6,7 +6,7 @@ A noncommercial educational portfolio-league demonstration for an interview, bui
 
 **Reviewer administrator:** `admin@stockyllix.com`. Ask the project owner for the password. Administrators can advance the shared clock and reset the demonstration world; ordinary players cannot.
 
-**Data disclosure:** a separate real historical replay is prepared for **October 19–November 2, 2026**, using twenty Yahoo daily price series and Bank of Israel USD/ILS. Loading this private snapshot does not fetch Yahoo or claim a data licence. The legacy simulated world is preserved with its original data; new-world choices use real history once the private file is installed. See [release status and activation](docs/finish-release.md). **Current market** and **News & quiz** embed official TradingView panels; their real-world data can be delayed and never execute historical orders. No real money is involved.
+**Data disclosure:** the active game uses real historical replay for **October 19–November 2, 2026**, using twenty Yahoo daily price series and Bank of Israel USD/ILS. Loading this private snapshot does not fetch Yahoo or claim a data licence. The legacy simulated world is preserved with its original data; new-world choices use the installed real history. See [release status and activation](docs/finish-release.md). **Current market** and **News & quiz** embed official TradingView panels; their real-world data can be delayed and never execute historical orders. No real money is involved.
 
 ## What works in the implementation
 
@@ -19,9 +19,9 @@ A noncommercial educational portfolio-league demonstration for an interview, bui
 - Your supplied logo, grouped navigation, private profile photo/name, and persisted Auto/Light/Dark appearance.
 - A financial quiz that changes with the shared game day, private price targets, revealed-price charts and reversible daily-change/name sorting.
 - A How to play guide, compact game-status details and explicit paused/loading/error states.
-- Realized/unrealized ILS profit using weighted average cost, plus same-period simulated SPY comparison. Nothing is annualized.
+- Realized/unrealized ILS profit using weighted average cost, plus a same-period SPY comparison using the active world's price series. Nothing is annualized.
 
-The public Web app uses Firebase Authentication and the Render API at `https://stockyllix-api.onrender.com/api`. Hosting, static files, internal routes and administrator sign-in have been checked in the cloud. See [verification](docs/verification.md) for measured checks and remaining limits.
+The public Web app uses Firebase Authentication and the Render API at `https://stockyllix-api.onrender.com/api`. Hosting, internal routes, administrator sign-in, historical buys/sells, weekly ranking, end-of-period refusal and persistence after an actual Render restart have been checked in the cloud. See [verification](docs/verification.md) for measured checks and remaining limits.
 
 The authenticated `/api/reference/fx` endpoint separately fetches the latest published Bank of Israel representative rate. The Yahoo server adapter retains separate price/fetch timestamps and shares a persistent Firestore cache. Earlier local HTTP checks returned twenty quotes, but Render returned HTTP 429. Yahoo's explicit automated-access permission requirement now blocks further collection unless that permission is obtained; it is not a working cloud quote feed. Cached observations remain labelled old. The official TradingView display is separate and is not scraped into our API.
 

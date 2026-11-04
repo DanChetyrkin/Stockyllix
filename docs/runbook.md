@@ -48,6 +48,8 @@ Render and Firebase Hosting were deployed on November 4. The API is `https://sto
    npx firebase deploy --only hosting,firestore:rules,firestore:indexes --config ../firebase.json --project stockyllix
    ```
 
+The Hosting configuration publishes two static sites in the same Spark project: **stockyllix** contains the app; **stockyllix-panels** contains only the third-party widget wrapper. Keep the wrapper off the app origin so its scripts cannot access authentication storage. For a fresh Firebase project, create both Hosting sites first; the existing project already has both. Wrapper-only updates use `firebase deploy --only hosting:stockyllix-panels --config ../firebase.json --project stockyllix`. No second Node service or billing upgrade is needed.
+
 7. Complete the authenticated cloud smoke in step 8 above, including a second phone/browser, an internal-route reload and Render wake-up. Only this establishes the public submission URL. Firebase Hosting serves the phone browser too; no App Store or Play Store install is required.
 
 Official references checked November 4: [Firebase CLI login](https://firebase.google.com/docs/cli#sign-in-test-cli), [Admin SDK server credentials](https://firebase.google.com/docs/admin/setup#initialize_the_sdk_in_non-google_environments), [Render Node deployment](https://render.com/docs/deploy-node-express-app) and [Free limitations](https://render.com/docs/free). A working free plan in documentation does not verify the owner's signup/anti-abuse flow.
