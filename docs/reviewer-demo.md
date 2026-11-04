@@ -12,7 +12,7 @@ Read the header's two clocks: **Israel time now** is the real server-derived dat
 
 ## 2. Open a safe game
 
-In World controls, choose **Open isolated test game**. Check the **Isolated test game** scope before changing time or money. If the existing test game is complete, use **Start a new game → Create new test game** and the available real historical price selection. Confirm with **NEW GAME**. Previous games/orders remain saved; the new game has its own fresh portfolio.
+In World controls, choose **Open isolated test game**. Check the **Isolated test game** scope before changing time or money. For the exact cash example below, **always create a fresh test game**, even if the current test period has not ended: open **Start a new game**, select **Real historical prices**, type **NEW GAME**, then choose **Create new test game**. Previous games/orders remain saved; this new game starts with its own fresh portfolio. An existing test game may already contain trades and different balances.
 
 For this real-data walkthrough, keep the real historical source. The optional **Simulated test prices** mode is a separate, explicitly generated 28-calendar-day sandbox; it is not historical evidence.
 
