@@ -36,7 +36,7 @@ Manually compute MDD for1m →1.1m →990k →1.05m. Explain the percentile conv
 
 Run a local failure/restart demonstration. Find a request by ID, interpret a rejected order and resume a clock job. Explain Render sleep, ephemeral disk, Spark quotas, why Cloud Functions was omitted, and which checks were performed locally versus in the cloud.
 
-Use the [reviewer walkthrough](reviewer-demo.md): sign in → separate test game → pending order → advance to its execution → executed order → portfolio/ranking → daily question above news. Then answer: what would fail first at 1,000 players, what evidence supports that answer, and what would you measure before changing architecture?
+Use the [3–5 minute walkthrough](../README.md#try-it-in-35-minutes): sign in → separate test game → pending order → advance to its execution → executed order → portfolio/ranking → daily question above news. Then answer: what would fail first at 1,000 players, what evidence supports that answer, and what would you measure before changing architecture?
 
 Real-date return tracking tests instrumentation, not improved retention. The shared game replays real Yahoo/BOI history. Preserved legacy simulation and a newly selected dated test simulation are separate, disclosed sources; the test simulation generates its own FX and never claims to be real market data.
 
@@ -48,7 +48,7 @@ Explain the time boundaries: shared game time drives trading and the quiz's Isra
 
 Trace Advance to pending execution → server-selected event → durable job → bounded steps → published state. Explain why a server receipt can confirm a clock change after a reload, why an unknown outcome keeps its original request key, and why clock polling must not invalidate every in-flight data request. Compare the pending-execution shortcut with the next market event. Find advanced recovery; internal identifiers belong in diagnostics rather than ordinary labels.
 
-Distinguish the latest published BOI reference panel, the real historical replay's BOI execution rates and the preserved legacy world's ECB rates. Explain why a Twelve Data importer without a key, verified coverage and display/storage permission is not a working integration. Explain why import activation needs a new world instead of replacing prices under existing positions, and why TradingView display is not a game-data API.
+Distinguish the latest published BOI reference panel, the real historical replay's BOI execution rates and the preserved legacy world's ECB rates. Explain why the live Yahoo quote and Alpha Vantage news adapters were removed instead of kept as dead code, why new data needs a new world instead of replacing prices under existing positions, and why TradingView display is not a game-data API.
 
 Create a dated 28-day simulated test game, for example March 2027, only in the administrator's test realm. Explain why its private versioned descriptor must be persisted with the world, why its registry is separate from shared history and how restart recreates exactly the same data. Explain the differing Israel/New York DST transition dates without shifting historical observations. Use normal Israel date/time input; explain why a nonexistent or ambiguous minute is rejected instead of silently selecting an offset.
 

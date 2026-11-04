@@ -1,25 +1,18 @@
-# Private historical import tools
+# Private historical data probe
 
-These tools support an already completed local Yahoo/yfinance experiment. They are **not** a Python service, Render dependency, current quote feed or routine deployment step. The public game loads its existing private immutable snapshot through the TypeScript server.
+`probe_yfinance.py` is the one-time local experiment that downloaded the daily prices behind the shared league's historical replay. It is not a service, a Render dependency or a live feed, and the game never runs it.
 
-## Current restriction
+## What it does
 
-Yahoo's [Terms of Service, section 2, conduct item 9](https://legal.yahoo.com/us/en/yahoo/terms/otos/index.html) requires prior permission for automated collection. No such permission is claimed. Do not rerun the probe/download simply to deploy or test the game. A Python package's open-source licence and technical success do not grant data rights.
+It reads the TypeScript instrument catalogue, downloads daily OHLC with yfinance (`auto_adjust=False`, `back_adjust=False`, `repair=False`), and checks prices, timestamps, units (ILA vs ILS), corporate actions and missing dates compared with peers in the same market. Reports, the Python environment and caches go to the ignored `artifacts/yfinance-probe` folder and are never committed. It stops on an access or rate-limit error and does not try to bypass it.
 
-Reuse/display permission for previously downloaded observations remains **unverified**, a separate issue from the explicit restriction on new acquisition. Educational/noncommercial intent is disclosed, not presented as supplier approval. Full source evidence is in [data sources](../docs/data-sources.md).
+On November 4, 2026 it returned 420 valid daily bars: 20 per TASE listing (in agorot, divided by 100) and 22 per US listing. Every TASE listing skipped October 27 (a confirmed holiday). The October download included dividends for ESLT.TA and JPM, so the replay uses October 19–November 2 instead. `npm run import:yahoo` in `server` then turns the private report into the dataset.
 
-## What was observed on November 4, 2026
+## Do not rerun it to deploy or test
 
-The original two-symbol AAPL/LUMI.TA probe and later twenty-symbol run succeeded with yfinance 1.8.0. Ten TASE listings returned twenty October observations each in ILA, normalized by 100; ten US listings returned twenty-two each in USD, for 420 daily bars. No invalid OHLC, duplicates or peer-relative gaps were detected. Peer coverage alone did not prove a calendar.
+Yahoo's [Terms of Service](https://legal.yahoo.com/us/en/yahoo/terms/otos/index.html) (section 2, item 9) require prior permission for automated collection. No permission is claimed. The yfinance open-source licence covers its code, not the data. Details are in [data sources](../docs/data-sources.md).
 
-All TASE listings omitted October 2/27; a subsequent official-calendar review confirmed closures. The broader October series included reported ESLT.TA/JPM dividends. The game therefore uses a narrower reviewed October 19–November 2 replay with October 16 baseline, no reported corporate actions inside that selected window and a real BOI FX history. Historical imports never fill a missing price or automatically invent a holiday.
-
-`auto_adjust=False`, `back_adjust=False` and `repair=False` disabled additional library adjustments; Yahoo OHLC can nevertheless be split-adjusted and is not guaranteed as-traded data. See [parameters](https://ranaroussi.github.io/yfinance/reference/api/yfinance.download.html) and [library notice](https://pypi.org/project/yfinance/).
-
-## Files and reproducibility
-
-`probe_yfinance.py` checks the existing TypeScript catalogue, OHLC, timestamps, units, actions and peer dates. Raw reports, Python environment and caches stay under ignored `artifacts/yfinance-probe`. They are never committed or served. The tool stops on access/rate-limit failure without bypasses.
-
-`server`'s `import:yahoo` consumes an existing private report, verified calendar and BOI history to stage `server/data/yahoo-world.json`; it does not itself authorize a new source acquisition. An existing world must retain its exact dataset. Only a separate new-world action selects another validated dataset. See [the runbook](../docs/runbook.md) for private paths and preservation.
-
-A raw probe report is not a game Dataset, a cloud-feed acceptance result or a licence. Python is unnecessary for ordinary game use, clock processing, Hosting publication and the new administrator-only generated test simulations.
+```bash
+python -m pip install -r requirements-yfinance.txt
+python probe_yfinance.py --help
+```

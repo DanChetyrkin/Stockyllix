@@ -1,117 +1,60 @@
-# Market data decisions
+# How the price world was built
 
-Provider research and local import status were checked on 2026-11-04. The company prefers real, current data and explicitly permits a sensible simulation if real data becomes too difficult. These checks do not claim a working paid account or a licence that was not granted.
+Stockyllix is a non-commercial educational interview demo with virtual money. This page explains where each price comes from and what was checked. Research and checks are dated November 4, 2026. Nothing here claims a paid account or a data licence that was not granted.
 
-Stockyllix is a non-commercial educational interview demonstration, with virtual money. The shared league and new shared games use real historical prices. Release 1.4.0 adds an explicitly separate administrator-only generated-price test game with selectable dates; it does not replace shared history or claim simulated values are real quotes. Legacy worlds retain their original immutable data. Existing historical files are loaded by an explicit path, not by a flag asserting supplier approval. Technical validation and operator selection do not establish data rights. New-release deployment/QA status is recorded in [verification](verification.md).
+## Three kinds of prices
 
-## Current-market implementation
-
-The custom Node adapter can fetch current regular-session Yahoo chart observations for the existing twenty listings, but new automated access is now disabled unless the source grants prior permission (YAHOO_AUTOMATED_ACCESS_AUTHORIZED=true). A real local run returned twenty valid quotes; a recreated service using the same store reused them with no extra provider calls. This is separate from the daily-history experiment. Public display permission remains unverified, so `/api/market/current` defaults to a server-authorized administrator preview. It is not used by the trading engine.
-
-The shared cache persists last good observations, refresh eligibility, lease and fencing version in Firestore. An in-process single flight and short L1 cache reduce duplicate work/reads. Refreshes occur within bounded HTTP requests, at most once every ten minutes, with limited concurrency, timeout and provider backoff. No always-on worker or local disk is required. Each quote retains its own `priceAt` and `fetchedAt`; a failed partial refresh preserves the old quote and marks it stale. The previous session close comes from dated bars, not a five-day baseline incorrectly labelled yesterday. Unknown delay remains unknown; extended sessions are not included.
-
-For public display the browser uses the [official free TradingView widgets](https://www.tradingview.com/widget/) with attribution intact. Their [market list](https://www.tradingview.com/widget-docs/markets/mea/) includes delayed TASE stocks. The widget is an independent hosted display, not a source we may scrape into our API. TradingView explicitly [does not offer widget data export/API access](https://www.tradingview.com/widget-docs/faq/data/). Its quotes are not copied into Firestore or used for game fills. Dated browser rendering/filter checks are recorded in verification; they do not prove twenty-symbol API access or real-time entitlement.
-
-Other requested candidates were screened without adding services:
-
-| Candidate | Material finding |
-| --- | --- |
-| [OpenBB](https://docs.openbb.co/odp/python/faqs/data_providers) | An integration layer dependent on provider access; it is not an independent data licence or feed. Adds no benefit to this Node deployment. |
-| [Massive](https://massive.com/knowledge-base/article/which-plan-do-i-need-to-show-massive-data-in-my-app) | Free individual EOD access is not public application display rights; even externally reachable demos require a business arrangement. TASE coverage was not established. |
-| [Marketstack](https://marketstack.com/product) | Free EOD quota is 100 requests/month, with symbol-based consumption. Five full twenty-symbol refreshes/month cannot support this market view. |
-| [Interactive Brokers](https://www.interactivebrokers.com/campus/ibkr-api-page/twsapi-doc/) | TWS/IB Gateway needs an authenticated broker session and running desktop/gateway software. Delayed-data availability depends on exchange/account/entity; it is not a stand-alone free Render feed. |
-
-## Current news
-
-The supplied Alpha Vantage free key was tested locally without logging it. `NEWS_SENTIMENT` returned HTTP 200 with a Premium requirement and zero articles, matching the [current endpoint documentation](https://www.alphavantage.co/documentation/#news-sentiment). The implemented adapter stores only title, source, publication time, related catalog IDs and HTTPS article URL. It strips bodies/images/sentiment, uses a six-hour shared cache and persistent request budget, and reports entitlement/quota failures without leaking provider URLs or secrets.
-
-[EODHD News](https://eodhd.com/financial-apis/stock-market-financial-news-api) offers a free allowance, but its [personal-use terms](https://eodhd.com/financial-apis/terms-conditions) do not permit displaying the data to others. No second news API was connected. Reddit requires approved/OAuth access and represents community posts, while new StockTwits API registration is currently closed; neither is presented as verified news. The public News page instead embeds the official TradingView feed. It follows real publication time, independently of demo time.
-
-| Source | Verified capability | Why it is not the default stock feed |
+| Used for | Source | Can it execute orders? |
 | --- | --- | --- |
-| [Twelve Data](https://twelvedata.com/pricing) | Basic is free without a card, 8 credits/minute and 800/day; US equities are included. [XTAE](https://twelvedata.com/exchanges/xtae) is end-of-day in a paid tier. | Basic is internal non-display. [External display and redistribution](https://twelvedata.com/terms) require appropriate rights. A trial symbol does not establish access to twenty instruments or public-display rights. |
-| [Alpha Vantage](https://www.alphavantage.co/support/) | Free key and 25 requests/day; [daily OHLC compact](https://www.alphavantage.co/documentation/) gives 100 observations. | TASE coverage was not established. The [licence](https://www.alphavantage.co/terms_of_service/) is personal/non-commercial, and public demo redistribution was not established. Intraday and real-time US data are paid. |
-| [TASE Data Hub](https://content.tase.co.il/media/4imn13pz/2001_api_pricelist_2026_eng.pdf) | Free Securities Basic exists for internal use. EOD and historical securities products are separately priced. | The Basic product's open/close fields could not be verified from the public portal. Do not infer either full OHLC coverage or its absence from the product name. Public redistribution rights were not established. |
-| [Finnhub](https://finnhub.io/pricing) | Free: 60 API calls/minute, US coverage, WebSocket up to 50 symbols, no card required. OHLC history is not included in Free's comparison table. | US quote streaming does not supply the required historical replay. Free TASE coverage is not listed. [Sharing data or derived results](https://finnhub.io/terms-of-service) requires written approval, even for a personal-plan demo. |
-| [Financial Modeling Prep](https://site.financialmodelingprep.com/pricing-plans) | Basic: $0, 250 calls/day, end-of-day history and company profile/reference data; 500MB over 30 days. Global coverage is listed in paid Ultimate. | Free TASE coverage, rating access and no-card signup were not verified. The pricing page explicitly requires a separate Data Display and Licensing Agreement for displaying or redistributing FMP data. [Terms](https://site.financialmodelingprep.com/terms-of-service) do not establish public-demo permission. |
+| Shared league | Real daily open and close prices from a private Yahoo/yfinance snapshot, with Bank of Israel USD/ILS | Yes |
+| Administrator test games | Prices and USD/ILS generated by the server for 28 days from a chosen date | Yes, only inside that test game |
+| Current market and News pages | Official TradingView widgets, possibly delayed | No, display only |
 
-No researched source passed all of: both markets, required open/close history, no card, free, and verified permission for this public demo. The existing real Yahoo/BOI snapshot is validated and remains the shared historical choice. Legacy datasets stay unchanged. The separately authorized test simulation is available only in the administrator's isolated realm and is clearly generated, including its FX. Loading/creating a dataset never migrates old balances or replaces prices under completed trades.
+The app labels the source on every trading screen. A world keeps the dataset it was created with, so changing data always means a new game.
 
-Among the three newly compared candidates, Twelve Data remains the best technical fit for a unified daily-history importer, conditional on access and display rights. It already has a prepared adapter. Its [US feed explanation](https://support.twelvedata.com/en/articles/9935903-us-equities-market-data) distinguishes listed-symbol coverage from volume coverage: the default real-time feed represents about 5% of market volume, while completed EOD/history covers all US exchanges. Basic's 800 daily allowance is credits, not an unlimited multi-symbol request count. This does not grant TASE access or external-display permission.
+## Shared league: real historical replay
 
-WebSocket is not needed to execute an accelerated replay. A live stream cannot supply a future closing price when the administrator advances the game. Daily open/close history is the relevant starting point. Finnhub's larger minute quota does not resolve that difference.
+- **Instruments:** 10 TASE listings (LUMI, POLI, MZTF, DSCT, BEZQ, AZRG, ESLT, ICL, TEVA, NICE) and 10 US listings (AAPL, MSFT, AMZN, GOOGL, NVDA, META, JPM, JNJ, KO, SPY).
+- **Period:** October 19–November 2, 2026, with the October 16 close as the baseline. That is two full competition weeks plus one extra day for executions, 21 sessions and 420 opening and closing prices.
+- **Prices:** daily open and close prices downloaded once with yfinance 1.8.0 (`auto_adjust=False`, `back_adjust=False`, `repair=False`). TASE quotes in agorot (ILA) are divided by 100. Each open and close is replayed at the assignment's market hours; there is no intraday path.
+- **Calendar:** every TASE listing skipped October 27, and the official TASE 2026 calendar confirms that closure. US sessions were checked against the NYSE calendar. A missing price stops the import instead of being guessed.
+- **Corporate actions:** the wider October download contained dividends for ESLT.TA and JPM. The chosen window has no reported dividends or splits, which is why it starts on October 19.
+- **USD/ILS:** Bank of Israel representative rates. A rate for one day becomes usable at 00:00 Israel time on the next day, so no order can use a rate before it was published. An order on Friday in New York can therefore use Thursday's rate.
+- **Checks:** all 420 replayed prices were compared with the raw download, and a local engine run executed 20 buys and 20 sells across both weeks with correct cash, units, returns, MDD and rankings.
+- **Storage:** the snapshot (`historical-8c9e717c12d59090`) is private. It is not in Git and is loaded on Render from the secret file in `HISTORICAL_DATASET_PATH`. The API never returns a price from after the current game time, but the historical prices can of course be looked up elsewhere.
 
-## Sorting and optional research metrics
+The private Python probe that produced the download is described in [tools/README.md](../tools/README.md). `npm run import:yahoo` (server) turns that private report, the verified calendar and the BOI history into the dataset file.
 
-The market list supports name and daily-price-change sorting in both directions. Each asset's percentage is measured in its quote currency against the previous known trading-session close; closed days keep the last trading day's change. A missing comparison remains unavailable and sorts last. The market response computes all twenty values from the private in-memory dataset, sharing the same rule as asset history, with no additional provider requests or database reads.
+## Data rights
 
-There is no invented annual return from the short historical replay. A later feature must distinguish calendar-year return (YTD) from trailing twelve months (1Y), and price return from dividend-inclusive total return. It needs sufficient historical data available as of game time.
+- Yahoo's [Terms of Service](https://legal.yahoo.com/us/en/yahoo/terms/otos/index.html) (section 2, item 9) require prior permission for automated collection. No permission is claimed, so the download is not repeated and the game never calls Yahoo.
+- Whether the already downloaded prices may be kept and shown in this small demo is **not verified**. The yfinance licence covers the code, not the data. A licensed source would be the right choice for a real product.
+- Bank of Israel and ECB rates are public reference data, shown with attribution.
 
-Company ratings are not a universal measure. Finnhub lists US analyst recommendation trends; FMP's [Ratings Snapshot](https://site.financialmodelingprep.com/developer/docs/stable/ratings-snapshot) is a calculated financial-ratio score, distinct from analyst consensus or a credit rating. Its [FAQ](https://site.financialmodelingprep.com/faqs?code=company) says the score is not normalized for sector peers. No rating feed or its public-display entitlement was tested or activated. Source, method and observation date must be defined before adding a rating sort.
+## Test games with simulated prices
 
-## Legacy simulation and separate dated test simulation
+An administrator can create a test game from any start date (for example March 1, 2027). The server generates 28 calendar days of sessions in the Israel and New York time zones, prices for the same 20 instruments, and simulated USD/ILS rates. The generator input is saved privately with the test world, so a restart rebuilds exactly the same prices. These games exist only in the administrator's test realm, are labelled "Simulated", and never replace or relabel the shared league's data.
 
-The bullets below describe the preserved October 2026 legacy generator. Its output/IDs are not rewritten for the 1.4.0 test feature. A separately versioned 28-calendar-day test generator accepts a chosen local start date, builds sessions in the Israel/New York zones and creates explicitly simulated FX as well as stock prices. March 2027 test prices are not October history moved to another date. Private immutable test descriptors remain in the administrator's Firestore realm so the exact data can be reconstructed after restart; they are never exposed as future prices or supplier observations.
+The first version of the game used a similar simulated world for October 2026 with real ECB rates (`npm run import:ecb`). That world is still loaded so old games stay readable. Without the ECB file, the server refuses to start unless `ALLOW_SIMULATED_FX=true` is set, and then it labels the rates as simulated.
 
-- Twenty instruments: ten on TASE and ten US listings, including SPY. All generated prices are in ILS or USD, never agorot.
-- Baseline prices represent a simulated October 2 close; they are illustrative values, not quotes copied from a source.
-- Sessions run October 5 through October 30, with November 2 as an execution buffer. The buffer is a partial fifth competition week; it is not a fifth complete weekly result.
-- Opening gaps, shared market moves, sector moves and individual moves produce both gains and losses. A private seed makes replay reproducible. The dataset contains no seed.
-- The assignment's weekday hours are authoritative. Weekends have no sessions; the simulated calendar does not model real exchange holidays or early holiday closes. Timezone conversion uses IANA zones for Israel and New York, including their different daylight saving transitions.
-- Prices update only on market open/close events. Daily high/low and intraday paths are not used. MDD is measured on the actual world event samples, not inferred from a daily candle's high and low.
-- No fees, dividends or splits are simulated. This is an explicit simplification; do not relabel these generated prices as a historical return series.
+## Current market and news
 
-## Real exchange rates
+The **Current market** and **News** pages embed the [official TradingView widgets](https://www.tradingview.com/widget/) with attribution. TradingView offers no data export from its widgets, so their prices are never copied, stored or used for orders. They may be delayed, and TASE prices there are in agorot.
 
-`npm run import:ecb` downloads a fixed October 2 through November 2 window from the [official ECB SDMX API](https://data.ecb.europa.eu/help/api/data), using the `D.USD+ILS.EUR.SP00.A` series and CSV format. A fixed historical query remains usable after October leaves a rolling 90-day feed. The importer calculates USD/ILS as ILS-per-EUR divided by USD-per-EUR. The private JSON contains attribution, source URL, import time, source observation dates and availability times. It rejects missing currencies and never creates a replacement rate.
+The status panel also shows the latest published Bank of Israel USD/ILS rate (`GET /api/reference/fx`, cached on the server). It is a reference only and never changes a historical execution rate.
 
-[ECB reference rates](https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html) update daily, not continuously. [ECB reuse terms](https://www.ecb.europa.eu/services/using-our-site/disclaimer/html/index.en.html) permit accurate reuse with source attribution and disclosure of calculations. This is a virtual educational game, not a real currency execution feed.
+## Sources considered for live or current data
 
-For conservative historical replay, a daily rate is made available at 00:00 Israel time on the following calendar day. Until then the latest available rate is carried forward. This intentionally delays observations beyond their normal publication, so no same-day value is used before publication. Friday US executions can consequently use Thursday's reference rate. An observation more than seven calendar days old causes dataset validation to fail.
+Earlier versions also had server-side adapters for live Yahoo quotes and Alpha Vantage news. Both were removed because they could not work in production: new Yahoo collection needs permission, Render's requests were throttled (HTTP 429), and the free Alpha Vantage key returned "Premium required" for news.
 
-### Bank of Israel: connected reference data, staged history
+| Source | What it offers for free | Why it was not used |
+| --- | --- | --- |
+| Twelve Data | Basic plan with US daily history | TASE end-of-day data is paid; displaying data publicly needs extra rights |
+| Alpha Vantage | 25 requests/day of daily prices | TASE coverage not confirmed; personal, non-commercial licence; news needs Premium |
+| TASE Data Hub | Free basic product for internal use | Open and close fields and public display rights could not be confirmed |
+| Finnhub | US quotes and WebSocket | No historical candles on the free plan; sharing data needs written approval |
+| Financial Modeling Prep | 250 calls/day of end-of-day data | Public display needs a separate licence agreement |
+| Marketstack, Massive, EODHD | Small free quotas | Too few requests, or personal use only |
+| Interactive Brokers | Broker API | Needs a broker account and a running desktop gateway |
 
-The [Bank of Israel API](https://www.boi.org.il/information/bank-paymnts/guide/api-guide/) supplies daily representative rates, not stock prices. Its [latest USD endpoint](https://www.boi.org.il/PublicApi/GetExchangeRate?key=USD) is now connected through authenticated `GET /api/reference/fx` and was verified against the real provider locally. The response identifies the observation date/publication time, fetch time and source. It is the latest **published representative rate**, not a real-time dealing quote.
-
-The server caches this separate reference request and deduplicates concurrent refreshes. A failed refresh returns an explicitly stale cached result when available, or an unavailable error; it never invents a rate. This optional panel does not drive trades or replace the active world's FX.
-
-`npm run import:boi` successfully staged **21** historical observations for October 2–November 2 in ignored `server/data/boi-fx.json`. The importer validates the official series/currency/units, dates, positive rates and baseline. Historical availability is conservatively the following Israel midnight. `BOI_FX_DATA_PATH` must differ from the legacy `FX_DATA_PATH`. The shared historical replay uses BOI observations embedded in its immutable snapshot; preserved legacy worlds retain their original ECB file/data ID. Importing alone never migrates either world.
-
-A broad redistribution/storage licence was not established by the earlier research. A functioning public endpoint is not evidence of permission to redistribute a historical dataset. Keep attribution and review applicable terms before publishing imported data.
-
-If the real FX file is unavailable, server startup fails. Only the explicit `ALLOW_SIMULATED_FX=true` setting permits a labelled simulated FX fallback. It never silently labels generated numbers as ECB observations.
-
-## Private imports and future data
-
-### Yahoo/yfinance: real historical replay and source restrictions
-
-On November 4, 2026, a private two-symbol experiment with yfinance 1.8.0 downloaded October daily history for AAPL and LUMI.TA. A subsequent run covered all twenty existing catalog symbols: 420 daily observations, with twenty per TASE symbol and twenty-two per US symbol. All TASE listings reported ILA and were normalized to ILS by dividing by 100. Original quotes remain in the ignored local report. No invalid OHLC, duplicate dates or missing dates relative to same-market peers were found.
-
-All TASE listings omitted October 2 and October 27. This is an observation, not an exchange-calendar verification; dates missing for every peer cannot be detected by peer comparison alone. The provider returned dividend events for ESLT.TA and JPM during the period. Corporate-action handling must be decided before using this period for portfolio scoring.
-
-The separate [Python probe](../tools/README.md) was a local experiment writing ignored artifacts, not a Python server or Render dependency. Do not rerun new automated acquisition without the permission described below. `auto_adjust=False`, `back_adjust=False` and `repair=False` prevented additional automatic library adjustments/repairs. Yahoo OHLC can still be split-adjusted and is not guaranteed as-traded history. See the [parameter documentation](https://ranaroussi.github.io/yfinance/reference/api/yfinance.download.html) and [maintainer explanation](https://github.com/ranaroussi/yfinance/discussions/1682).
-
-The extended private report contains 440 observations through November 2. The staged replay selects **October 19–November 2, 2026**, with an October 16 closing baseline, two complete competition weeks and November 2 as an execution buffer. TASE's October 27 closure was checked against its [official 2026 calendar](https://www.tase.co.il/he/content/knowledge_center/trading_vacation_schedule); the US sessions were checked against the [NYSE calendar](https://www.nyse.com/markets/hours-calendars). None of the reported corporate actions falls inside the selected replay period. A missing required bar stops import rather than becoming a guessed holiday or replacement price. Exchange daily OHLC is replayed on the assignment's required hours; it is not an intraday reconstruction.
-
-The actual private dataset `historical-8c9e717c12d59090` has twenty instruments and twenty-one sessions. An isolated end-to-end engine check compared all **420** replay opening/closing prices with raw provider values and verified available BOI FX at each event. It executed twenty buys and twenty sells, checked cash, fractional holdings, valuation/profit, two weekly returns/MDD/rankings, the exact end boundary and preservation of the earlier world. This is local engine evidence; it is not a claim of deployed browser acceptance.
-
-The [library notice](https://pypi.org/project/yfinance/) says it is unofficial, intended for research/education, and directs users to Yahoo's data terms. Its open-source license is not a data licence. Two different source issues must not be conflated:
-
-- **Explicit restriction:** Yahoo's [Terms of Service, section 2, conduct item 9](https://legal.yahoo.com/us/en/yahoo/terms/otos/index.html) prohibits automated collection without express prior permission. This affects new automated Yahoo requests, including the refresh adapter and future historical downloads. No permission is claimed; caching, educational purpose or a successful local request does not grant it. HTTP 429 from Render is a separate technical refusal, not proof of a licence decision.
-- **Unverified:** permission to retain and show the previously downloaded historical observations in this small non-commercial interview demo was not established. The terms' commercial-exploitation restriction is not cited as an explicit ban on this non-commercial demonstration. The existing private snapshot is not committed or sent to the client wholesale; no supplier approval is implied by its configuration. A public data licence or authorized replacement source remains preferable.
-
-`HISTORICAL_DATASET_PATH` loads an existing validated private file into the registry. The removed `HISTORICAL_DATA_USE_CONFIRMED` flag must not be presented as provider permission. Activation requires a separate administrator new-world action. No new Yahoo network download occurs when loading or trading the snapshot, and no future observations are returned before the world clock reaches them.
-
-### Twelve Data importer: prepared, not a working stock connection
-
-`npm run import:market` is preparation for an authorized historical import. No Twelve Data key/provider access was available, so no real stock import or full 20-instrument connection has been verified. Parser/fixture tests establish input validation, not account entitlements, actual TASE coverage or display rights.
-
-Before using it, confirm all twenty listings, daily open/close history, storage and public-demo display permission, free usage and no-card access. Only then supply server-only `TWELVE_DATA_API_KEY` and set `MARKET_DATA_USE_CONFIRMED=true`. The flag records an operator decision; it cannot grant rights or verify them automatically.
-
-Optional `MARKET_FROM_DATE`/`MARKET_TO_DATE` select a Monday start and a fully completed end date. Defaults select a recent completed period. `MARKET_OUTPUT_PATH` stages private output, normally `server/data/market-world.json`; it must be separate from active `DATASET_PATH`. The importer checks listing/exchange/timezone/currency, normalizes Israeli agorot to ILS, combines opening/closing bars with BOI history, and validates the resulting world. It fails on missing dates rather than guessing holidays. Choose a complete period or supply a separately verified calendar; avoid unhandled splits/dividends. Request spacing is not proof of entitlement or sufficient quota.
-
-Do not point an existing world's portfolios at newly imported prices. Keep the staged file private, review its provenance and coverage, back up the current exact dataset, and plan activation for a **new** game world. A source/configuration change must not silently replace the active dataset; mismatches fail closed. Nothing in this importer enables live future prices for an accelerated game clock.
-
-`DATASET_PATH` can point to a private JSON matching the `Dataset` interface. Startup validates identifiers, all twenty prices per snapshot, positive decimal values, chronological events, timezone-bearing timestamps, session boundaries, and market events. Imported historical datasets may omit exchange holidays; they must supply the corresponding complete sessions and event snapshots themselves.
-
-Future events, the generator seed, private JSON and raw future prices are server-only. They must not appear in a client bundle, public API response or public Git repository. Public historical data can still be looked up elsewhere; replay is not a claim of protection against external knowledge. An exhausted dataset stops advancement and order acceptance rather than looping to the beginning.
+No source passed every requirement: both markets, open and close history, free without a card, and permission to display in a public demo. A live stream would also not help an accelerated clock, because the game needs a future closing price at the moment the administrator advances time.
