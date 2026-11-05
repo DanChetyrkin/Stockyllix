@@ -135,7 +135,7 @@ cp .env.example .env.local
 npx expo start
 ```
 
-On Windows, use `copy .env.example .env.local`. Scan the QR code with the iPhone Camera app, or from inside Expo Go on Android. The phone and the computer must be on the same Wi-Fi; otherwise run `npx expo start --tunnel`. A simulator also works: press `i` for the iOS Simulator (macOS) or `a` for an Android emulator. On a phone, Current market and News open TradingView in the browser.
+On Windows, use `copy .env.example .env.local`. Scan the QR code with the iPhone Camera app, or from inside Expo Go on Android. The phone and the computer must be on the same Wi-Fi; otherwise run `npx expo start --tunnel`. A simulator also works: press `i` for the iOS Simulator (macOS) or `a` for an Android emulator. On a phone, Current market and News show the same TradingView panels inside the app, and their links open in the phone's browser.
 
 **Checks.** Java 21 is needed only for the Firebase emulator tests.
 

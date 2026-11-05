@@ -7,7 +7,7 @@ How to run Stockyllix locally, deploy it, and recover it. The product and rule d
 | Part | Where |
 | --- | --- |
 | Web app | https://stockyllix.web.app (Firebase Hosting, static Expo export from `mobile/dist`) |
-| TradingView wrapper | https://stockyllix-panels.web.app (second Hosting site, files from `widgets/`) |
+| TradingView wrapper | https://stockyllix-panels.web.app (second Hosting site, files from `widgets/`; an iframe on the web and a WebView in the phone app) |
 | API | https://stockyllix-api.onrender.com/api (Render free plan, service `stockyllix-api`, root `server`) |
 | Health | https://stockyllix-api.onrender.com/health (version, release and deployed commit) |
 | Identity and data | Firebase project `stockyllix` on the Spark plan: Authentication and Firestore |

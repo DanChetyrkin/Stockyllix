@@ -12,6 +12,10 @@ This file separates what was checked locally, what was checked in the cloud, and
 | GitHub Write access for the reviewer | Owner handover |
 | Physical Expo Go session | Not verified. Browser phone-width checks and the Android bundle build are not a device test |
 
+## TradingView panels in the phone app (November 5, 2026)
+
+On phones, Current market and News showed only a link to the browser. They now load the same panel page as the website inside a WebView (`react-native-webview` 14.0.1, the version bundled with Expo SDK 58 and Expo Go), and the panel's links open in the phone's browser. Typecheck, lint, 50 app checks and the Android export passed. The web export is unchanged and still matches the live site byte for byte, so no deploy was needed. Not yet checked on a physical phone.
+
 ## Market list fix and price watch removal, release 1.5.3 (November 5, 2026)
 
 A manual run found that the order panel always opened on LUMI, the first asset in the catalogue, even when the market filter showed only US assets. The panel now follows the visible list, and a saved or reviewed request keeps its asset. The price watch was removed: the assignment does not ask for it, and without notifications it could only show a badge inside the app. Existing `users/<uid>/watchlist/current` documents are no longer read. Locally: 197 server tests (the 6 removed tests covered only the watchlist), 50 app checks (1 new for the order panel), typecheck, lint, the server build and the web export passed.

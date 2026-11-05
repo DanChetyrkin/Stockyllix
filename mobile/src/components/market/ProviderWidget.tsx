@@ -1,25 +1,43 @@
-import { Linking } from 'react-native';
-import { Button, Card, Copy } from '@/components/ui/kit';
+import { useState } from 'react';
+import { Linking, View } from 'react-native';
+import { WebView } from 'react-native-webview';
+import { useTheme } from '@/context/ThemeContext';
+import { Button, Copy } from '@/components/ui/kit';
 import { newsSourceUrl, type ProviderWidgetProps } from './news-options';
 
-export function ProviderWidget({ kind, newsSymbol }: ProviderWidgetProps) {
+// phones load the same isolated panel page as the website; it holds no account data.
+const panelOrigin = 'https://stockyllix-panels.web.app';
+
+export function ProviderWidget({ kind, newsMarket = 'all', newsSymbol = '' }: ProviderWidgetProps) {
+  const { mode } = useTheme();
+  const [revision, setRevision] = useState(0);
+  const source = kind === 'markets' ? 'https://www.tradingview.com/markets/stocks-israel/' : newsSourceUrl(newsSymbol);
+  const query = new URLSearchParams({ kind, theme: mode, market: newsMarket, symbol: newsSymbol });
   return (
-    <Card style={{ gap: 14 }}>
-      <Copy>
-        The TradingView panel is available in the browser.{' '}
-        {kind === 'news'
-          ? 'Open the selected company’s news at the source, or use the website for market filters.'
-          : 'Open the website to view current quotes.'}
-      </Copy>
-      <Button
-        onPress={() =>
-          void Linking.openURL(
-            kind === 'markets' ? 'https://stockyllix.web.app/current-market' : newsSourceUrl(newsSymbol),
-          )
-        }
-      >
-        Open {kind === 'markets' ? 'browser view' : 'news source'} ↗
-      </Button>
-    </Card>
+    <View style={{ gap: 12 }}>
+      <View style={{ height: kind === 'markets' ? 650 : 620, borderRadius: 10, overflow: 'hidden' }}>
+        <WebView
+          key={`${mode}/${revision}/${newsMarket}/${newsSymbol}`}
+          accessibilityLabel={
+            kind === 'markets' ? 'TradingView delayed market prices' : 'TradingView current market news'
+          }
+          source={{ uri: `${panelOrigin}/provider-widget.html?${query}` }}
+          // panel links open a new window; send them to the phone's browser so the app stays on the panel.
+          onOpenWindow={event => void Linking.openURL(event.nativeEvent.targetUrl)}
+          nestedScrollEnabled
+        />
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+        <Copy muted style={{ fontSize: 11, flex: 1 }}>
+          TradingView · source links open the original story.
+        </Copy>
+        <Button compact variant="quiet" onPress={() => setRevision(value => value + 1)}>
+          Reload
+        </Button>
+        <Button compact variant="quiet" onPress={() => void Linking.openURL(source)}>
+          Open source ↗
+        </Button>
+      </View>
+    </View>
   );
 }
