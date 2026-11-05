@@ -6,15 +6,15 @@ This file separates what was checked locally, what was checked in the cloud, and
 
 | Item | Status |
 | --- | --- |
-| Live web app | Built from `5f4b2ff` at https://stockyllix.web.app. `index.html` and all script bundles match the release build byte for byte |
-| Live API | Server `5f4b2ff`, `/health` = 1.5.3 / market-list-v8 |
-| CI | All three jobs passed for `5f4b2ff` on `main` and `codex/render-free-deploy` |
+| Live web app | Built from `68d7a59` at https://stockyllix.web.app. `index.html`, all script bundles and the demo video match the release build byte for byte |
+| Live API | Server `68d7a59` (no server change since `5f4b2ff`), `/health` = 1.5.3 / market-list-v8 |
+| CI | All three jobs passed for `68d7a59` on `main` and `codex/render-free-deploy` |
 | GitHub Write access for the reviewer | Owner handover |
 | Physical Expo Go session | Android: the owner's 2:49 recording on November 5, 2026 (the demo video). iPhone: not verified |
 
 ## Demo video (November 5, 2026)
 
-The owner recorded a 2:49 session in Expo Go on an Android phone: sign-in, a new game, a ₪500,000 Apple buy refused by the 20% rule, a ₪50,000 buy that stayed pending, the clock moved to the US opening, the executed order, and the TradingView news panel inside the app. The web copy is H.264 at 720 × 1560 and a constant 30 frames per second, 13.5 MB, with its index at the start so playback begins before the download ends. A chat notification that appeared for about four seconds is blurred. Firebase Hosting answers range requests (206), which iPhone Safari needs for video.
+The owner recorded a 2:49 session in Expo Go on an Android phone: sign-in, a new game, a ₪500,000 Apple buy refused by the 20% rule, a ₪50,000 buy that stayed pending, the clock moved to the US opening, the executed order, and the TradingView news panel inside the app. The web copy is H.264 at 720 × 1560 and a constant 30 frames per second, 13.5 MB, with its index at the start so playback begins before the download ends. A chat notification that appeared for about four seconds is blurred. After the deploy, the live file matched the build, Hosting served it as `video/mp4` with a one-day cache, and a range request returned 206, which iPhone Safari needs for video.
 
 ## TradingView panels in the phone app (November 5, 2026)
 
