@@ -15,6 +15,10 @@ A weekly portfolio league: each player gets ₪1,000,000 in virtual cash, trades
 
 ## Try it in 3–5 minutes
 
+**Or watch it first (2:49).** Recorded in Expo Go on an Android phone, not in a browser: signing in as the administrator, starting a new game, a buy blocked by the 20% rule, a ₪50,000 Apple buy that waits for the US opening, moving the game clock to execute it, and the news feed. The same video is on the app's **How to play** page.
+
+[![Stockyllix in Expo Go on Android: the market, a pending buy, the executed order and the news feed](docs/demo-preview.jpg)](https://stockyllix.web.app/demo/stockyllix-demo.mp4)
+
 The API runs on a free server that sleeps when idle, so the first page load can take up to a minute. Moving the game clock takes from about 30 seconds to a few minutes (see [Running in production](#running-in-production)); World controls shows the progress.
 
 1. Open the link and sign in as the administrator. A new player can also register; every player starts with ₪1,000,000 once per game.

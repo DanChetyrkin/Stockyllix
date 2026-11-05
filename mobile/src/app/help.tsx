@@ -1,6 +1,8 @@
 import { Link, type Href } from 'expo-router';
-import { View } from 'react-native';
+import { Linking, View } from 'react-native';
 import { AppShell } from '@/components/AppShell';
+import { DemoVideo } from '@/components/help/DemoVideo';
+import { demoVideoUrl } from '@/components/help/demo-video';
 import { Button, CardTitle, Copy, PageTitle, useThemedStyles } from '@/components/ui/kit';
 import { useGame } from '@/context/GameContext';
 
@@ -18,6 +20,19 @@ export default function HelpScreen() {
         <GuideLink href="/orders">Orders</GuideLink>
         <GuideLink href="/leaderboard">The league</GuideLink>
       </View>
+      <GuideCard title="Watch a 3-minute demo">
+        <Copy muted>
+          Recorded in Expo Go on an Android phone, not in a browser: signing in as the administrator, starting a new
+          game, a buy blocked by the 20% rule, a ₪50,000 Apple buy that waits for the US opening, moving the game clock
+          to execute it, and the news feed.
+        </Copy>
+        <DemoVideo />
+        <View style={{ alignSelf: 'flex-start' }}>
+          <Button compact variant="quiet" onPress={() => void Linking.openURL(demoVideoUrl)}>
+            Open the video ↗
+          </Button>
+        </View>
+      </GuideCard>
       <GuideCard title="Current prices and the historical game">
         <Copy>
           Current market displays TradingView’s source-owned market panel. Quotes can be delayed; when a market is

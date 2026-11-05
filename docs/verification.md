@@ -10,7 +10,11 @@ This file separates what was checked locally, what was checked in the cloud, and
 | Live API | Server `5f4b2ff`, `/health` = 1.5.3 / market-list-v8 |
 | CI | All three jobs passed for `5f4b2ff` on `main` and `codex/render-free-deploy` |
 | GitHub Write access for the reviewer | Owner handover |
-| Physical Expo Go session | Not verified. Browser phone-width checks and the Android bundle build are not a device test |
+| Physical Expo Go session | Android: the owner's 2:49 recording on November 5, 2026 (the demo video). iPhone: not verified |
+
+## Demo video (November 5, 2026)
+
+The owner recorded a 2:49 session in Expo Go on an Android phone: sign-in, a new game, a ₪500,000 Apple buy refused by the 20% rule, a ₪50,000 buy that stayed pending, the clock moved to the US opening, the executed order, and the TradingView news panel inside the app. The web copy is H.264 at 720 × 1560 and a constant 30 frames per second, 13.5 MB, with its index at the start so playback begins before the download ends. A chat notification that appeared for about four seconds is blurred. Firebase Hosting answers range requests (206), which iPhone Safari needs for video.
 
 ## TradingView panels in the phone app (November 5, 2026)
 
@@ -102,4 +106,4 @@ The private snapshot `historical-8c9e717c12d59090` covers October 19–November 
 - Load at real scale. The 1,000-player local week is engine timing only. Spark quotas and a sleeping Render instance limit real capacity.
 - The data rights to show the previously downloaded Yahoo prices.
 - The Firebase console password policy and the sign-up form rules (8+ characters with a letter and a number).
-- A real phone session in Expo Go.
+- A real iPhone session in Expo Go.
