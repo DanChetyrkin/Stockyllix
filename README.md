@@ -109,7 +109,7 @@ The **News** page shows one short finance question per game day. Everyone gets t
 
 ## What I added beyond the assignment
 
-Isolated administrator test games (real or simulated, from any date), asset charts and daily change sorting, watchlist price targets, a performance report (realized and unrealized profit, compared with SPY), profile name and photo, light and dark themes, and the latest Bank of Israel reference rate.
+Isolated administrator test games (real or simulated, from any date), asset charts and daily change sorting, watchlist price targets, a performance report (realized and unrealized profit, compared with SPY), profile name and photo, and the latest Bank of Israel reference rate.
 
 ## What I left out, and why
 
