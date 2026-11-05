@@ -6,7 +6,7 @@ A weekly portfolio league: each player gets ₪1,000,000 in virtual cash, trades
 
 **Play in the browser: [stockyllix.web.app](https://stockyllix.web.app)** (no installation).
 
-> **Rotem, this one is for you.** To try everything, including the game clock controls, sign in with:
+>To try everything, including the game clock controls, sign in with:
 >
 > - Email: `admin@stockyllix.com`
 > - Password: `Watermelon2001@Mango!`
