@@ -123,14 +123,27 @@ Isolated administrator test games (real or simulated, from any date), asset char
 
 ## Run it locally
 
-Use Node 26.13.0. Java 21 is needed only for the Firebase emulators.
+Use Node 26.13.0 and run each block from the repository root.
+
+**On a phone with Expo Go (iOS or Android).** The app connects to the live game, so no server setup is needed. Install Expo Go on the phone (it must support Expo SDK 58), then:
+
+```bash
+cd mobile
+npm ci
+cp .env.example .env.local
+npx expo start
+```
+
+On Windows, use `copy .env.example .env.local`. Scan the QR code with the iPhone Camera app, or from inside Expo Go on Android. The phone and the computer must be on the same Wi-Fi; otherwise run `npx expo start --tunnel`. A simulator also works: press `i` for the iOS Simulator (macOS) or `a` for an Android emulator. On a phone, Current market and News open TradingView in the browser.
+
+**Checks.** Java 21 is needed only for the Firebase emulator tests.
 
 ```bash
 cd server && npm ci && npm run typecheck && npm run lint && npm test
 ```
 
 ```bash
-cd mobile && npm ci && npm run typecheck && npm run lint && node --test scripts/*.test.mjs
+cd mobile && npm ci && npm run typecheck && npm run lint && npm test
 ```
 
 The full local setup (emulators, seed accounts and the Expo dev server), deployment and recovery steps are in [docs/runbook.md](docs/runbook.md).

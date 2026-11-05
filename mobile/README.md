@@ -21,8 +21,8 @@ Before sending, an order's request key and exact input are saved on the device. 
 npm ci
 npm run typecheck
 npm run lint
-node --test scripts/*.test.mjs
+npm test
 npm run build:web
 ```
 
-`npx expo start --web` runs the app locally. `npm run check:release` checks the production settings and the API's health and CORS before publishing. Copy `.env.example` to `.env.local` for local work. Every `EXPO_PUBLIC_*` value ends up in the app bundle, so no server key belongs there. Emulator mode, Expo Go and deployment are in the [runbook](../docs/runbook.md).
+`.env.example` holds the live game's public settings: copy it to `.env.local` and run `npx expo start` to open the app in Expo Go on a phone. `npm run check:release` checks the production settings and the API's health and CORS before publishing. Every `EXPO_PUBLIC_*` value ends up in the app bundle, so no server key belongs there. Emulator mode, Expo Go and deployment are in the [runbook](../docs/runbook.md).

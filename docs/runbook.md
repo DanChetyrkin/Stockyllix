@@ -55,16 +55,7 @@ For emulator mode, set `EXPO_PUBLIC_USE_EMULATORS=true`, `EXPO_PUBLIC_API_URL=ht
 
 ## Expo Go against the deployed game
 
-No emulator or local API is needed. In the ignored `mobile/.env.local`, use the real public Firebase web config (the same one Hosting uses) and:
-
-```dotenv
-EXPO_PUBLIC_API_URL=https://stockyllix-api.onrender.com/api
-EXPO_PUBLIC_USE_EMULATORS=false
-EXPO_PUBLIC_FIREBASE_PROJECT_ID=stockyllix
-EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=stockyllix.firebaseapp.com
-```
-
-Remove `EXPO_PUBLIC_AUTH_EMULATOR_URL`. Before switching, keep your emulator settings in a file Expo does not load, such as `.env.local.emulators.backup`. Then run `npx expo start --go --clear` from `mobile` and scan the QR code from a phone on a reachable network. A browser check at phone width or an Android export does not replace a real Expo Go session.
+No emulator or local API is needed: `mobile/.env.example` already holds the live game's public settings. If `mobile/.env.local` holds emulator settings, first keep them in a file Expo does not load, such as `.env.local.emulators.backup`. Then, from `mobile`, copy `.env.example` to `.env.local`, run `npx expo start --go --clear` and scan the QR code from a phone on the same network (add `--tunnel` otherwise). The live API accepts phone requests without a browser origin; a local web dev server on `localhost` is not in `CORS_ORIGINS`, so use the live site for the browser. A browser check at phone width or an Android export does not replace a real Expo Go session.
 
 ## Server configuration
 

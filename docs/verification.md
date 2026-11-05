@@ -6,15 +6,17 @@ This file separates what was checked locally, what was checked in the cloud, and
 
 | Item | Status |
 | --- | --- |
-| Live web app | Built from `d780399` at https://stockyllix.web.app. `index.html` and all three script bundles match the release build byte for byte |
-| Live API | Server `03d09b0`, `/health` = 1.5.1 / review-pass-v6. `03d09b0` only adds a README line to the code commit `d780399` |
-| CI | All three jobs passed for `d780399` and for `main` |
+| Live web app | Built from `8299242` at https://stockyllix.web.app. `index.html` and all three script bundles match the release build byte for byte |
+| Live API | Server `8299242`, `/health` = 1.5.2 / readability-v7 |
+| CI | All three jobs passed for `d780399`; see GitHub Actions for later commits |
 | GitHub Write access for the reviewer | Owner handover |
 | Physical Expo Go session | Not verified. Browser phone-width checks and the Android bundle build are not a device test |
 
 ## Readability pass, release 1.5.2 (November 5, 2026)
 
 The source was formatted once with Prettier (120 characters per line, layout only), the 20% rule got a named constant, and the redundant `seed` script, two unused packages (`expo-device`, `expo-web-browser`) and the Expo template file `mobile/AGENTS.md` were removed. Locally: 203 server tests, 49 app checks, typecheck, lint, the web export and the Android export passed.
+
+After both deploys, the live walkthrough passed again in the isolated test realm: the AMZN buy reserved ₪50,000 and executed once after two **Advance to market event** jumps (52.2 s), the sale, the 20% rule and the refusal of the removed action held, and the shared league was unchanged. `mobile/.env.example` now holds the live game's public settings, so the README's Expo Go steps need no editing.
 
 ## Review pass and release 1.5.1 (November 5, 2026)
 
