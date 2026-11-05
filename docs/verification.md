@@ -6,17 +6,19 @@ This file separates what was checked locally, what was checked in the cloud, and
 
 | Item | Status |
 | --- | --- |
-| Live web app | Client `48ad777` at https://stockyllix.web.app. `index.html` and all three script bundles match the release build byte for byte |
-| Live API | Server `48ad777`, `/health` = 1.5.0 / final-cleanup-v5 |
-| CI | All three jobs passed for `48ad777` and for `main` |
+| Live web app | Built from `d780399` at https://stockyllix.web.app. `index.html` and all three script bundles match the release build byte for byte |
+| Live API | Server `03d09b0`, `/health` = 1.5.1 / review-pass-v6. `03d09b0` only adds a README line to the code commit `d780399` |
+| CI | All three jobs passed for `d780399` and for `main` |
 | GitHub Write access for the reviewer | Owner handover |
 | Physical Expo Go session | Not verified. Browser phone-width checks and the Android bundle build are not a device test |
 
-## Review pass after the live checks (November 5, 2026)
+## Review pass and release 1.5.1 (November 5, 2026)
 
-A second review of the deployed code removed what nothing used: the "Advance to pending execution" control and its scan of every player's orders (every order executes at a market opening or closing, so "Advance to market event" reaches it), the old `/admin/clock/advance` route, the `valuations` document written for every player at every event but never read, the review fields nothing displayed, a dead `import:market` script and six partial `test:*` scripts. The Hosting quota in the runbook was corrected to 10 GB per month. Locally: 203 server tests, 49 app checks, typecheck and lint passed. This is release 1.5.1; the rows above describe what is live until it is deployed.
+A second review of the deployed code removed what nothing used: the "Advance to pending execution" control and its scan of every player's orders (every order executes at a market opening or closing, so "Advance to market event" reaches it), the old `/admin/clock/advance` route, the `valuations` document written for every player at every event but never read, the review fields nothing displayed, a dead `import:market` script and six partial `test:*` scripts. The Hosting quota in the runbook was corrected to 10 GB per month. Locally: 203 server tests, 49 app checks, typecheck, lint, the web export and `check:release` passed.
 
-## Live checks after deployment (November 5, 2026)
+The same walkthrough as below then ran against the live 1.5.1 API, in the isolated test realm: the pending AMZN buy reserved ₪50,000; two **Advance to market event** jumps (Tel Aviv opening, then US opening) took 51.8 s and executed it once at $255.25 and USD/ILS 3.089; a ₪10,000 sale brought cash to ₪960,000; the removed `next_order` action was refused; the 20% rule held; a jump to October 29 took 236 s. A fresh, paused test game was left for the reviewer, and the shared league's world and revision were unchanged.
+
+## Live checks of release 1.5.0 (November 5, 2026)
 
 The release was built from a clean clone of `48ad777` on the owner's Windows machine: 204 server tests, 49 app checks, typecheck, lint, the web export and `check:release` passed there. The site was deployed to Hosting first, then the API on Render.
 
