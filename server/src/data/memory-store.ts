@@ -18,24 +18,28 @@ export class MemoryStore implements DocumentStore {
       .filter(([path]) => path.startsWith(prefix) && !path.slice(prefix.length).includes('/'))
       .map(([path, data]) => ({ id: path.slice(prefix.length), data: structuredClone(data) as T }));
     const field = options.orderBy ?? '__name__';
-    const value = (row: { id: string; data: T }): string | number => field === '__name__'
-      ? row.id : (row.data as Record<string, string | number>)[field]!;
+    const value = (row: { id: string; data: T }): string | number =>
+      field === '__name__' ? row.id : (row.data as Record<string, string | number>)[field]!;
     for (const [key, operation, expected] of options.where ?? []) {
-      rows = rows.filter((row) => {
+      rows = rows.filter(row => {
         const actual = (row.data as Record<string, string | number>)[key]!;
         switch (operation) {
-          case '==': return actual === expected;
-          case '<': return actual < expected;
-          case '<=': return actual <= expected;
-          case '>': return actual > expected;
+          case '==':
+            return actual === expected;
+          case '<':
+            return actual < expected;
+          case '<=':
+            return actual <= expected;
+          case '>':
+            return actual > expected;
         }
       });
     }
     const direction = options.direction === 'desc' ? -1 : 1;
-    rows.sort((a, b) => value(a) < value(b) ? -direction : value(a) > value(b) ? direction : 0);
+    rows.sort((a, b) => (value(a) < value(b) ? -direction : value(a) > value(b) ? direction : 0));
     if (options.startAfter !== undefined) {
       const after = options.startAfter;
-      rows = rows.filter((row) => direction === 1 ? value(row) > after : value(row) < after);
+      rows = rows.filter(row => (direction === 1 ? value(row) > after : value(row) < after));
     }
     rows = rows.slice(0, options.limit ?? rows.length);
     this.operations.reads += rows.length;

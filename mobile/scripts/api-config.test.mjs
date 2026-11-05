@@ -3,12 +3,19 @@ import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 
 function configuration(apiUrl, emulators = 'false') {
-  const result = spawnSync(process.execPath, ['--input-type=module', '-e',
-    "const config = await import('./src/config/api-config.ts'); process.stdout.write(JSON.stringify(config));"], {
-    cwd: new URL('..', import.meta.url),
-    env: { ...process.env, EXPO_PUBLIC_API_URL: apiUrl, EXPO_PUBLIC_USE_EMULATORS: emulators },
-    encoding: 'utf8',
-  });
+  const result = spawnSync(
+    process.execPath,
+    [
+      '--input-type=module',
+      '-e',
+      "const config = await import('./src/config/api-config.ts'); process.stdout.write(JSON.stringify(config));",
+    ],
+    {
+      cwd: new URL('..', import.meta.url),
+      env: { ...process.env, EXPO_PUBLIC_API_URL: apiUrl, EXPO_PUBLIC_USE_EMULATORS: emulators },
+      encoding: 'utf8',
+    },
+  );
   assert.equal(result.status, 0, result.stderr);
   return JSON.parse(result.stdout);
 }
@@ -36,7 +43,12 @@ test('local http is limited to explicitly enabled emulators', () => {
 });
 
 test('api configuration rejects ambiguous or malformed urls', () => {
-  for (const url of ['not-a-url', 'https://user:password@example.com/api', 'https://example.com/api?token=x', 'https://example.com/api#fragment']) {
+  for (const url of [
+    'not-a-url',
+    'https://user:password@example.com/api',
+    'https://example.com/api?token=x',
+    'https://example.com/api#fragment',
+  ]) {
     assert.equal(configuration(url).apiConfigured, false, url);
   }
 });

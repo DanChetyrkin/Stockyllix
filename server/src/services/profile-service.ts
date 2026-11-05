@@ -24,9 +24,10 @@ function validatePhoto(photo: string | null | undefined) {
   }
   const content = match[2]!;
   const bytes = Buffer.from(content, 'base64');
-  const validHeader = match[1] === 'png'
-    ? bytes.subarray(0, PNG_HEADER.length).equals(PNG_HEADER)
-    : bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
+  const validHeader =
+    match[1] === 'png'
+      ? bytes.subarray(0, PNG_HEADER.length).equals(PNG_HEADER)
+      : bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
   if (bytes.length > MAX_PHOTO_BYTES || content !== bytes.toString('base64') || !validHeader) {
     throw new GameError('INVALID_PROFILE_PHOTO', 'The profile photo must be a JPEG or PNG under 32 KB.', 400);
   }
@@ -36,7 +37,7 @@ export class ProfileService {
   constructor(private readonly store: DocumentStore) {}
 
   async get(uid: string): Promise<PlayerProfile> {
-    return await this.store.get<PlayerProfile>(`profiles/${uid}`) ?? { displayName: '', photoDataUrl: null };
+    return (await this.store.get<PlayerProfile>(`profiles/${uid}`)) ?? { displayName: '', photoDataUrl: null };
   }
 
   async save(uid: string, input: ProfileInput): Promise<PlayerProfile> {
@@ -46,14 +47,14 @@ export class ProfileService {
     }
     validatePhoto(input.photoDataUrl);
 
-    return this.store.transaction(async (tx) => {
+    return this.store.transaction(async tx => {
       const existing = await tx.get<PlayerProfile>(`profiles/${uid}`);
       const pointer = await tx.get<{ worldId: string }>(CURRENT_WORLD);
       const path = pointer ? playerPath(pointer.worldId, uid) : null;
       const player = path ? await tx.get<Portfolio>(path) : undefined;
       const profile = {
         displayName,
-        photoDataUrl: input.photoDataUrl === undefined ? existing?.photoDataUrl ?? null : input.photoDataUrl,
+        photoDataUrl: input.photoDataUrl === undefined ? (existing?.photoDataUrl ?? null) : input.photoDataUrl,
       };
 
       // all reads happen before writes; only the player's name changes here.

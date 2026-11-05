@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { authErrorMessage, confirmationError, firstValidationError, normalizeEmail, registrationErrors, signInErrors } from '../src/auth/validation.ts';
+import {
+  authErrorMessage,
+  confirmationError,
+  firstValidationError,
+  normalizeEmail,
+  registrationErrors,
+  signInErrors,
+} from '../src/auth/validation.ts';
 
 test('normalizes email without changing passwords or rejecting plus addressing', () => {
   assert.equal(normalizeEmail('  Student+League@Example.COM  '), 'student+league@example.com');
@@ -24,7 +31,10 @@ test('registration rejects missing names, malformed email and weak passwords', (
   }
   assert.ok(registrationErrors('x'.repeat(41), 'student@example.test', 'student123').name);
   assert.ok(registrationErrors('Bad\nName', 'student@example.test', 'student123').name);
-  assert.equal(firstValidationError(registrationErrors('  Student  ', 'Student@example.test', 'student123')), undefined);
+  assert.equal(
+    firstValidationError(registrationErrors('  Student  ', 'Student@example.test', 'student123')),
+    undefined,
+  );
 });
 
 test('password confirmation compares the original password exactly', () => {
@@ -35,7 +45,12 @@ test('password confirmation compares the original password exactly', () => {
 
 test('incorrect password and missing account use the same sign-in message', () => {
   const generic = 'The email or password is incorrect.';
-  for (const code of ['auth/invalid-credential', 'auth/invalid-login-credentials', 'auth/wrong-password', 'auth/user-not-found']) {
+  for (const code of [
+    'auth/invalid-credential',
+    'auth/invalid-login-credentials',
+    'auth/wrong-password',
+    'auth/user-not-found',
+  ]) {
     assert.equal(authErrorMessage(code), generic);
   }
   assert.match(authErrorMessage('auth/email-already-in-use'), /Sign in instead/);

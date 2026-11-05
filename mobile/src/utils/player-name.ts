@@ -1,4 +1,8 @@
-export function playerDisplayName(identity: { portfolioName?: string | null; accountName?: string | null; email?: string | null }): string | undefined {
+export function playerDisplayName(identity: {
+  portfolioName?: string | null;
+  accountName?: string | null;
+  email?: string | null;
+}): string | undefined {
   const saved = identity.portfolioName?.trim();
   const account = identity.accountName?.trim();
   const placeholder = (name: string) => /^(investor|player)$/i.test(name);

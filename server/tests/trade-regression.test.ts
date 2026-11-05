@@ -17,7 +17,11 @@ function fixedDataset(): Dataset {
 }
 
 function prepare(dataset = fixedDataset(), store: DocumentStore = new MemoryStore()) {
-  return { dataset, store, game: new GameService(store, dataset, { batchSize: 1, now: () => new Date('2026-11-04T12:00:00Z') }) };
+  return {
+    dataset,
+    store,
+    game: new GameService(store, dataset, { batchSize: 1, now: () => new Date('2026-11-04T12:00:00Z') }),
+  };
 }
 
 async function complete(game: GameService, target: string, key: string) {
@@ -40,15 +44,32 @@ describe('reported AMZN purchase and actionable trading failures', () => {
     await game.initialize('report-player', 'Report player');
     const order = await buy(game, 'AMZN', '50000', 'reported-amzn-buy');
     const pending = await game.getPortfolio('report-player');
-    expect(pending.summary).toMatchObject({ cashILS: '1000000.00', reservedCashILS: '50000.00', availableCashILS: '950000.00', valueILS: '1000000.00' });
+    expect(pending.summary).toMatchObject({
+      cashILS: '1000000.00',
+      reservedCashILS: '50000.00',
+      availableCashILS: '950000.00',
+      valueILS: '1000000.00',
+    });
     expect(pending.summary.holdings).toEqual([]);
-    expect((await game.getOrders('report-player')).orders[0]).toMatchObject({ status: 'pending', executeAt: order.executeAt });
+    expect((await game.getOrders('report-player')).orders[0]).toMatchObject({
+      status: 'pending',
+      executeAt: order.executeAt,
+    });
 
     await complete(game, order.executeAt, 'reported-amzn-open');
     const executed = await game.getPortfolio('report-player');
-    expect(executed.summary).toMatchObject({ cashILS: '950000.00', reservedCashILS: '0.00', availableCashILS: '950000.00', valueILS: '1000000.00' });
+    expect(executed.summary).toMatchObject({
+      cashILS: '950000.00',
+      reservedCashILS: '0.00',
+      availableCashILS: '950000.00',
+      valueILS: '1000000.00',
+    });
     expect(executed.summary.holdings).toHaveLength(1);
-    expect(executed.summary.holdings[0]).toMatchObject({ instrumentId: 'AMZN', valueILS: '50000.00', units: '125.000000000000000000' });
+    expect(executed.summary.holdings[0]).toMatchObject({
+      instrumentId: 'AMZN',
+      valueILS: '50000.00',
+      units: '125.000000000000000000',
+    });
 
     const retry = await buy(game, 'AMZN', '50000', 'reported-amzn-buy');
     expect(retry).toMatchObject({ id: order.id, status: 'executed', fill: { price: '100', fx: '4' } });
@@ -59,12 +80,24 @@ describe('reported AMZN purchase and actionable trading failures', () => {
   it('does not let simultaneous purchases over-reserve the last available cash', async () => {
     const { game, dataset } = prepare();
     await game.initialize('report-player', 'Report player');
-    for (const instrument of dataset.instruments.slice(0, 5)) await buy(game, instrument.id, '180000', `cash-setup-${instrument.id}`);
-    const results = await Promise.allSettled(dataset.instruments.slice(5, 7).map(instrument => buy(game, instrument.id, '75000', `parallel-cash-${instrument.id}`)));
+    for (const instrument of dataset.instruments.slice(0, 5))
+      await buy(game, instrument.id, '180000', `cash-setup-${instrument.id}`);
+    const results = await Promise.allSettled(
+      dataset.instruments
+        .slice(5, 7)
+        .map(instrument => buy(game, instrument.id, '75000', `parallel-cash-${instrument.id}`)),
+    );
     expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
-    expect(results.find(result => result.status === 'rejected')).toMatchObject({ reason: { code: 'INSUFFICIENT_CASH' } });
+    expect(results.find(result => result.status === 'rejected')).toMatchObject({
+      reason: { code: 'INSUFFICIENT_CASH' },
+    });
     const result = await game.getPortfolio('report-player');
-    expect(result.summary).toMatchObject({ cashILS: '1000000.00', reservedCashILS: '975000.00', availableCashILS: '25000.00', valueILS: '1000000.00' });
+    expect(result.summary).toMatchObject({
+      cashILS: '1000000.00',
+      reservedCashILS: '975000.00',
+      availableCashILS: '25000.00',
+      valueILS: '1000000.00',
+    });
     expect(result.portfolio.pendingOrderIds).toHaveLength(6);
   });
 
@@ -76,8 +109,13 @@ describe('reported AMZN purchase and actionable trading failures', () => {
       buy(game, 'AMZN', '150000', 'parallel-amzn-two'),
     ]);
     expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
-    expect(results.find(result => result.status === 'rejected')).toMatchObject({ reason: { code: 'CONCENTRATION_LIMIT' } });
-    expect((await game.getPortfolio('report-player')).summary).toMatchObject({ reservedCashILS: '150000.00', availableCashILS: '850000.00' });
+    expect(results.find(result => result.status === 'rejected')).toMatchObject({
+      reason: { code: 'CONCENTRATION_LIMIT' },
+    });
+    expect((await game.getPortfolio('report-player')).summary).toMatchObject({
+      reservedCashILS: '150000.00',
+      availableCashILS: '850000.00',
+    });
     expect((await game.getOrders('report-player')).orders).toHaveLength(1);
   });
 
@@ -85,17 +123,23 @@ describe('reported AMZN purchase and actionable trading failures', () => {
     const base = new MemoryStore();
     let crashAfterFill = true;
     const store: DocumentStore = {
-      get: base.get.bind(base), list: base.list.bind(base),
+      get: base.get.bind(base),
+      list: base.list.bind(base),
       transaction: async <T>(work: (transaction: Transaction) => Promise<T>) => {
         let settled = false;
-        const result = await base.transaction(tx => work({
-          get: tx.get,
-          set: (path, value) => {
-            settled ||= path.includes('/orders/') && (value as Partial<Order>).status === 'executed';
-            tx.set(path, value);
-          },
-        }));
-        if (settled && crashAfterFill) { crashAfterFill = false; throw new Error('failure after settlement commit'); }
+        const result = await base.transaction(tx =>
+          work({
+            get: tx.get,
+            set: (path, value) => {
+              settled ||= path.includes('/orders/') && (value as Partial<Order>).status === 'executed';
+              tx.set(path, value);
+            },
+          }),
+        );
+        if (settled && crashAfterFill) {
+          crashAfterFill = false;
+          throw new Error('failure after settlement commit');
+        }
         return result;
       },
     };
@@ -105,8 +149,13 @@ describe('reported AMZN purchase and actionable trading failures', () => {
     let progress = await game.advance(order.executeAt, 'restart-amzn-clock');
     let sawCrash = false;
     while (progress.job) {
-      try { progress = await game.step(progress.job.id); }
-      catch (error) { expect((error as Error).message).toBe('failure after settlement commit'); sawCrash = true; break; }
+      try {
+        progress = await game.step(progress.job.id);
+      } catch (error) {
+        expect((error as Error).message).toBe('failure after settlement commit');
+        sawCrash = true;
+        break;
+      }
     }
     expect(sawCrash).toBe(true);
     const recreated = prepare(dataset, store).game;
@@ -118,7 +167,12 @@ describe('reported AMZN purchase and actionable trading failures', () => {
       if (++remaining > 100) throw new Error('restart progress exceeded its test bound');
     }
     const result = await recreated.getPortfolio('report-player');
-    expect(result.summary).toMatchObject({ cashILS: '950000.00', reservedCashILS: '0.00', availableCashILS: '950000.00', valueILS: '1000000.00' });
+    expect(result.summary).toMatchObject({
+      cashILS: '950000.00',
+      reservedCashILS: '0.00',
+      availableCashILS: '950000.00',
+      valueILS: '1000000.00',
+    });
     expect(result.portfolio.holdings.AMZN?.units).toBe('125.000000000000000000');
     expect((await recreated.getOrders('report-player')).orders).toHaveLength(1);
     expect((await buy(recreated, 'AMZN', '50000', 'restart-amzn-buy')).status).toBe('executed');
@@ -127,7 +181,8 @@ describe('reported AMZN purchase and actionable trading failures', () => {
   it('reserves an existing position for a sell and releases it with a clear rejection after a price fall', async () => {
     const dataset = fixedDataset();
     const close = dataset.events.find(event => event.market === 'US' && event.kind === 'MARKET_CLOSE')!;
-    for (const event of dataset.events.filter(event => Date.parse(event.at) >= Date.parse(close.at))) event.snapshot.prices.AMZN = '50';
+    for (const event of dataset.events.filter(event => Date.parse(event.at) >= Date.parse(close.at)))
+      event.snapshot.prices.AMZN = '50';
     const { game } = prepare(dataset);
     await game.initialize('report-player', 'Report player');
     const pending = await buy(game, 'AMZN', '50000', 'sell-fixture-buy');
@@ -138,12 +193,22 @@ describe('reported AMZN purchase and actionable trading failures', () => {
     const reserved = await game.getPortfolio('report-player');
     expect(reserved.portfolio.holdings.AMZN?.reservedUnits).toBe('125.000000000000000000');
     expect(reserved.summary).toMatchObject({ cashILS: '950000.00', reservedCashILS: '0.00' });
-    await expect(game.submitOrder('report-player', { ...input, amountILS: '1' }, 'second-amzn-sell')).rejects.toMatchObject({ code: 'SELL_ALREADY_PENDING' });
+    await expect(
+      game.submitOrder('report-player', { ...input, amountILS: '1' }, 'second-amzn-sell'),
+    ).rejects.toMatchObject({ code: 'SELL_ALREADY_PENDING' });
     await complete(game, sell.executeAt, 'sell-fixture-close');
-    expect((await game.getOrders('report-player')).orders[0]).toMatchObject({ status: 'rejected', rejection: { code: 'INSUFFICIENT_UNITS' } });
+    expect((await game.getOrders('report-player')).orders[0]).toMatchObject({
+      status: 'rejected',
+      rejection: { code: 'INSUFFICIENT_UNITS' },
+    });
     const rejected = await game.getPortfolio('report-player');
     expect(rejected.portfolio.holdings.AMZN).toEqual({ units: '125.000000000000000000', reservedUnits: '0' });
-    expect(rejected.summary).toMatchObject({ cashILS: '950000.00', availableCashILS: '950000.00', reservedCashILS: '0.00', valueILS: '975000.00' });
+    expect(rejected.summary).toMatchObject({
+      cashILS: '950000.00',
+      availableCashILS: '950000.00',
+      reservedCashILS: '0.00',
+      valueILS: '975000.00',
+    });
   });
 
   it('explains a paused advance and an exhausted price period without creating or reserving an order', async () => {
@@ -151,12 +216,17 @@ describe('reported AMZN purchase and actionable trading failures', () => {
     await game.initialize('report-player', 'Report player');
     const world = await game.getWorld();
     let advance = await game.advance(dataset.endsAt, 'exhaust-price-period');
-    await expect(buy(game, 'AMZN', '50000', 'blocked-during-advance')).rejects.toMatchObject({ code: 'WORLD_ADVANCING', retryable: true });
+    await expect(buy(game, 'AMZN', '50000', 'blocked-during-advance')).rejects.toMatchObject({
+      code: 'WORLD_ADVANCING',
+      retryable: true,
+    });
     while (advance.job) advance = await game.step(advance.job.id);
     const before = await game.getPortfolio('report-player');
     expect((await game.getWorld()).finished).toBe(true);
     expect((await game.getMarket()).instruments.find(item => item.id === 'AMZN')?.nextExecutionAt).toBeNull();
-    await expect(buy(game, 'AMZN', '50000', 'blocked-after-period')).rejects.toMatchObject({ code: 'DATASET_FINISHED' });
+    await expect(buy(game, 'AMZN', '50000', 'blocked-after-period')).rejects.toMatchObject({
+      code: 'DATASET_FINISHED',
+    });
     expect((await game.getPortfolio('report-player')).portfolio).toEqual(before.portfolio);
     expect((await game.getOrders('report-player')).orders).toHaveLength(0);
     expect((await store.get<Portfolio>(`worlds/${world.id}/players/report-player`))?.reservedCashAgorot).toBe(0);

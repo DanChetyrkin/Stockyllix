@@ -1,6 +1,6 @@
 {
   "name": "stockyllix-server",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,7 +13,6 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --maxWorkers=2",
     "lint": "eslint .",
-    "seed": "tsx src/scripts/seed.ts",
     "seed:local": "tsx src/scripts/seed-local.ts",
     "smoke:local": "tsx src/scripts/smoke-local.ts",
     "test:load": "tsx src/scripts/load-test.ts",

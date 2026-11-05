@@ -16,7 +16,9 @@ export class BankIsraelService {
   private pending: Promise<BankIsraelView> | null = null;
   private retryAt = 0;
 
-  constructor(options: { load?: () => Promise<BoiLatestRate>; now?: () => Date; ttlMs?: number; retryMs?: number } = {}) {
+  constructor(
+    options: { load?: () => Promise<BoiLatestRate>; now?: () => Date; ttlMs?: number; retryMs?: number } = {},
+  ) {
     this.now = options.now ?? (() => new Date());
     this.load = options.load ?? (() => fetchBoiLatest({ now: this.now }));
     this.ttlMs = options.ttlMs ?? 10 * 60_000;
@@ -24,20 +26,31 @@ export class BankIsraelService {
   }
 
   private unavailable(): BankIsraelView {
-    if (!this.cached) throw new GameError('REFERENCE_FX_UNAVAILABLE', 'Bank of Israel is temporarily unavailable. Please try again later.', 503, true);
+    if (!this.cached)
+      throw new GameError(
+        'REFERENCE_FX_UNAVAILABLE',
+        'Bank of Israel is temporarily unavailable. Please try again later.',
+        503,
+        true,
+      );
     return {
-      ...this.cached.rate, fetchedAt: this.cached.fetchedAt, stale: true,
+      ...this.cached.rate,
+      fetchedAt: this.cached.fetchedAt,
+      stale: true,
       notice: 'Bank of Israel could not be reached. This is the last successfully fetched representative rate.',
     };
   }
 
   async get(): Promise<BankIsraelView> {
     const now = this.now().getTime();
-    if (this.cached && now < this.cached.expiresAt) return { ...this.cached.rate, fetchedAt: this.cached.fetchedAt, stale: false };
+    if (this.cached && now < this.cached.expiresAt)
+      return { ...this.cached.rate, fetchedAt: this.cached.fetchedAt, stale: false };
     if (now < this.retryAt) return this.unavailable();
     if (this.pending) return this.pending;
     // concurrent requests share one provider call, including a sleeping server's first request.
-    this.pending = this.refresh().finally(() => { this.pending = null; });
+    this.pending = this.refresh().finally(() => {
+      this.pending = null;
+    });
     return this.pending;
   }
 

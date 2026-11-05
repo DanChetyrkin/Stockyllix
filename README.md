@@ -58,7 +58,7 @@ An older simulated world based on ECB rates is still loaded, so games created wi
 
 - Every game has one saved clock. While it runs, game time moves one second per real second from the historical date. Phones only display it; they never decide execution.
 - Render's free plan sleeps, so there is no background worker. Each API request lets the server process reached events in small, saved steps. Trading pauses with a clear message until every reached event has been applied to all portfolios.
-- **To advance:** sign in as an administrator and open **World controls**. You can **Pause / Resume**, **Advance to market event** (the next opening or closing, which is where every pending order executes), or pick a date and time in Israel time and choose **Apply time and pause**. Every jump goes forward only, stays inside the price period, and processes every event in between, in order, once.
+- **To advance:** sign in as an administrator and open **World controls**. You can **Pause / Resume**, **Advance to market event** (the next opening or closing; an order executes when its own scheduled event is reached), or pick a date and time in Israel time and choose **Apply time and pause**. Every jump goes forward only, stays inside the price period, and processes every event in between, in order, once.
 - **Permission:** the API allows these actions only for Firebase user IDs listed in its `ADMIN_UIDS` setting. Reviewers use the administrator account above. In a local setup, add your own user ID to `ADMIN_UIDS`. Administrators can also open an isolated test realm, so experiments never touch the shared league.
 - A game cannot move backwards and does not loop at the end of its data. To start again, create a new game. Old games and their results stay saved.
 

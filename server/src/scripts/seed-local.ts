@@ -5,9 +5,12 @@ import { GameService } from '../services/game-service.js';
 import { loadDatasetRegistry } from '../world/loader.js';
 
 const config = readConfig();
-if (config.NODE_ENV === 'production' || config.FIREBASE_PROJECT_ID !== 'demo-stockyllix'
-  || !process.env.FIRESTORE_EMULATOR_HOST?.startsWith('127.0.0.1:')
-  || !process.env.FIREBASE_AUTH_EMULATOR_HOST?.startsWith('127.0.0.1:')) {
+if (
+  config.NODE_ENV === 'production' ||
+  config.FIREBASE_PROJECT_ID !== 'demo-stockyllix' ||
+  !process.env.FIRESTORE_EMULATOR_HOST?.startsWith('127.0.0.1:') ||
+  !process.env.FIREBASE_AUTH_EMULATOR_HOST?.startsWith('127.0.0.1:')
+) {
   throw new Error('seed:local only works with both loopback emulators and project demo-stockyllix');
 }
 const { store } = connectFirebase(config);
@@ -20,7 +23,8 @@ for (const user of [
   try {
     await auth.getUser(user.uid);
   } catch (error) {
-    if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 'auth/user-not-found')) throw error;
+    if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 'auth/user-not-found'))
+      throw error;
     await auth.createUser({ ...user, password: 'stockyllix-local-demo' });
   }
   await game.initialize(user.uid, user.displayName);

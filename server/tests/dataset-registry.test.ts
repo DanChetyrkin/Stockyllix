@@ -8,7 +8,11 @@ import { createDataset } from '../src/world/index.js';
 import { DatasetRegistry } from '../src/world/registry.js';
 
 const legacy = createDataset('registry-legacy-fixture');
-const candidate: Dataset = { ...createDataset('registry-other-fixture'), source: 'historical', sourceDescription: 'Historical fixture; not real provider prices' };
+const candidate: Dataset = {
+  ...createDataset('registry-other-fixture'),
+  source: 'historical',
+  sourceDescription: 'Historical fixture; not real provider prices',
+};
 
 async function advance(service: GameService, target: string) {
   let response = await service.advance(target, `advance-${target}`);
@@ -21,7 +25,9 @@ describe('immutable per-world replay datasets', () => {
     const registry = new DatasetRegistry(input, [candidate]);
     input.initialSnapshot.prices.AAPL = '1';
     expect(registry.get(legacy.id).initialSnapshot.prices.AAPL).toBe(legacy.initialSnapshot.prices.AAPL);
-    expect(() => { registry.get(legacy.id).initialSnapshot.prices.AAPL = '2'; }).toThrow();
+    expect(() => {
+      registry.get(legacy.id).initialSnapshot.prices.AAPL = '2';
+    }).toThrow();
     for (const summary of registry.summaries()) {
       expect(summary).not.toHaveProperty('initialSnapshot');
       expect(summary).not.toHaveProperty('events');
@@ -37,9 +43,17 @@ describe('immutable per-world replay datasets', () => {
     const originalService = new GameService(store, legacy);
     await originalService.initialize('alice', 'Alice');
     const original = await originalService.getWorld();
-    await originalService.submitOrder('alice', { worldId: original.id, instrumentId: 'LUMI.TA', side: 'buy', amountILS: '100000' }, 'legacy-buy-request');
+    await originalService.submitOrder(
+      'alice',
+      { worldId: original.id, instrumentId: 'LUMI.TA', side: 'buy', amountILS: '100000' },
+      'legacy-buy-request',
+    );
     await advance(originalService, '2026-10-05T07:00:00Z');
-    await originalService.submitOrder('alice', { worldId: original.id, instrumentId: 'AAPL', side: 'buy', amountILS: '1000' }, 'legacy-pending-request');
+    await originalService.submitOrder(
+      'alice',
+      { worldId: original.id, instrumentId: 'AAPL', side: 'buy', amountILS: '1000' },
+      'legacy-pending-request',
+    );
     const before = {
       world: await store.get<World>(`worlds/${original.id}`),
       portfolio: await store.get<Portfolio>(`worlds/${original.id}/players/alice`),
@@ -49,13 +63,23 @@ describe('immutable per-world replay datasets', () => {
     const service = new GameService(store, registry);
     expect((await service.getWorld()).id).toBe(original.id);
     expect(service.listDatasets().map(dataset => dataset.id)).toEqual([candidate.id]);
-    await expect(service.reset('disallowed-new-simulation', original.id, legacy.id)).rejects.toMatchObject({ code: 'HISTORICAL_DATA_REQUIRED' });
+    await expect(service.reset('disallowed-new-simulation', original.id, legacy.id)).rejects.toMatchObject({
+      code: 'HISTORICAL_DATA_REQUIRED',
+    });
     const created = await service.reset('select-replay-request', original.id, candidate.id);
     expect(created.datasetId).toBe(candidate.id);
     expect(created.source).toBe('historical');
     expect((await service.reset('select-replay-request', original.id, candidate.id)).id).toBe(created.id);
-    await expect(service.reset('select-replay-request', original.id, legacy.id)).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
-    await expect(service.submitOrder('alice', { worldId: original.id, instrumentId: 'AAPL', side: 'buy', amountILS: '1' }, 'stale-order-request')).rejects.toMatchObject({ code: 'WORLD_CHANGED' });
+    await expect(service.reset('select-replay-request', original.id, legacy.id)).rejects.toMatchObject({
+      code: 'IDEMPOTENCY_CONFLICT',
+    });
+    await expect(
+      service.submitOrder(
+        'alice',
+        { worldId: original.id, instrumentId: 'AAPL', side: 'buy', amountILS: '1' },
+        'stale-order-request',
+      ),
+    ).rejects.toMatchObject({ code: 'WORLD_CHANGED' });
     expect(await store.get(`worlds/${original.id}`)).toEqual(before.world);
     expect(await store.get(`worlds/${original.id}/players/alice`)).toEqual(before.portfolio);
     expect(await store.list(`worlds/${original.id}/players/alice/orders`)).toEqual(before.orders);
@@ -65,12 +89,20 @@ describe('immutable per-world replay datasets', () => {
     const insights = new MarketInsightsService(store, registry);
     expect((await insights.history('AAPL')).dataMode).toBe('historical');
     expect((await new PerformanceService(store, registry).get('alice')).dataMode).toBe('historical');
-    await service.submitOrder('alice', { worldId: created.id, instrumentId: 'LUMI.TA', side: 'buy', amountILS: '100000' }, 'historical-buy-request');
+    await service.submitOrder(
+      'alice',
+      { worldId: created.id, instrumentId: 'LUMI.TA', side: 'buy', amountILS: '100000' },
+      'historical-buy-request',
+    );
     await advance(service, '2026-10-05T07:00:00Z');
     const order = (await service.getOrders('alice')).orders[0]!;
     expect(order.status).toBe('executed');
-    expect(order.fill!.price).toBe(candidate.events.find(item => item.kind === 'MARKET_OPEN' && item.market === 'TA')!.snapshot.prices['LUMI.TA']);
-    expect(order.fill!.price).not.toBe(legacy.events.find(item => item.kind === 'MARKET_OPEN' && item.market === 'TA')!.snapshot.prices['LUMI.TA']);
+    expect(order.fill!.price).toBe(
+      candidate.events.find(item => item.kind === 'MARKET_OPEN' && item.market === 'TA')!.snapshot.prices['LUMI.TA'],
+    );
+    expect(order.fill!.price).not.toBe(
+      legacy.events.find(item => item.kind === 'MARKET_OPEN' && item.market === 'TA')!.snapshot.prices['LUMI.TA'],
+    );
     const restarted = await service.reset('restart-current-replay', created.id);
     expect(restarted.datasetId).toBe(candidate.id);
   });
@@ -86,7 +118,9 @@ describe('immutable per-world replay datasets', () => {
     expect(attempts.filter(item => item.status === 'rejected')).toHaveLength(1);
     const current = await service.getWorld();
     await service.advance('2026-10-05T07:00:00Z', 'unfinished-job-key', current.id);
-    await expect(service.reset('reset-during-clock', current.id, candidate.id)).rejects.toMatchObject({ code: 'WORLD_ADVANCING' });
+    await expect(service.reset('reset-during-clock', current.id, candidate.id)).rejects.toMatchObject({
+      code: 'WORLD_ADVANCING',
+    });
   });
 
   it('uses real historical prices for an unspecified new-world choice while keeping an existing simulated world unchanged', async () => {
@@ -96,7 +130,9 @@ describe('immutable per-world replay datasets', () => {
     expect((await service.getWorld()).datasetId).toBe(legacy.id);
     const created = await service.reset('default-real-history-world', original.id);
     expect(created.datasetId).toBe(candidate.id);
-    expect((await new GameService(new MemoryStore(), new DatasetRegistry(legacy, [candidate])).getWorld()).datasetId).toBe(candidate.id);
+    expect(
+      (await new GameService(new MemoryStore(), new DatasetRegistry(legacy, [candidate])).getWorld()).datasetId,
+    ).toBe(candidate.id);
   });
 
   it('fails closed if an installed dataset is removed and marks the exact end without inventing prices', async () => {
@@ -111,6 +147,12 @@ describe('immutable per-world replay datasets', () => {
     const finished = await service.getWorld();
     expect(finished.finished).toBe(true);
     expect(finished.nextEvent).toBeNull();
-    await expect(service.submitOrder('alice', { worldId: finished.id, instrumentId: 'AAPL', side: 'buy', amountILS: '100' }, 'after-history-ended')).rejects.toMatchObject({ code: 'DATASET_FINISHED' });
+    await expect(
+      service.submitOrder(
+        'alice',
+        { worldId: finished.id, instrumentId: 'AAPL', side: 'buy', amountILS: '100' },
+        'after-history-ended',
+      ),
+    ).rejects.toMatchObject({ code: 'DATASET_FINISHED' });
   });
 });

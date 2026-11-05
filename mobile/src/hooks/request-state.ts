@@ -7,8 +7,11 @@ export class RequestCoordinator {
     this.cancel();
     const entry = { key, controller: new AbortController(), promise: Promise.resolve() as Promise<unknown> };
     this.active = entry;
-    entry.promise = Promise.resolve().then(() => task(entry.controller.signal, () => this.active === entry && !entry.controller.signal.aborted))
-      .finally(() => { if (this.active === entry) this.active = null; });
+    entry.promise = Promise.resolve()
+      .then(() => task(entry.controller.signal, () => this.active === entry && !entry.controller.signal.aborted))
+      .finally(() => {
+        if (this.active === entry) this.active = null;
+      });
     return entry.promise as Promise<T>;
   }
 
@@ -19,9 +22,20 @@ export class RequestCoordinator {
   }
 }
 
-export interface RequestState { scope: string; loading: boolean; error: string | null }
+export interface RequestState {
+  scope: string;
+  loading: boolean;
+  error: string | null;
+}
 
-export function resourceView<T>({ scope, result, request, ready, pauseReason, prerequisiteError }: {
+export function resourceView<T>({
+  scope,
+  result,
+  request,
+  ready,
+  pauseReason,
+  prerequisiteError,
+}: {
   scope: string;
   result: { scope: string; data: T } | null;
   request: RequestState;
@@ -32,7 +46,7 @@ export function resourceView<T>({ scope, result, request, ready, pauseReason, pr
   return {
     data: result?.scope === scope ? result.data : null,
     loading: ready && request.scope === scope && request.loading,
-    error: ready ? request.scope === scope ? request.error : null : prerequisiteError,
+    error: ready ? (request.scope === scope ? request.error : null) : prerequisiteError,
     paused: !ready,
     pauseReason: ready ? null : pauseReason,
   };

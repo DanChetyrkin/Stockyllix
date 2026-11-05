@@ -18,7 +18,11 @@ async function files() {
   const directory = await mkdtemp(join(tmpdir(), 'stockyllix-loader-'));
   directories.push(directory);
   const original = createDataset('loader-original-fixture');
-  const historical = { ...createDataset('loader-history-fixture'), source: 'historical', sourceDescription: 'Test fixture, not provider data' };
+  const historical = {
+    ...createDataset('loader-history-fixture'),
+    source: 'historical',
+    sourceDescription: 'Test fixture, not provider data',
+  };
   const originalPath = join(directory, 'original.json');
   const historicalPath = join(directory, 'historical.json');
   await Promise.all([

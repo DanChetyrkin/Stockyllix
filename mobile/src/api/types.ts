@@ -86,7 +86,18 @@ export interface PortfolioResponse {
   worldId: string;
   revision: number;
   portfolio: Portfolio;
-  summary: { valueILS: string; cashILS: string; holdingsValueILS: string; cashWeightPct: string; reservedCashILS: string; availableCashILS: string; weeklyReturnPct: string; mddPct: string; eligible: boolean; holdings: HoldingSummary[] };
+  summary: {
+    valueILS: string;
+    cashILS: string;
+    holdingsValueILS: string;
+    cashWeightPct: string;
+    reservedCashILS: string;
+    availableCashILS: string;
+    weeklyReturnPct: string;
+    mddPct: string;
+    eligible: boolean;
+    holdings: HoldingSummary[];
+  };
   insight: string;
 }
 

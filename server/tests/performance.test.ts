@@ -9,9 +9,22 @@ import { calculateCosts, PerformanceService } from '../src/services/performance-
 import { createDataset } from '../src/world/index.js';
 
 function fill(side: 'buy' | 'sell', units: string, amountAgorot: number, sequence: number): Order {
-  return { id: String(sequence), uid: 'alice', worldId: 'test', instrumentId: 'AAPL', side, amountAgorot, sequence, status: 'executed',
-    submittedAt: '2026-10-05T00:00:00Z', createdAt: '2026-11-03T00:00:00Z', executeEventId: 'event', executeAt: '2026-10-05T13:30:00Z', requestKey: String(sequence),
-    fill: { price: '100', fx: '3', units, executedAt: '2026-10-05T13:30:00Z' } };
+  return {
+    id: String(sequence),
+    uid: 'alice',
+    worldId: 'test',
+    instrumentId: 'AAPL',
+    side,
+    amountAgorot,
+    sequence,
+    status: 'executed',
+    submittedAt: '2026-10-05T00:00:00Z',
+    createdAt: '2026-11-03T00:00:00Z',
+    executeEventId: 'event',
+    executeAt: '2026-10-05T13:30:00Z',
+    requestKey: String(sequence),
+    fill: { price: '100', fx: '3', units, executedAt: '2026-10-05T13:30:00Z' },
+  };
 }
 
 async function advanceTo(game: GameService, target: string) {
@@ -26,7 +39,11 @@ async function advanceTo(game: GameService, target: string) {
 
 async function trade(game: GameService, side: 'buy' | 'sell', amountILS: string) {
   const world = await game.getWorld();
-  const submitted = await game.submitOrder('alice', { worldId: world.id, instrumentId: 'AAPL', side, amountILS }, randomUUID());
+  const submitted = await game.submitOrder(
+    'alice',
+    { worldId: world.id, instrumentId: 'AAPL', side, amountILS },
+    randomUUID(),
+  );
   await advanceTo(game, submitted.executeAt);
   const result = (await game.getOrders('alice')).orders.find(order => order.id === submitted.id)!;
   expect(result.status).toBe('executed');
@@ -79,7 +96,8 @@ describe('performance accounting', () => {
     await trade(game, 'buy', '1000');
     let advanced = false;
     const racingStore: DocumentStore = {
-      get: store.get.bind(store), transaction: store.transaction.bind(store),
+      get: store.get.bind(store),
+      transaction: store.transaction.bind(store),
       async list<T>(collection: string, options?: ListOptions) {
         if (!advanced) {
           // the report has read the old portfolio; this is a real new trade and clock job.
@@ -89,8 +107,11 @@ describe('performance accounting', () => {
         return store.list<T>(collection, options);
       },
     };
-    await expect(new PerformanceService(racingStore, dataset).get('alice'))
-      .rejects.toMatchObject({ code: 'WORLD_CHANGED', status: 409, retryable: true });
+    await expect(new PerformanceService(racingStore, dataset).get('alice')).rejects.toMatchObject({
+      code: 'WORLD_CHANGED',
+      status: 409,
+      retryable: true,
+    });
     expect(advanced).toBe(true);
     await expect(new PerformanceService(store, dataset).get('alice')).resolves.toHaveProperty('holdings');
   });
@@ -129,7 +150,9 @@ describe('performance accounting', () => {
     const report = await new PerformanceService(store, dataset).get('alice');
     const current = await game.getPortfolio('alice');
     expect(current.portfolio.cashAgorot).toBe(99_600_000);
-    expect(decimal(report.realizedILS).add(report.unrealizedILS).sub(report.totalProfitILS).abs().lte('0.01')).toBe(true);
+    expect(decimal(report.realizedILS).add(report.unrealizedILS).sub(report.totalProfitILS).abs().lte('0.01')).toBe(
+      true,
+    );
     expect(report.totalProfitILS).toBe(decimal(current.summary.valueILS).sub(1_000_000).toFixed(2));
     expect(report.realizedILS).not.toBe('-0.00');
     expect(report.unrealizedILS).not.toBe('-0.00');

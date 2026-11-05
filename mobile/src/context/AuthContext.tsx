@@ -1,5 +1,12 @@
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { createUserWithEmailAndPassword, onAuthStateChanged, signInWithEmailAndPassword, signOut as firebaseSignOut, updateProfile, User } from 'firebase/auth';
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  updateProfile,
+  User,
+} from 'firebase/auth';
 import { auth, firebaseConfigured } from '@/config/firebase';
 import { api, ApiError, errorMessage } from '@/api/client';
 import { apiConfigurationError, apiConfigured } from '@/config/api-config';
@@ -34,7 +41,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const initialize = useCallback((current: User) => {
     const currentGeneration = generation.current;
-    if (initialization.current?.uid === current.uid && initialization.current.generation === currentGeneration) return initialization.current.promise;
+    if (initialization.current?.uid === current.uid && initialization.current.generation === currentGeneration)
+      return initialization.current.promise;
     const promise = (async () => {
       setInitializing(true);
       setError(null);
@@ -44,17 +52,25 @@ export function AuthProvider({ children }: PropsWithChildren) {
         await api('/me/initialize', { method: 'POST', body: { displayName } });
         if (generation.current === currentGeneration) setInitialized(true);
       } catch (cause) {
-        if (generation.current === currentGeneration) setError(cause instanceof ApiError && ['WORLD_ADVANCING', 'CLOCK_SYNCING'].includes(cause.code) ? null : errorMessage(cause));
+        if (generation.current === currentGeneration)
+          setError(
+            cause instanceof ApiError && ['WORLD_ADVANCING', 'CLOCK_SYNCING'].includes(cause.code)
+              ? null
+              : errorMessage(cause),
+          );
       } finally {
         if (generation.current === currentGeneration) setInitializing(false);
-        if (initialization.current?.generation === currentGeneration && initialization.current.uid === current.uid) initialization.current = null;
+        if (initialization.current?.generation === currentGeneration && initialization.current.uid === current.uid)
+          initialization.current = null;
       }
     })();
     initialization.current = { uid: current.uid, generation: currentGeneration, promise };
     return promise;
   }, []);
 
-  const retryInitialization = useCallback(async () => { if (user) await initialize(user); }, [user, initialize]);
+  const retryInitialization = useCallback(async () => {
+    if (user) await initialize(user);
+  }, [user, initialize]);
 
   useEffect(() => {
     if (!auth || !apiConfigured) return;
@@ -69,27 +85,42 @@ export function AuthProvider({ children }: PropsWithChildren) {
     });
   }, [initialize]);
 
-  return <AuthContext.Provider value={{
-    user, loading, initializing, initialized, error, configured: firebaseConfigured && apiConfigured,
-    configurationError: !firebaseConfigured ? 'Public Firebase settings are missing. Copy mobile/.env.example to .env.local, fill the app settings and HTTPS API URL, then restart Expo.' : apiConfigurationError,
-    signIn: async (email, password) => {
-      if (!auth || !apiConfigured) throw new Error('Configure Firebase authentication and a secure API URL first.');
-      const validation = firstValidationError(signInErrors(email, password));
-      if (validation) throw new Error(validation);
-      pendingName.current = '';
-      await signInWithEmailAndPassword(auth, normalizeEmail(email), password);
-    },
-    register: async (name, email, password) => {
-      if (!auth || !apiConfigured) throw new Error('Configure Firebase authentication and a secure API URL first.');
-      const validation = firstValidationError(registrationErrors(name, email, password));
-      if (validation) throw new Error(validation);
-      pendingName.current = name.trim();
-      const result = await createUserWithEmailAndPassword(auth, normalizeEmail(email), password);
-      await updateProfile(result.user, { displayName: name.trim() });
-    },
-    signOut: async () => { if (auth) await firebaseSignOut(auth); },
-    retryInitialization,
-  }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        initializing,
+        initialized,
+        error,
+        configured: firebaseConfigured && apiConfigured,
+        configurationError: !firebaseConfigured
+          ? 'Public Firebase settings are missing. Copy mobile/.env.example to .env.local, fill the app settings and HTTPS API URL, then restart Expo.'
+          : apiConfigurationError,
+        signIn: async (email, password) => {
+          if (!auth || !apiConfigured) throw new Error('Configure Firebase authentication and a secure API URL first.');
+          const validation = firstValidationError(signInErrors(email, password));
+          if (validation) throw new Error(validation);
+          pendingName.current = '';
+          await signInWithEmailAndPassword(auth, normalizeEmail(email), password);
+        },
+        register: async (name, email, password) => {
+          if (!auth || !apiConfigured) throw new Error('Configure Firebase authentication and a secure API URL first.');
+          const validation = firstValidationError(registrationErrors(name, email, password));
+          if (validation) throw new Error(validation);
+          pendingName.current = name.trim();
+          const result = await createUserWithEmailAndPassword(auth, normalizeEmail(email), password);
+          await updateProfile(result.user, { displayName: name.trim() });
+        },
+        signOut: async () => {
+          if (auth) await firebaseSignOut(auth);
+        },
+        retryInitialization,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

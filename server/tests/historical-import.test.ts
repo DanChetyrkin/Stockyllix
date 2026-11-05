@@ -7,10 +7,25 @@ import { snapshotAt, type FxRow } from '../src/world/index.js';
 const dates = ['2026-10-02', '2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09'];
 
 function fixture() {
-  const bars = Object.fromEntries(instruments.map((instrument, asset) => [instrument.id, dates.map((date, day) => ({ date, open: String(100 + asset * 7 + day * 10), close: String(103 + asset * 7 + day * 10) }))])) as Record<string, DailyBar[]>;
+  const bars = Object.fromEntries(
+    instruments.map((instrument, asset) => [
+      instrument.id,
+      dates.map((date, day) => ({
+        date,
+        open: String(100 + asset * 7 + day * 10),
+        close: String(103 + asset * 7 + day * 10),
+      })),
+    ]),
+  ) as Record<string, DailyBar[]>;
   const fx: FxRow[] = dates.map((date, day) => ({
-    date, rate: (3.6 + day * 0.01).toFixed(4), source: 'boi',
-    availableAt: DateTime.fromISO(date, { zone: 'Asia/Jerusalem' }).plus({ days: 1 }).startOf('day').toUTC().toISO({ suppressMilliseconds: true })!,
+    date,
+    rate: (3.6 + day * 0.01).toFixed(4),
+    source: 'boi',
+    availableAt: DateTime.fromISO(date, { zone: 'Asia/Jerusalem' })
+      .plus({ days: 1 })
+      .startOf('day')
+      .toUTC()
+      .toISO({ suppressMilliseconds: true })!,
   }));
   return { bars, fx };
 }
@@ -59,7 +74,8 @@ describe('historical shared-world builder', () => {
   it('fails on a missing security or whole market day rather than guessing a holiday or carrying a quote forward', () => {
     for (const market of ['TA', 'US'] as const) {
       const { bars, fx } = fixture();
-      for (const instrument of instruments.filter(item => item.market === market)) bars[instrument.id] = bars[instrument.id]!.filter(bar => bar.date !== '2026-10-06');
+      for (const instrument of instruments.filter(item => item.market === market))
+        bars[instrument.id] = bars[instrument.id]!.filter(bar => bar.date !== '2026-10-06');
       expect(() => build(bars, fx)).toThrow(/Missing .* prices on 2026-10-06.*verified trading calendar/);
     }
     const { bars, fx } = fixture();
@@ -74,13 +90,20 @@ describe('historical shared-world builder', () => {
     bars.AAPL.unshift({ date: '2026-09-25', open: '100', close: '103' });
     expect(() => build(bars, fx)).toThrow(/baseline/);
     const complete = fixture();
-    expect(() => build(complete.bars, complete.fx.filter(row => row.date >= '2026-10-05'))).toThrow(/FX.*before the world starts/);
+    expect(() =>
+      build(
+        complete.bars,
+        complete.fx.filter(row => row.date >= '2026-10-05'),
+      ),
+    ).toThrow(/FX.*before the world starts/);
   });
 
   it('rejects an unfinished closing event but accepts that exact close once completed', () => {
     const { bars, fx } = fixture();
     expect(() => build(bars, fx, new Date('2026-10-09T19:59:59Z'))).toThrow(/fully completed/);
     expect(build(bars, fx, new Date('2026-10-09T20:00:00.000Z')).endsAt).toBe('2026-10-09T20:00:00Z');
-    expect(() => buildHistoricalDataset(instruments, bars, fx, '2026-11-09', '2026-11-13', new Date('2026-11-04T00:00:00Z'))).toThrow(/fully completed/);
+    expect(() =>
+      buildHistoricalDataset(instruments, bars, fx, '2026-11-09', '2026-11-13', new Date('2026-11-04T00:00:00Z')),
+    ).toThrow(/fully completed/);
   });
 });

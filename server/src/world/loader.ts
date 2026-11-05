@@ -31,14 +31,23 @@ export async function loadDataset(): Promise<Dataset> {
   let rows: FxRow[] | undefined;
   try {
     const raw: unknown = JSON.parse(await readFile(resolve(fxPath), 'utf8'));
-    if (typeof raw !== 'object' || raw === null || !('source' in raw) || !['ecb', 'boi'].includes(String(raw.source)) || !('rows' in raw)) {
+    if (
+      typeof raw !== 'object' ||
+      raw === null ||
+      !('source' in raw) ||
+      !['ecb', 'boi'].includes(String(raw.source)) ||
+      !('rows' in raw)
+    ) {
       throw new Error('FX file must contain an official source and rows');
     }
     rows = validateFxRows(raw.rows as FxRow[]);
-    if (rows.some((row) => row.source !== raw.source)) throw new Error('FX observations do not match their declared source');
+    if (rows.some(row => row.source !== raw.source))
+      throw new Error('FX observations do not match their declared source');
   } catch (error) {
     if (process.env.ALLOW_SIMULATED_FX !== 'true') {
-      throw new Error(`Real FX file could not be loaded. Run npm run import:ecb, or explicitly set ALLOW_SIMULATED_FX=true for a labelled simulation. ${error instanceof Error ? error.message : ''}`);
+      throw new Error(
+        `Real FX file could not be loaded. Run npm run import:ecb, or explicitly set ALLOW_SIMULATED_FX=true for a labelled simulation. ${error instanceof Error ? error.message : ''}`,
+      );
     }
     // the fallback must be enabled explicitly, and createDataset labels it as simulated fx.
   }

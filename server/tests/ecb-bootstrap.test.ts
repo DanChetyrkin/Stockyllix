@@ -8,9 +8,11 @@ import type { PrivateFxCache } from '../src/world/ecb-cache.js';
 import { createDataset } from '../src/world/index.js';
 
 const fixture = vi.hoisted(() => ({
-  source: 'ecb', attribution: 'Synthetic test fixture; not provider data',
+  source: 'ecb',
+  attribution: 'Synthetic test fixture; not provider data',
   sourceUrl: 'https://data-api.ecb.europa.eu/service/data/EXR/D.USD+ILS.EUR.SP00.A',
-  importedAt: '2026-11-04T00:00:00Z', availabilityPolicy: 'Next-day test policy',
+  importedAt: '2026-11-04T00:00:00Z',
+  availabilityPolicy: 'Next-day test policy',
   rows: [{ date: '2026-10-02', rate: '3.7000000000', availableAt: '2026-10-02T21:00:00Z', source: 'ecb' }],
 }));
 
@@ -21,9 +23,16 @@ vi.mock('../src/world/ecb-replay.js', async importOriginal => {
     if (JSON.stringify(file) !== JSON.stringify(fixture)) throw new Error('Invalid test replay');
     return file as FxFile;
   };
-  return { ...original, validateEcbReplay: validate,
+  return {
+    ...original,
+    validateEcbReplay: validate,
     validateEcbReplayCache: (value: { file: unknown }) => validate(value.file),
-    ecbReplayCache: (file: unknown) => ({ schemaVersion: 1, rowsSha256: 'synthetic-unit-fixture', file: validate(file) }) };
+    ecbReplayCache: (file: unknown) => ({
+      schemaVersion: 1,
+      rowsSha256: 'synthetic-unit-fixture',
+      file: validate(file),
+    }),
+  };
 });
 
 const directories: string[] = [];
@@ -31,7 +40,8 @@ afterEach(async () => {
   vi.unstubAllEnvs();
   for (const path of directories.splice(0)) {
     const target = resolve(path);
-    if (!target.startsWith(`${resolve(tmpdir())}${sep}stockyllix-ecb-build-`)) throw new Error('Unexpected test cleanup directory');
+    if (!target.startsWith(`${resolve(tmpdir())}${sep}stockyllix-ecb-build-`))
+      throw new Error('Unexpected test cleanup directory');
     await rm(target, { recursive: true, force: true });
   }
 });
@@ -103,7 +113,9 @@ describe('immutable replay FX build preparation', () => {
 
   it('recovers on the third official attempt and persists the validated private cache once', async () => {
     const { output, options, download, create } = await setup();
-    download.mockRejectedValueOnce(new DOMException('timed out', 'TimeoutError')).mockRejectedValueOnce(new Error('ECB download failed: HTTP 503'));
+    download
+      .mockRejectedValueOnce(new DOMException('timed out', 'TimeoutError'))
+      .mockRejectedValueOnce(new Error('ECB download failed: HTTP 503'));
     expect((await prepareEcbReplay(options)).source).toBe('official');
     expect(download).toHaveBeenCalledTimes(3);
     expect(create).toHaveBeenCalledOnce();
@@ -130,20 +142,29 @@ describe('immutable replay FX build preparation', () => {
     expect(download).not.toHaveBeenCalled();
     expect(read).not.toHaveBeenCalled();
     await writeFile(datasetPath, '{broken');
-    await expect(prepareEcbReplay({ ...options, datasetPath })).rejects.toMatchObject({ code: 'DEFAULT_DATASET_INVALID' });
+    await expect(prepareEcbReplay({ ...options, datasetPath })).rejects.toMatchObject({
+      code: 'DEFAULT_DATASET_INVALID',
+    });
   });
 
   it('rejects synthetic rates and unofficial source metadata using the production validator', async () => {
     const actual = await vi.importActual<typeof import('../src/world/ecb-replay.js')>('../src/world/ecb-replay.js');
     expect(() => actual.validateEcbReplay(fixture)).toThrow('immutable original');
     expect(() => actual.validateEcbReplay({ ...fixture, sourceUrl: 'https://example.com/fx' })).toThrow('official ECB');
-    expect(() => actual.validateEcbReplayCache({ schemaVersion: 2, rowsSha256: actual.ECB_REPLAY_ROWS_SHA256, file: fixture })).toThrow('version');
+    expect(() =>
+      actual.validateEcbReplayCache({ schemaVersion: 2, rowsSha256: actual.ECB_REPLAY_ROWS_SHA256, file: fixture }),
+    ).toThrow('version');
   });
 });
 
 describe('bounded official ECB download', () => {
   it('uses the documented XML endpoint and checks normalized observations', async () => {
-    const fetcher = vi.fn<typeof fetch>(async () => new Response('<Envelope xmlns="http://www.ecb.int/vocabulary/2002-08-01/eurofxref"><Cube time="2026-10-02"><Cube currency="USD" rate="1.1"/><Cube currency="ILS" rate="4.07"/></Cube></Envelope>'));
+    const fetcher = vi.fn<typeof fetch>(
+      async () =>
+        new Response(
+          '<Envelope xmlns="http://www.ecb.int/vocabulary/2002-08-01/eurofxref"><Cube time="2026-10-02"><Cube currency="USD" rate="1.1"/><Cube currency="ILS" rate="4.07"/></Cube></Envelope>',
+        ),
+    );
     const file = await fetchEcbRows(undefined, undefined, { fetcher, source: 'xml', timeoutMs: 50 });
     expect(fetcher.mock.calls[0]?.[0]).toBe('https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml');
     expect(file.rows[0]?.rate).toBe('3.7000000000');
@@ -151,14 +172,24 @@ describe('bounded official ECB download', () => {
   });
 
   it('applies a deadline to a stalled request and refuses oversized responses', async () => {
-    const timeoutFetcher: typeof fetch = async (_url, options) => new Promise((_resolve, reject) => {
-      options?.signal?.addEventListener('abort', () => reject(options.signal?.reason), { once: true });
+    const timeoutFetcher: typeof fetch = async (_url, options) =>
+      new Promise((_resolve, reject) => {
+        options?.signal?.addEventListener('abort', () => reject(options.signal?.reason), { once: true });
+      });
+    await expect(fetchEcbRows(undefined, undefined, { fetcher: timeoutFetcher, timeoutMs: 10 })).rejects.toMatchObject({
+      name: 'TimeoutError',
     });
-    await expect(fetchEcbRows(undefined, undefined, { fetcher: timeoutFetcher, timeoutMs: 10 })).rejects.toMatchObject({ name: 'TimeoutError' });
-    const stalledBodyFetcher: typeof fetch = async (_url, options) => new Response(new ReadableStream({
-      start(controller) { options?.signal?.addEventListener('abort', () => controller.error(options.signal?.reason), { once: true }); },
-    }));
-    await expect(fetchEcbRows(undefined, undefined, { fetcher: stalledBodyFetcher, timeoutMs: 10 })).rejects.toMatchObject({ name: 'TimeoutError' });
+    const stalledBodyFetcher: typeof fetch = async (_url, options) =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            options?.signal?.addEventListener('abort', () => controller.error(options.signal?.reason), { once: true });
+          },
+        }),
+      );
+    await expect(
+      fetchEcbRows(undefined, undefined, { fetcher: stalledBodyFetcher, timeoutMs: 10 }),
+    ).rejects.toMatchObject({ name: 'TimeoutError' });
     const oversizedFetcher: typeof fetch = async () => new Response('x'.repeat(1_000_001));
     await expect(fetchEcbRows(undefined, undefined, { fetcher: oversizedFetcher })).rejects.toThrow('too large');
   });

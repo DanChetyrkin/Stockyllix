@@ -13,7 +13,9 @@ export function connectFirebase(config: ReturnType<typeof readConfig>) {
     }
     const credential = config.FIREBASE_SERVICE_ACCOUNT
       ? cert(JSON.parse(config.FIREBASE_SERVICE_ACCOUNT) as ServiceAccount)
-      : emulator ? undefined : applicationDefault();
+      : emulator
+        ? undefined
+        : applicationDefault();
     app = initializeApp({ projectId: config.FIREBASE_PROJECT_ID, ...(credential ? { credential } : {}) });
   }
   const store = new FirestoreStore(getFirestore(app));

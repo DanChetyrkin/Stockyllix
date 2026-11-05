@@ -20,12 +20,16 @@ const firebase = connectFirebase(config);
 const datasets = await loadDatasetRegistry();
 function gameServices(store: DocumentStore, registry: DatasetRegistry = datasets): GameServices {
   const game = new GameService(store, registry);
-  return { game, clock: new WorldClockService(store, game, registry, { autostart: config.WORLD_CLOCK_AUTOSTART === 'true' }),
-    insights: new MarketInsightsService(store, registry), quiz: new DailyQuizService(store, {
+  return {
+    game,
+    clock: new WorldClockService(store, game, registry, { autostart: config.WORLD_CLOCK_AUTOSTART === 'true' }),
+    insights: new MarketInsightsService(store, registry),
+    quiz: new DailyQuizService(store, {
       // the question follows the game's israel calendar day, not the last price event.
       gameTime: (world, tx) => readGameTime(tx, world, registry.get(world.datasetId).endsAt, Date.now()),
     }),
-    performance: new PerformanceService(store, registry) };
+    performance: new PerformanceService(store, registry),
+  };
 }
 const services = gameServices(firebase.store);
 const game = services.game;
@@ -40,7 +44,10 @@ function testRealmServices(uid: string): Promise<GameServices> {
       const simulations = new TestSimulationService(store, registry);
       await simulations.hydrate();
       return { ...gameServices(store, registry), simulations };
-    })().catch(error => { testRealms.delete(uid); throw error; });
+    })().catch(error => {
+      testRealms.delete(uid);
+      throw error;
+    });
     testRealms.set(uid, services);
   }
   return services;
@@ -48,10 +55,19 @@ function testRealmServices(uid: string): Promise<GameServices> {
 const bankIsrael = new BankIsraelService();
 // fail at startup if credentials or the saved world's dataset do not match.
 const initialWorld = await game.getWorld();
-const app = createApp({ ...services, testRealmServices, profile, bankIsrael,
-  verifyToken: firebase.verifyToken, adminUids: config.adminUids, corsOrigins: config.corsOrigins });
+const app = createApp({
+  ...services,
+  testRealmServices,
+  profile,
+  bankIsrael,
+  verifyToken: firebase.verifyToken,
+  adminUids: config.adminUids,
+  corsOrigins: config.corsOrigins,
+});
 const server = app.listen(config.PORT, config.HOST, () => {
-  process.stdout.write(`${JSON.stringify({ event: 'listening', host: config.HOST, port: config.PORT, dataMode: initialWorld.source })}\n`);
+  process.stdout.write(
+    `${JSON.stringify({ event: 'listening', host: config.HOST, port: config.PORT, dataMode: initialWorld.source })}\n`,
+  );
 });
 
 // stop accepting requests and let the current transaction finish.

@@ -12,13 +12,17 @@ function setup() {
   const game = new GameService(store, dataset);
   const logs: Record<string, unknown>[] = [];
   const app = createApp({
-    game, corsOrigins: ['http://localhost:8081'], adminUids: new Set(['administrator']),
+    game,
+    corsOrigins: ['http://localhost:8081'],
+    adminUids: new Set(['administrator']),
     rateLimitEnabled: false,
-    verifyToken: async (token) => {
+    verifyToken: async token => {
       if (!['alice', 'bob', 'administrator'].includes(token)) throw new Error('invalid token');
       return { uid: token };
     },
-    logger: (entry) => { logs.push(entry); },
+    logger: entry => {
+      logs.push(entry);
+    },
   });
   return { app, game, dataset, logs };
 }
@@ -38,15 +42,27 @@ describe('authenticated game api', () => {
 
   it('does not trust client identity, money, execution price or admin flags', async () => {
     const { app } = setup();
-    const initialized = await request(app).post('/api/me/initialize').auth('alice', { type: 'bearer' }).send({ displayName: 'Alice' });
+    const initialized = await request(app)
+      .post('/api/me/initialize')
+      .auth('alice', { type: 'bearer' })
+      .send({ displayName: 'Alice' });
     expect(initialized.status).toBe(200);
     expect(initialized.body.cashAgorot).toBe(100_000_000);
-    const forged = await request(app).post('/api/me/initialize').auth('bob', { type: 'bearer' }).send({ displayName: 'Bob', cashAgorot: 999999999 });
+    const forged = await request(app)
+      .post('/api/me/initialize')
+      .auth('bob', { type: 'bearer' })
+      .send({ displayName: 'Bob', cashAgorot: 999999999 });
     expect(forged.status).toBe(400);
-    expect((await request(app).post('/api/admin/clock/jobs/any/step').auth('alice', { type: 'bearer' })).status).toBe(403);
+    expect((await request(app).post('/api/admin/clock/jobs/any/step').auth('alice', { type: 'bearer' })).status).toBe(
+      403,
+    );
     const world = await request(app).get('/api/world').auth('alice', { type: 'bearer' });
     const order = { worldId: world.body.world.id, instrumentId: 'AAPL', side: 'buy', amountILS: '1000' };
-    const forgedPrice = await request(app).post('/api/orders').auth('alice', { type: 'bearer' }).set('Idempotency-Key', randomUUID()).send({ ...order, price: '0.01' });
+    const forgedPrice = await request(app)
+      .post('/api/orders')
+      .auth('alice', { type: 'bearer' })
+      .set('Idempotency-Key', randomUUID())
+      .send({ ...order, price: '0.01' });
     expect(forgedPrice.status).toBe(400);
   });
 
@@ -58,11 +74,23 @@ describe('authenticated game api', () => {
     const key = randomUUID();
     const withoutKey = await request(app).post('/api/orders').auth('alice', { type: 'bearer' }).send(payload);
     expect(withoutKey.status).toBe(400);
-    const first = await request(app).post('/api/orders').auth('alice', { type: 'bearer' }).set('Idempotency-Key', key).send(payload);
-    const retry = await request(app).post('/api/orders').auth('alice', { type: 'bearer' }).set('Idempotency-Key', key).send(payload);
+    const first = await request(app)
+      .post('/api/orders')
+      .auth('alice', { type: 'bearer' })
+      .set('Idempotency-Key', key)
+      .send(payload);
+    const retry = await request(app)
+      .post('/api/orders')
+      .auth('alice', { type: 'bearer' })
+      .set('Idempotency-Key', key)
+      .send(payload);
     expect(first.status).toBe(201);
     expect(retry.body.order).toEqual(first.body.order);
-    const conflict = await request(app).post('/api/orders').auth('alice', { type: 'bearer' }).set('Idempotency-Key', key).send({ ...payload, amountILS: '2000' });
+    const conflict = await request(app)
+      .post('/api/orders')
+      .auth('alice', { type: 'bearer' })
+      .set('Idempotency-Key', key)
+      .send({ ...payload, amountILS: '2000' });
     expect(conflict.status).toBe(409);
     const orders = await request(app).get('/api/orders').auth('alice', { type: 'bearer' });
     expect(orders.body.orders).toHaveLength(1);
@@ -72,9 +100,16 @@ describe('authenticated game api', () => {
 
   it('blocks untrusted browser origins and returns safe errors with request ids', async () => {
     const { app, logs } = setup();
-    const blocked = await request(app).get('/api/world').set('Origin', 'https://untrusted.example').auth('alice', { type: 'bearer' });
+    const blocked = await request(app)
+      .get('/api/world')
+      .set('Origin', 'https://untrusted.example')
+      .auth('alice', { type: 'bearer' });
     expect(blocked.status).toBe(403);
-    const invalid = await request(app).post('/api/me/initialize').auth('alice', { type: 'bearer' }).set('Content-Type', 'application/json').send('{invalid');
+    const invalid = await request(app)
+      .post('/api/me/initialize')
+      .auth('alice', { type: 'bearer' })
+      .set('Content-Type', 'application/json')
+      .send('{invalid');
     expect(invalid.status).toBe(400);
     expect(invalid.body.error.requestId).toBeTruthy();
     expect(JSON.stringify(logs)).not.toContain('Bearer');
@@ -83,14 +118,16 @@ describe('authenticated game api', () => {
   it('provides a resumable admin workflow and rejects game reads during processing', async () => {
     const { app, game, dataset } = setup();
     await request(app).post('/api/me/initialize').auth('alice', { type: 'bearer' }).send({ displayName: 'Alice' });
-    const target = dataset.events.find((event) => event.kind === 'MARKET_OPEN')!.at;
+    const target = dataset.events.find(event => event.kind === 'MARKET_OPEN')!.at;
     const world = await request(app).get('/api/world').auth('alice', { type: 'bearer' });
     const started = await game.advance(target, randomUUID(), world.body.world.id);
     expect(started.status).toBe('advancing');
     expect((await request(app).get('/api/portfolio').auth('alice', { type: 'bearer' })).status).toBe(423);
     let state: { status: string; job: { id: string } | null } = started;
     for (let attempt = 0; attempt < 15 && state.status !== 'idle'; attempt += 1) {
-      const step = await request(app).post(`/api/admin/clock/jobs/${state.job!.id}/step`).auth('administrator', { type: 'bearer' });
+      const step = await request(app)
+        .post(`/api/admin/clock/jobs/${state.job!.id}/step`)
+        .auth('administrator', { type: 'bearer' });
       expect(step.status).toBe(200);
       state = step.body;
     }

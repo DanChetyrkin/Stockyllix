@@ -1,4 +1,8 @@
-export interface PricePoint { at: string; price: string; kind: 'baseline' | 'open' | 'close' }
+export interface PricePoint {
+  at: string;
+  price: string;
+  kind: 'baseline' | 'open' | 'close';
+}
 export interface PriceHistory {
   worldId: string;
   revision: number;
@@ -24,4 +28,9 @@ export interface WatchItem {
   reached: boolean;
   updatedAt: string;
 }
-export interface WatchlistResponse { worldId: string; revision: number; asOf: string; items: WatchItem[] }
+export interface WatchlistResponse {
+  worldId: string;
+  revision: number;
+  asOf: string;
+  items: WatchItem[];
+}

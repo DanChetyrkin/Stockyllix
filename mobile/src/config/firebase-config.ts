@@ -11,5 +11,8 @@ const config = {
 };
 
 export const firebaseConfigured = Object.values(config).every(Boolean);
-export const firebaseApp = firebaseConfigured && apiConfigured ? (getApps().length ? getApp() : initializeApp(config)) : null;
-export const authEmulatorUrl = useEmulator ? (process.env.EXPO_PUBLIC_AUTH_EMULATOR_URL || 'http://127.0.0.1:9099') : null;
+export const firebaseApp =
+  firebaseConfigured && apiConfigured ? (getApps().length ? getApp() : initializeApp(config)) : null;
+export const authEmulatorUrl = useEmulator
+  ? process.env.EXPO_PUBLIC_AUTH_EMULATOR_URL || 'http://127.0.0.1:9099'
+  : null;

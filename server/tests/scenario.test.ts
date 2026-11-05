@@ -16,12 +16,23 @@ async function advance(game: GameService, to: string) {
 }
 
 async function preparedGame() {
-  const game = new GameService(new MemoryStore(), dataset, { batchSize: 1, now: () => new Date('2026-11-03T12:00:00Z') });
+  const game = new GameService(new MemoryStore(), dataset, {
+    batchSize: 1,
+    now: () => new Date('2026-11-03T12:00:00Z'),
+  });
   const world = await game.getWorld();
   await game.initialize('investor', 'Investor');
   await game.initialize('cash-player', 'Cash player');
-  await game.submitOrder('investor', { worldId: world.id, instrumentId: 'LUMI.TA', side: 'buy', amountILS: '123456.78' }, 'scenario-israeli-order');
-  await game.submitOrder('investor', { worldId: world.id, instrumentId: 'AAPL', side: 'buy', amountILS: '98765.43' }, 'scenario-american-order');
+  await game.submitOrder(
+    'investor',
+    { worldId: world.id, instrumentId: 'LUMI.TA', side: 'buy', amountILS: '123456.78' },
+    'scenario-israeli-order',
+  );
+  await game.submitOrder(
+    'investor',
+    { worldId: world.id, instrumentId: 'AAPL', side: 'buy', amountILS: '98765.43' },
+    'scenario-american-order',
+  );
   return game;
 }
 
@@ -29,10 +40,23 @@ describe('shared-world replay equivalence', () => {
   it('makes a multiweek jump identical to advancing each event group, including simultaneous week-end and FX updates', async () => {
     const jumped = await preparedGame();
     const stepped = await preparedGame();
-    const eventTimes = [...new Set(dataset.events
-      .filter((event) => Date.parse(event.at) > Date.parse(dataset.startsAt) && Date.parse(event.at) <= Date.parse(target))
-      .map((event) => event.at))];
-    expect(dataset.events.some((event, index) => event.kind === 'WEEK_END' && dataset.events[index + 1]?.at === event.at && dataset.events[index + 1]?.kind === 'FX')).toBe(true);
+    const eventTimes = [
+      ...new Set(
+        dataset.events
+          .filter(
+            event => Date.parse(event.at) > Date.parse(dataset.startsAt) && Date.parse(event.at) <= Date.parse(target),
+          )
+          .map(event => event.at),
+      ),
+    ];
+    expect(
+      dataset.events.some(
+        (event, index) =>
+          event.kind === 'WEEK_END' &&
+          dataset.events[index + 1]?.at === event.at &&
+          dataset.events[index + 1]?.kind === 'FX',
+      ),
+    ).toBe(true);
 
     await advance(jumped, target);
     for (const at of eventTimes) await advance(stepped, at);
@@ -45,12 +69,17 @@ describe('shared-world replay equivalence', () => {
       expect(direct.portfolio).toEqual(incremental.portfolio);
       expect(direct.summary).toEqual(incremental.summary);
       expect(direct.portfolio.week.weekId).toBe('2026-10-12');
-      const outcomes = (await jumped.getOrders(uid)).orders.map((order) => ({ ...order, worldId: 'compared-world' }));
-      const otherOutcomes = (await stepped.getOrders(uid)).orders.map((order) => ({ ...order, worldId: 'compared-world' }));
+      const outcomes = (await jumped.getOrders(uid)).orders.map(order => ({ ...order, worldId: 'compared-world' }));
+      const otherOutcomes = (await stepped.getOrders(uid)).orders.map(order => ({
+        ...order,
+        worldId: 'compared-world',
+      }));
       expect(outcomes).toEqual(otherOutcomes);
-      expect(outcomes.every((order) => order.status === 'executed')).toBe(true);
+      expect(outcomes.every(order => order.status === 'executed')).toBe(true);
     }
-    expect((await jumped.getLeaderboard(1, '2026-10-05')).rows).toEqual((await stepped.getLeaderboard(1, '2026-10-05')).rows);
+    expect((await jumped.getLeaderboard(1, '2026-10-05')).rows).toEqual(
+      (await stepped.getLeaderboard(1, '2026-10-05')).rows,
+    );
     expect((await jumped.getLeaderboard()).rows).toEqual((await stepped.getLeaderboard()).rows);
     expect((await jumped.getPortfolio('cash-player')).portfolio.cashAgorot).toBe(100_000_000);
   });

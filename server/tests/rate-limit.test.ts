@@ -9,10 +9,18 @@ async function setup(rateLimitEnabled = true) {
   const game = new GameService(new MemoryStore(), createDataset('rate-limit-test-seed'));
   const world = await game.getWorld();
   const app = createApp({
-    game, adminUids: new Set(['administrator']), corsOrigins: [], rateLimitEnabled,
-    verifyToken: async token => ({ uid: token }), logger: () => undefined,
+    game,
+    adminUids: new Set(['administrator']),
+    corsOrigins: [],
+    rateLimitEnabled,
+    verifyToken: async token => ({ uid: token }),
+    logger: () => undefined,
   });
-  return { app, game, stepResult: { worldId: world.id, revision: world.revision, status: world.status, job: world.job } };
+  return {
+    app,
+    game,
+    stepResult: { worldId: world.id, revision: world.revision, status: world.status, job: world.job },
+  };
 }
 
 describe('rate limits for shared networks and clock processing', () => {
@@ -40,7 +48,10 @@ describe('rate limits for shared networks and clock processing', () => {
     const { app, game, stepResult } = await setup();
     const step = vi.spyOn(game, 'step').mockResolvedValue(stepResult);
     for (let index = 0; index < 200; index += 1) {
-      expect((await request(app).post('/api/admin/clock/jobs/demo-job/step').auth('administrator', { type: 'bearer' })).status).toBe(200);
+      expect(
+        (await request(app).post('/api/admin/clock/jobs/demo-job/step').auth('administrator', { type: 'bearer' }))
+          .status,
+      ).toBe(200);
     }
     expect(step).toHaveBeenCalledTimes(200);
     // the clock calls leave the full ordinary API allowance available.
@@ -48,9 +59,16 @@ describe('rate limits for shared networks and clock processing', () => {
       expect((await request(app).get('/api/world').auth('administrator', { type: 'bearer' })).status).toBe(200);
     }
     expect((await request(app).get('/api/world').auth('administrator', { type: 'bearer' })).status).toBe(429);
-    expect((await request(app).post('/api/admin/clock/jobs/demo-job/step/extra').auth('administrator', { type: 'bearer' })).status).toBe(429);
-    expect((await request(app).get('/api/admin/clock/jobs/demo-job/step').auth('administrator', { type: 'bearer' })).status).toBe(429);
-    expect((await request(app).post('/api/admin/clock/jobs/demo-job/step').auth('administrator', { type: 'bearer' })).status).toBe(200);
+    expect(
+      (await request(app).post('/api/admin/clock/jobs/demo-job/step/extra').auth('administrator', { type: 'bearer' }))
+        .status,
+    ).toBe(429);
+    expect(
+      (await request(app).get('/api/admin/clock/jobs/demo-job/step').auth('administrator', { type: 'bearer' })).status,
+    ).toBe(429);
+    expect(
+      (await request(app).post('/api/admin/clock/jobs/demo-job/step').auth('administrator', { type: 'bearer' })).status,
+    ).toBe(200);
     expect(step).toHaveBeenCalledTimes(201);
   }, 20_000);
 
@@ -62,7 +80,9 @@ describe('rate limits for shared networks and clock processing', () => {
     for (let index = 0; index < 179; index += 1) {
       expect((await request(app).get('/api/world').auth('alice', { type: 'bearer' })).status).toBe(200);
     }
-    expect((await request(app).post('/api/admin/clock/jobs/demo-job/step').auth('alice', { type: 'bearer' })).status).toBe(429);
+    expect(
+      (await request(app).post('/api/admin/clock/jobs/demo-job/step').auth('alice', { type: 'bearer' })).status,
+    ).toBe(429);
     expect(step).not.toHaveBeenCalled();
   }, 20_000);
 

@@ -5,8 +5,11 @@ export type SortDirection = 'asc' | 'desc';
 type SortableAsset = Pick<Instrument, 'id' | 'name' | 'symbol' | 'dailyChangePct'>;
 
 function nameOrder(a: SortableAsset, b: SortableAsset) {
-  return a.name.localeCompare(b.name, 'en', { sensitivity: 'base' })
-    || a.symbol.localeCompare(b.symbol, 'en') || a.id.localeCompare(b.id, 'en');
+  return (
+    a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }) ||
+    a.symbol.localeCompare(b.symbol, 'en') ||
+    a.id.localeCompare(b.id, 'en')
+  );
 }
 
 export function dailyChangeValue(value: string | null | undefined): number | null {
@@ -15,7 +18,11 @@ export function dailyChangeValue(value: string | null | undefined): number | nul
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-export function sortMarketAssets<T extends SortableAsset>(assets: readonly T[], field: MarketSort, direction: SortDirection): T[] {
+export function sortMarketAssets<T extends SortableAsset>(
+  assets: readonly T[],
+  field: MarketSort,
+  direction: SortDirection,
+): T[] {
   const order = direction === 'asc' ? 1 : -1;
   return [...assets].sort((a, b) => {
     if (field === 'name') return nameOrder(a, b) * order;

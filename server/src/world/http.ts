@@ -13,5 +13,7 @@ export async function readResponseText(response: Response, maxBytes: number): Pr
       text += decoder.decode(chunk.value, { stream: true });
     }
     return text + decoder.decode();
-  } finally { await reader.cancel(); }
+  } finally {
+    await reader.cancel();
+  }
 }

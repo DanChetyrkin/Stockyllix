@@ -13,21 +13,53 @@ const instrumentId = 'LUMI.TA';
 
 function player(uid = 'alice'): Portfolio {
   return {
-    uid, displayName: uid, cashAgorot: 100_000_000, reservedCashAgorot: 0, holdings: {}, pendingOrderIds: [], pendingBuyAgorot: {}, nextSequence: 1,
+    uid,
+    displayName: uid,
+    cashAgorot: 100_000_000,
+    reservedCashAgorot: 0,
+    holdings: {},
+    pendingOrderIds: [],
+    pendingBuyAgorot: {},
+    nextSequence: 1,
     week: { weekId: '2026-10-05', startValueILS: '1000000', peakValueILS: '1000000', mddRatio: '0', eligible: true },
-    lastEventId: null, joinedAt: dataset.startsAt, createdAt: '2026-11-03T00:00:00Z',
+    lastEventId: null,
+    joinedAt: dataset.startsAt,
+    createdAt: '2026-11-03T00:00:00Z',
   };
 }
 
 function order(amountILS = '100000.00', side: 'buy' | 'sell' = 'buy', id = 'order-a'): Order {
   return {
-    id, uid: 'alice', worldId: 'world-test', instrumentId, side, amountAgorot: parseAmount(amountILS), sequence: 1,
-    status: 'pending', submittedAt: dataset.startsAt, createdAt: '2026-11-03T00:00:00Z', executeEventId: 'fill', executeAt: '2026-10-05T07:00:00Z', requestKey: id,
+    id,
+    uid: 'alice',
+    worldId: 'world-test',
+    instrumentId,
+    side,
+    amountAgorot: parseAmount(amountILS),
+    sequence: 1,
+    status: 'pending',
+    submittedAt: dataset.startsAt,
+    createdAt: '2026-11-03T00:00:00Z',
+    executeEventId: 'fill',
+    executeAt: '2026-10-05T07:00:00Z',
+    requestKey: id,
   };
 }
 
 function event(price = '10', fx = '4'): WorldEvent {
-  return { id: 'fill', at: '2026-10-05T07:00:00Z', kind: 'MARKET_OPEN', market: 'TA', weekId: '2026-10-05', snapshot: { ...dataset.initialSnapshot, at: '2026-10-05T07:00:00Z', prices: { ...dataset.initialSnapshot.prices, [instrumentId]: price, AAPL: '100' }, fx } };
+  return {
+    id: 'fill',
+    at: '2026-10-05T07:00:00Z',
+    kind: 'MARKET_OPEN',
+    market: 'TA',
+    weekId: '2026-10-05',
+    snapshot: {
+      ...dataset.initialSnapshot,
+      at: '2026-10-05T07:00:00Z',
+      prices: { ...dataset.initialSnapshot.prices, [instrumentId]: price, AAPL: '100' },
+      fx,
+    },
+  };
 }
 
 function reserve(portfolio: Portfolio, pending: Order, fill = event()) {
@@ -48,7 +80,8 @@ describe('money, concentration, reservations and settlement', () => {
   it('validates cents without floating point parsing', () => {
     expect(parseAmount('0.01')).toBe(1);
     expect(parseAmount('1000000.12')).toBe(100_000_012);
-    for (const invalid of ['0', '-1', '1.001', 'NaN', '1e3', ' 10', 'Infinity']) expect(() => parseAmount(invalid)).toThrow();
+    for (const invalid of ['0', '-1', '1.001', 'NaN', '1e3', ' 10', 'Infinity'])
+      expect(() => parseAmount(invalid)).toThrow();
   });
 
   it('reserves cash without reducing equity and includes earlier pending buys in the 20% limit', () => {
@@ -93,7 +126,11 @@ describe('money, concentration, reservations and settlement', () => {
   });
 
   it('locks the existing position for one ILS sell and rejects the whole sale after a price decline', () => {
-    const initial = { ...player(), cashAgorot: 90_000_000, holdings: { [instrumentId]: { units: '10000', reservedUnits: '0' } } };
+    const initial = {
+      ...player(),
+      cashAgorot: 90_000_000,
+      holdings: { [instrumentId]: { units: '10000', reservedUnits: '0' } },
+    };
     const sell = order('100000', 'sell');
     const reserved = reserve(initial, sell);
     expect(sell.reservedUnits).toBe('10000');
@@ -105,7 +142,11 @@ describe('money, concentration, reservations and settlement', () => {
   });
 
   it('does not use later purchases to enlarge a sell reservation or free concentration space before execution', () => {
-    const initial = { ...player(), cashAgorot: 90_000_000, holdings: { [instrumentId]: { units: '10000', reservedUnits: '0' } } };
+    const initial = {
+      ...player(),
+      cashAgorot: 90_000_000,
+      holdings: { [instrumentId]: { units: '10000', reservedUnits: '0' } },
+    };
     const sell = order('100000', 'sell');
     const reserved = reserve(initial, sell);
     const enlarged = structuredClone(reserved);
@@ -134,7 +175,9 @@ describe('money, concentration, reservations and settlement', () => {
       fullyReserved = reserve(fullyReserved, pending);
     }
     expect(fullyReserved.reservedCashAgorot).toBe(fullyReserved.cashAgorot);
-    expect(() => reserve(fullyReserved, { ...order('1', 'buy', 'sixth'), instrumentId: dataset.instruments[5]!.id })).toThrow(/cash/);
+    expect(() =>
+      reserve(fullyReserved, { ...order('1', 'buy', 'sixth'), instrumentId: dataset.instruments[5]!.id }),
+    ).toThrow(/cash/);
   });
 
   it('offers a conservative cent-denominated sell maximum without permitting shorts at a rounded display value', () => {
@@ -156,16 +199,19 @@ describe('money, concentration, reservations and settlement', () => {
 });
 
 describe('sampled weekly drawdown and percentile ranking', () => {
-  it.each(['3.141592', '72.400001', '1560.000001'])('does not rank negligible fractional settlement dust as a loss at price %s', (price) => {
-    const fill = event(price);
-    const pending = { ...order('100000'), uid: 'buyer' };
-    const buyer = executeOrder(dataset, reserve(player('buyer'), pending, fill), pending, fill).portfolio;
-    const rows = rankPortfolios(dataset, fill.snapshot, [player('cash'), buyer]);
-    expect(rows.map((row) => row.rank)).toEqual([1, 1]);
-    expect(rows.every((row) => row.score === '100.000000')).toBe(true);
-    expect(rows.every((row) => row.weeklyReturnPct === '0.000000')).toBe(true);
-    expect(portfolioSummary(dataset, fill.snapshot, buyer).weeklyReturnPct).toBe('0.000000');
-  });
+  it.each(['3.141592', '72.400001', '1560.000001'])(
+    'does not rank negligible fractional settlement dust as a loss at price %s',
+    price => {
+      const fill = event(price);
+      const pending = { ...order('100000'), uid: 'buyer' };
+      const buyer = executeOrder(dataset, reserve(player('buyer'), pending, fill), pending, fill).portfolio;
+      const rows = rankPortfolios(dataset, fill.snapshot, [player('cash'), buyer]);
+      expect(rows.map(row => row.rank)).toEqual([1, 1]);
+      expect(rows.every(row => row.score === '100.000000')).toBe(true);
+      expect(rows.every(row => row.weeklyReturnPct === '0.000000')).toBe(true);
+      expect(portfolioSummary(dataset, fill.snapshot, buyer).weeklyReturnPct).toBe('0.000000');
+    },
+  );
 
   it('measures a later trough from the earlier peak and never uses a trough before its peak', () => {
     let week = player().week;
@@ -180,15 +226,20 @@ describe('sampled weekly drawdown and percentile ranking', () => {
     const worse = { ...player('worse'), cashAgorot: 90_000_000, week: { ...player().week, mddRatio: '0.1' } };
     const training = { ...player('training'), cashAgorot: 150_000_000, week: { ...player().week, eligible: false } };
     const rows = rankPortfolios(dataset, dataset.initialSnapshot, [best, tied, worse, training]);
-    expect(rows.find((row) => row.uid === 'best')).toMatchObject({ returnPercentile: '100.000000', stabilityPercentile: '100.000000', score: '100.000000', rank: 1 });
-    expect(rows.find((row) => row.uid === 'tie')?.rank).toBe(1);
-    expect(rows.find((row) => row.uid === 'worse')?.score).toBe('0.000000');
-    expect(rows.find((row) => row.uid === 'training')).toMatchObject({ rank: 0, eligible: false });
+    expect(rows.find(row => row.uid === 'best')).toMatchObject({
+      returnPercentile: '100.000000',
+      stabilityPercentile: '100.000000',
+      score: '100.000000',
+      rank: 1,
+    });
+    expect(rows.find(row => row.uid === 'tie')?.rank).toBe(1);
+    expect(rows.find(row => row.uid === 'worse')?.score).toBe('0.000000');
+    expect(rows.find(row => row.uid === 'training')).toMatchObject({ rank: 0, eligible: false });
     expect(rankPortfolios(dataset, dataset.initialSnapshot, [best])[0]?.score).toBe('100.000000');
     const riskyWinner = { ...player('risky'), cashAgorot: 110_000_000, week: { ...player().week, mddRatio: '0.2' } };
     const weighted = rankPortfolios(dataset, dataset.initialSnapshot, [riskyWinner, best]);
-    expect(weighted.find((row) => row.uid === 'risky')?.score).toBe('85.000000');
-    expect(weighted.find((row) => row.uid === 'best')?.score).toBe('15.000000');
+    expect(weighted.find(row => row.uid === 'risky')?.score).toBe('85.000000');
+    expect(weighted.find(row => row.uid === 'best')?.score).toBe('15.000000');
   });
 });
 
@@ -198,13 +249,20 @@ describe('durable game service', () => {
     const service = new GameService(new MemoryStore(), capDataset);
     await service.initialize('alice', 'Alice');
     const world = await service.getWorld();
-    for (const instrument of capDataset.instruments.filter((item) => item.market === 'TA').slice(0, 5)) {
-      await service.submitOrder('alice', { worldId: world.id, instrumentId: instrument.id, side: 'buy', amountILS: '200000' }, `cap-order-${instrument.id}`);
+    for (const instrument of capDataset.instruments.filter(item => item.market === 'TA').slice(0, 5)) {
+      await service.submitOrder(
+        'alice',
+        { worldId: world.id, instrumentId: instrument.id, side: 'buy', amountILS: '200000' },
+        `cap-order-${instrument.id}`,
+      );
     }
-    await advanceDone(service, capDataset.events.find((event) => event.kind === 'MARKET_OPEN' && event.market === 'TA')!.at);
+    await advanceDone(
+      service,
+      capDataset.events.find(event => event.kind === 'MARKET_OPEN' && event.market === 'TA')!.at,
+    );
     const orders = (await service.getOrders('alice')).orders;
     expect(orders).toHaveLength(5);
-    expect(orders.every((pending) => pending.status === 'executed')).toBe(true);
+    expect(orders.every(pending => pending.status === 'executed')).toBe(true);
     const result = await service.getPortfolio('alice');
     expect(result.portfolio.cashAgorot).toBe(0);
     expect(result.portfolio.reservedCashAgorot).toBe(0);
@@ -223,18 +281,25 @@ describe('durable game service', () => {
     await service.initialize('alice', 'Alice');
     const world = await service.getWorld();
     const input = { worldId: world.id, instrumentId, side: 'buy' as const, amountILS: '150000' };
-    const repeated = await Promise.all([service.submitOrder('alice', input, 'same-order-key'), service.submitOrder('alice', input, 'same-order-key')]);
+    const repeated = await Promise.all([
+      service.submitOrder('alice', input, 'same-order-key'),
+      service.submitOrder('alice', input, 'same-order-key'),
+    ]);
     expect(repeated[0].id).toBe(repeated[1].id);
     expect((await service.getOrders('alice')).orders).toHaveLength(1);
-    await expect(service.submitOrder('alice', { ...input, amountILS: '1' }, 'same-order-key')).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
-    await expect(service.submitOrder('alice', input, 'another-order-key')).rejects.toMatchObject({ code: 'CONCENTRATION_LIMIT' });
+    await expect(service.submitOrder('alice', { ...input, amountILS: '1' }, 'same-order-key')).rejects.toMatchObject({
+      code: 'IDEMPOTENCY_CONFLICT',
+    });
+    await expect(service.submitOrder('alice', input, 'another-order-key')).rejects.toMatchObject({
+      code: 'CONCENTRATION_LIMIT',
+    });
     expect((await service.getPortfolio('alice')).portfolio.reservedCashAgorot).toBe(15_000_000);
     await service.initialize('bob', 'Bob');
     const parallel = await Promise.allSettled([
       service.submitOrder('bob', input, 'parallel-order-one'),
       service.submitOrder('bob', input, 'parallel-order-two'),
     ]);
-    expect(parallel.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(parallel.filter(result => result.status === 'fulfilled')).toHaveLength(1);
     expect((await service.getPortfolio('bob')).portfolio.reservedCashAgorot).toBe(15_000_000);
   });
 
@@ -243,10 +308,20 @@ describe('durable game service', () => {
     let service = new GameService(store, dataset, { batchSize: 1 });
     await service.initialize('alice', 'Alice');
     const world = await service.getWorld();
-    await service.submitOrder('alice', { worldId: world.id, instrumentId, side: 'buy', amountILS: '100000' }, 'opening-order-key');
+    await service.submitOrder(
+      'alice',
+      { worldId: world.id, instrumentId, side: 'buy', amountILS: '100000' },
+      'opening-order-key',
+    );
     let job = await service.advance('2026-10-05T07:00:00Z', 'first-advance-key');
     await expect(service.getPortfolio('alice')).rejects.toMatchObject({ code: 'WORLD_ADVANCING' });
-    await expect(service.submitOrder('alice', { worldId: world.id, instrumentId, side: 'buy', amountILS: '1' }, 'new-order-during-advance')).rejects.toMatchObject({ code: 'WORLD_ADVANCING' });
+    await expect(
+      service.submitOrder(
+        'alice',
+        { worldId: world.id, instrumentId, side: 'buy', amountILS: '1' },
+        'new-order-during-advance',
+      ),
+    ).rejects.toMatchObject({ code: 'WORLD_ADVANCING' });
     while (job.job) {
       service = new GameService(store, dataset, { batchSize: 1 });
       job = await service.step(job.job.id);
@@ -264,11 +339,23 @@ describe('durable game service', () => {
     const base = new MemoryStore();
     let crashAfterSample = false;
     const store: DocumentStore = {
-      get: base.get.bind(base), list: base.list.bind(base),
+      get: base.get.bind(base),
+      list: base.list.bind(base),
       transaction: async <T>(work: (tx: Transaction) => Promise<T>) => {
         let sampled = false;
-        const result = await base.transaction((tx) => work({ get: tx.get, set: (path, value) => { sampled ||= path.endsWith('/players/alice'); tx.set(path, value); } }));
-        if (sampled && crashAfterSample) { crashAfterSample = false; throw new Error('simulated process crash after commit'); }
+        const result = await base.transaction(tx =>
+          work({
+            get: tx.get,
+            set: (path, value) => {
+              sampled ||= path.endsWith('/players/alice');
+              tx.set(path, value);
+            },
+          }),
+        );
+        if (sampled && crashAfterSample) {
+          crashAfterSample = false;
+          throw new Error('simulated process crash after commit');
+        }
         return result;
       },
     };
@@ -276,12 +363,18 @@ describe('durable game service', () => {
     const service = new GameService(store, dataset, { now: () => time, leaseMs: 1000, batchSize: 1 });
     await service.initialize('alice', 'Alice');
     const world = await service.getWorld();
-    await service.submitOrder('alice', { worldId: world.id, instrumentId, side: 'buy', amountILS: '100000' }, 'crash-order-key');
+    await service.submitOrder(
+      'alice',
+      { worldId: world.id, instrumentId, side: 'buy', amountILS: '100000' },
+      'crash-order-key',
+    );
     const initial = await service.advance('2026-10-05T07:00:00Z', 'crash-advance-key');
-    await expect(service.advance('2026-10-05T08:00:00Z', 'parallel-advance-key')).rejects.toMatchObject({ code: 'WORLD_ADVANCING' });
+    await expect(service.advance('2026-10-05T08:00:00Z', 'parallel-advance-key')).rejects.toMatchObject({
+      code: 'WORLD_ADVANCING',
+    });
     await expect(service.reset('reset-while-advancing')).rejects.toMatchObject({ code: 'WORLD_ADVANCING' });
     const path = `worlds/${world.id}`;
-    await base.transaction(async (tx) => {
+    await base.transaction(async tx => {
       const active = (await tx.get<World>(path))!;
       tx.set(path, { ...active, job: { ...active.job!, leaseOwner: 'dead-worker', leaseUntil: time.getTime() + 500 } });
     });
@@ -307,8 +400,8 @@ describe('durable game service', () => {
     expect(alice.portfolio.cashAgorot).toBe(100_000_000);
     expect((await service.getPortfolio('late')).portfolio.week.eligible).toBe(true);
     const archived = await service.getLeaderboard(1, '2026-10-05');
-    expect(archived.rows.find((row) => row.uid === 'late')?.eligible).toBe(false);
-    expect(archived.rows.find((row) => row.uid === 'alice')?.score).toBe('100.000000');
+    expect(archived.rows.find(row => row.uid === 'late')?.eligible).toBe(false);
+    expect(archived.rows.find(row => row.uid === 'alice')?.score).toBe('100.000000');
   });
 
   it('fences a stale worker after another worker takes its lease', async () => {
@@ -317,15 +410,24 @@ describe('durable game service', () => {
     let takeOverDuringQuery = false;
     let realNow = new Date('2026-11-03T10:00:00Z');
     const store: DocumentStore = {
-      get: base.get.bind(base), transaction: base.transaction.bind(base),
+      get: base.get.bind(base),
+      transaction: base.transaction.bind(base),
       list: async <T>(collection: string, options?: ListOptions) => {
         const rows = await base.list<T>(collection, options);
         if (takeOverDuringQuery && collection.endsWith('/players')) {
           takeOverDuringQuery = false;
-          await base.transaction(async (tx) => {
+          await base.transaction(async tx => {
             const path = `worlds/${worldId}`;
             const world = (await tx.get<World>(path))!;
-            tx.set(path, { ...world, job: { ...world.job!, fence: world.job!.fence + 1, leaseOwner: 'newer-worker', leaseUntil: realNow.getTime() + 1000 } });
+            tx.set(path, {
+              ...world,
+              job: {
+                ...world.job!,
+                fence: world.job!.fence + 1,
+                leaseOwner: 'newer-worker',
+                leaseUntil: realNow.getTime() + 1000,
+              },
+            });
           });
         }
         return rows;
@@ -350,7 +452,11 @@ describe('durable game service', () => {
     const service = new GameService(new MemoryStore(), dataset);
     await service.initialize('alice', 'Alice');
     const world = await service.getWorld();
-    await service.submitOrder('alice', { worldId: world.id, instrumentId: 'AAPL', side: 'buy', amountILS: '100000' }, 'weekend-us-buy');
+    await service.submitOrder(
+      'alice',
+      { worldId: world.id, instrumentId: 'AAPL', side: 'buy', amountILS: '100000' },
+      'weekend-us-buy',
+    );
     await advanceDone(service, '2026-10-10T12:00:00Z');
     const portfolio = await service.getPortfolio('alice');
     expect(portfolio.portfolio.week.finalValueILS).toBeDefined();
@@ -386,7 +492,11 @@ describe('durable game service', () => {
     const service = new GameService(store, dataset, { now: () => realNow });
     await service.initialize('alice', 'Alice');
     const world = await service.getWorld();
-    await service.submitOrder('alice', { worldId: world.id, instrumentId, side: 'buy', amountILS: '100000' }, 'review-initial-buy');
+    await service.submitOrder(
+      'alice',
+      { worldId: world.id, instrumentId, side: 'buy', amountILS: '100000' },
+      'review-initial-buy',
+    );
     await advanceDone(service, '2026-10-06T14:30:00Z');
     const first = await service.recordReview('alice');
     expect(first).toMatchObject({ realDate: '2026-11-03', worldDate: '2026-10-06', returnedOnLaterRealDay: false });
@@ -401,7 +511,9 @@ describe('durable game service', () => {
 
     await advanceDone(service, '2026-10-08T07:00:00Z');
     expect(await service.recordReview('alice')).toEqual(second);
-    const activity = await store.get<{ distinctRealDays: number; lastRealDate: string }>(`worlds/${world.id}/players/alice/activity/current`);
+    const activity = await store.get<{ distinctRealDays: number; lastRealDate: string }>(
+      `worlds/${world.id}/players/alice/activity/current`,
+    );
     expect(activity).toMatchObject({ firstRealDate: '2026-11-03', lastRealDate: '2026-11-04', distinctRealDays: 2 });
     expect((await service.getPortfolio('alice')).insight).toMatch(/largest holding/);
   });
@@ -410,19 +522,29 @@ describe('durable game service', () => {
     const service = new GameService(new MemoryStore(), dataset);
     await service.initialize('alice', 'Alice');
     const market = await service.getMarket();
-    expect(market.instruments.find((instrument) => instrument.id === 'AAPL')?.price).toBe(dataset.initialSnapshot.prices.AAPL);
+    expect(market.instruments.find(instrument => instrument.id === 'AAPL')?.price).toBe(
+      dataset.initialSnapshot.prices.AAPL,
+    );
     const publicWorld = await service.getWorld();
     expect(publicWorld).not.toHaveProperty('events');
     expect(publicWorld).not.toHaveProperty('snapshot');
     await advanceDone(service, dataset.endsAt);
-    await expect(service.submitOrder('alice', { worldId: publicWorld.id, instrumentId: 'AAPL', side: 'buy', amountILS: '100' }, 'end-of-dataset-key')).rejects.toMatchObject({ code: 'DATASET_FINISHED' });
+    await expect(
+      service.submitOrder(
+        'alice',
+        { worldId: publicWorld.id, instrumentId: 'AAPL', side: 'buy', amountILS: '100' },
+        'end-of-dataset-key',
+      ),
+    ).rejects.toMatchObject({ code: 'DATASET_FINISHED' });
   });
 
   it('rejects stale administrator actions after reset but permits an identical reset retry', async () => {
     const service = new GameService(new MemoryStore(), dataset);
     const previous = await service.getWorld();
     const created = await service.reset('guarded-reset-key', previous.id);
-    await expect(service.advance('2026-10-05T07:00:00Z', 'stale-admin-advance', previous.id)).rejects.toMatchObject({ code: 'WORLD_CHANGED' });
+    await expect(service.advance('2026-10-05T07:00:00Z', 'stale-admin-advance', previous.id)).rejects.toMatchObject({
+      code: 'WORLD_CHANGED',
+    });
     await expect(service.reset('stale-admin-reset', previous.id)).rejects.toMatchObject({ code: 'WORLD_CHANGED' });
     expect((await service.reset('guarded-reset-key', previous.id)).id).toBe(created.id);
     expect((await service.getWorld()).id).toBe(created.id);

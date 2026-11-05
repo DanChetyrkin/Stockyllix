@@ -22,7 +22,16 @@ async function fixture(options: { maxSteps?: number } = {}) {
   await game.initialize('alice', 'Alice');
   const clock = new WorldClockService(store, game, dataset, { now, ...options });
   await clock.getWorld();
-  return { store, game, clock, world, now, elapse: (value: number) => { milliseconds += value; } };
+  return {
+    store,
+    game,
+    clock,
+    world,
+    now,
+    elapse: (value: number) => {
+      milliseconds += value;
+    },
+  };
 }
 
 async function drain(clock: WorldClockService) {
@@ -49,17 +58,36 @@ describe('persisted server-owned world clock', () => {
 
   it('refuses new orders across a due-event boundary before settlement, then catches up after process recreation without double charging', async () => {
     const { clock, game, world, store, now, elapse } = await fixture({ maxSteps: 1 });
-    const order = await game.submitOrder('alice', { worldId: world.id, instrumentId: 'AMZN', side: 'buy', amountILS: '50000' }, 'pending-amazon-request');
-    expect((await game.getPortfolio('alice')).summary).toMatchObject({ cashILS: '1000000.00', reservedCashILS: '50000.00', availableCashILS: '950000.00', valueILS: '1000000.00' });
+    const order = await game.submitOrder(
+      'alice',
+      { worldId: world.id, instrumentId: 'AMZN', side: 'buy', amountILS: '50000' },
+      'pending-amazon-request',
+    );
+    expect((await game.getPortfolio('alice')).summary).toMatchObject({
+      cashILS: '1000000.00',
+      reservedCashILS: '50000.00',
+      availableCashILS: '950000.00',
+      valueILS: '1000000.00',
+    });
     elapse(Date.parse(order.executeAt) - Date.parse(world.now));
-    await expect(game.submitOrder('alice', { worldId: world.id, instrumentId: 'AAPL', side: 'buy', amountILS: '1000' }, 'boundary-race-request')).rejects.toMatchObject({ code: 'CLOCK_SYNCING' });
+    await expect(
+      game.submitOrder(
+        'alice',
+        { worldId: world.id, instrumentId: 'AAPL', side: 'buy', amountILS: '1000' },
+        'boundary-race-request',
+      ),
+    ).rejects.toMatchObject({ code: 'CLOCK_SYNCING' });
     await clock.synchronize();
     expect((await game.getWorld()).status).toBe('advancing');
     const restartedGame = new GameService(store, dataset, { now });
     const restarted = new WorldClockService(store, restartedGame, dataset, { now, maxSteps: 1 });
     await drain(restarted);
     const settled = await restartedGame.getPortfolio('alice');
-    expect(settled.summary).toMatchObject({ cashILS: '950000.00', reservedCashILS: '0.00', availableCashILS: '950000.00' });
+    expect(settled.summary).toMatchObject({
+      cashILS: '950000.00',
+      reservedCashILS: '0.00',
+      availableCashILS: '950000.00',
+    });
     expect(settled.summary.holdings).toHaveLength(1);
     expect((await restartedGame.getOrders('alice')).orders[0]?.status).toBe('executed');
     await drain(restarted);
@@ -79,12 +107,16 @@ describe('persisted server-owned world clock', () => {
     elapse(1000);
     expect((await clock.getWorld()).clock.targetNow).toBe('2026-10-05T07:00:00.000Z');
     await drain(clock);
-    await expect(clock.configure('admin-user', { worldId: world.id, action: 'set', target: '2026-10-05T06:59:59Z' }, randomUUID())).rejects.toMatchObject({ code: 'CLOCK_BACKWARD' });
+    await expect(
+      clock.configure('admin-user', { worldId: world.id, action: 'set', target: '2026-10-05T06:59:59Z' }, randomUUID()),
+    ).rejects.toMatchObject({ code: 'CLOCK_BACKWARD' });
     const state = await store.get<WorldClock>(clockPath(world.id));
     expect(state?.updatedBy).toBe('admin-user');
     const audit = await clock.audit();
     expect(audit.entries).toHaveLength(2);
-    expect(audit.entries).toEqual(expect.arrayContaining([expect.objectContaining({ actor: 'admin-user', action: 'set' })]));
+    expect(audit.entries).toEqual(
+      expect.arrayContaining([expect.objectContaining({ actor: 'admin-user', action: 'set' })]),
+    );
   });
 
   it('treats an administrator request retry as the same action and rejects conflicting reuse', async () => {
@@ -96,7 +128,9 @@ describe('persisted server-owned world clock', () => {
     await clock.configure('admin', input, key);
     expect((await clock.getWorld()).clock).toEqual(before);
     expect((await clock.audit()).entries).toHaveLength(1);
-    await expect(clock.configure('admin', { ...input, action: 'resume' }, key)).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+    await expect(clock.configure('admin', { ...input, action: 'resume' }, key)).rejects.toMatchObject({
+      code: 'IDEMPOTENCY_CONFLICT',
+    });
   });
 
   it('next-event controls use the dataset and pause custom playback', async () => {
@@ -112,7 +146,11 @@ describe('persisted server-owned world clock', () => {
     const { clock, world } = await fixture();
     await clock.configure('admin', { worldId: world.id, action: 'set', target: '2026-10-05T20:00:00Z' }, randomUUID());
     const previous = await drain(clock);
-    const expected = dataset.events.find(event => ['MARKET_OPEN', 'MARKET_CLOSE'].includes(event.kind) && Date.parse(event.at) > Date.parse(previous.clock.targetNow))!;
+    const expected = dataset.events.find(
+      event =>
+        ['MARKET_OPEN', 'MARKET_CLOSE'].includes(event.kind) &&
+        Date.parse(event.at) > Date.parse(previous.clock.targetNow),
+    )!;
     expect(previous.nextEvent?.kind).toBe('FX');
     await clock.configure('admin', { worldId: world.id, action: 'next' }, randomUUID());
     expect(Date.parse((await drain(clock)).now)).toBe(Date.parse(expected.at));
@@ -120,20 +158,38 @@ describe('persisted server-owned world clock', () => {
 
   it('processes weekly boundaries during catch-up and stops at the real end without resetting cash', async () => {
     const { clock, world, game, elapse } = await fixture({ maxSteps: 2 });
-    await game.submitOrder('alice', { worldId: world.id, instrumentId: 'AMZN', side: 'buy', amountILS: '50000' }, 'weekly-amazon-request');
+    await game.submitOrder(
+      'alice',
+      { worldId: world.id, instrumentId: 'AMZN', side: 'buy', amountILS: '50000' },
+      'weekly-amazon-request',
+    );
     elapse(Date.parse(dataset.endsAt) - Date.parse(world.now) + 86_400_000);
     const ended = await drain(clock);
     expect(ended.finished).toBe(true);
-    expect(ended.clock).toMatchObject({ finished: true, running: false, targetNow: new Date(dataset.endsAt).toISOString() });
+    expect(ended.clock).toMatchObject({
+      finished: true,
+      running: false,
+      targetNow: new Date(dataset.endsAt).toISOString(),
+    });
     expect((await game.getOrders('alice')).orders[0]?.status).toBe('executed');
     expect((await game.getPortfolio('alice')).summary.cashILS).toBe('950000.00');
     expect((await game.getLeaderboard(1, '2026-10-05')).total).toBe(1);
-    await expect(game.submitOrder('alice', { worldId: world.id, instrumentId: 'AAPL', side: 'buy', amountILS: '100' }, 'after-end-request')).rejects.toMatchObject({ code: 'DATASET_FINISHED' });
+    await expect(
+      game.submitOrder(
+        'alice',
+        { worldId: world.id, instrumentId: 'AAPL', side: 'buy', amountILS: '100' },
+        'after-end-request',
+      ),
+    ).rejects.toMatchObject({ code: 'DATASET_FINISHED' });
   });
 
   it('coalesces simultaneous readers and does not settle the same pending order twice', async () => {
     const { clock, world, game, elapse, store, now } = await fixture();
-    const pending = await game.submitOrder('alice', { worldId: world.id, instrumentId: 'AMZN', side: 'buy', amountILS: '50000' }, 'parallel-amazon-request');
+    const pending = await game.submitOrder(
+      'alice',
+      { worldId: world.id, instrumentId: 'AMZN', side: 'buy', amountILS: '50000' },
+      'parallel-amazon-request',
+    );
     elapse(Date.parse(pending.executeAt) - Date.parse(world.now));
     const workers = [clock, new WorldClockService(store, game, dataset, { now })];
     await Promise.all(Array.from({ length: 12 }, (_, index) => workers[index % workers.length]!.synchronize()));
@@ -145,11 +201,23 @@ describe('persisted server-owned world clock', () => {
   it('keeps failed synchronization visible, persists retry cooldown and resumes after a transient database failure', async () => {
     const base = new MemoryStore();
     let fail = false;
-    const store: DocumentStore = { get: path => base.get(path), list: (path, options) => base.list(path, options),
-      transaction: work => base.transaction(tx => work({ get: path => tx.get(path), set: (path, value) => {
-        if (fail && path.endsWith('/players/alice')) { fail = false; throw new Error('injected transient write failure'); }
-        tx.set(path, value);
-      } })) };
+    const store: DocumentStore = {
+      get: path => base.get(path),
+      list: (path, options) => base.list(path, options),
+      transaction: work =>
+        base.transaction(tx =>
+          work({
+            get: path => tx.get(path),
+            set: (path, value) => {
+              if (fail && path.endsWith('/players/alice')) {
+                fail = false;
+                throw new Error('injected transient write failure');
+              }
+              tx.set(path, value);
+            },
+          }),
+        ),
+    };
     let milliseconds = initialServerTime;
     const now = () => new Date(milliseconds);
     const game = new GameService(store, dataset, { now });
@@ -157,7 +225,11 @@ describe('persisted server-owned world clock', () => {
     const world = await game.getWorld();
     await game.initialize('alice', 'Alice');
     await clock.getWorld();
-    const pending = await game.submitOrder('alice', { worldId: world.id, instrumentId: 'AMZN', side: 'buy', amountILS: '50000' }, 'transient-amazon-request');
+    const pending = await game.submitOrder(
+      'alice',
+      { worldId: world.id, instrumentId: 'AMZN', side: 'buy', amountILS: '50000' },
+      'transient-amazon-request',
+    );
     milliseconds += Date.parse(pending.executeAt) - Date.parse(world.now);
     fail = true;
     await clock.synchronize();
@@ -180,20 +252,46 @@ describe('clock API access and isolated test realm', () => {
     const { store, game, clock, world, elapse, now } = await fixture();
     const realm = scopedStore(store, 'testRealms/admin/');
     const testGame = new GameService(realm, dataset, { now });
-    const testServices: GameServices = { game: testGame, clock: new WorldClockService(realm, testGame, dataset, { now }) };
-    const app = createApp({ game, clock, testRealmServices: () => testServices,
-      verifyToken: async token => ({ uid: token }), adminUids: new Set(['admin']), corsOrigins: [], logger: () => undefined });
+    const testServices: GameServices = {
+      game: testGame,
+      clock: new WorldClockService(realm, testGame, dataset, { now }),
+    };
+    const app = createApp({
+      game,
+      clock,
+      testRealmServices: () => testServices,
+      verifyToken: async token => ({ uid: token }),
+      adminUids: new Set(['admin']),
+      corsOrigins: [],
+      logger: () => undefined,
+    });
     await request(app).get('/api/world').expect(401);
-    await request(app).get('/api/world').set('Authorization', 'Bearer alice').set('X-Stockyllix-Test', 'true').expect(403);
-    await request(app).post('/api/admin/clock/configure').set('Authorization', 'Bearer alice').set('Idempotency-Key', randomUUID())
-      .send({ worldId: world.id, action: 'pause' }).expect(403);
+    await request(app)
+      .get('/api/world')
+      .set('Authorization', 'Bearer alice')
+      .set('X-Stockyllix-Test', 'true')
+      .expect(403);
+    await request(app)
+      .post('/api/admin/clock/configure')
+      .set('Authorization', 'Bearer alice')
+      .set('Idempotency-Key', randomUUID())
+      .send({ worldId: world.id, action: 'pause' })
+      .expect(403);
     await request(app).get('/api/admin/clock/audit').set('Authorization', 'Bearer alice').expect(403);
     const original = await store.get(`worlds/${world.id}`);
-    const testWorld = await request(app).get('/api/world').set('Authorization', 'Bearer admin').set('X-Stockyllix-Test', 'true').expect(200);
+    const testWorld = await request(app)
+      .get('/api/world')
+      .set('Authorization', 'Bearer admin')
+      .set('X-Stockyllix-Test', 'true')
+      .expect(200);
     expect(testWorld.body.testRealm).toBe(true);
     expect(testWorld.body.world.id).not.toBe(world.id);
     expect(await store.get(`worlds/${world.id}`)).toEqual(original);
-    const pending = await game.submitOrder('alice', { worldId: world.id, instrumentId: 'AMZN', side: 'buy', amountILS: '50000' }, 'reader-amazon-request');
+    const pending = await game.submitOrder(
+      'alice',
+      { worldId: world.id, instrumentId: 'AMZN', side: 'buy', amountILS: '50000' },
+      'reader-amazon-request',
+    );
     elapse(Date.parse(pending.executeAt) - Date.parse(world.now));
     for (let index = 0; index < 10; index += 1) {
       clock.invalidate();

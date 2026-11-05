@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { executionDate, executionWait } from '../src/utils/execution-wait.ts';
 
 test('execution estimates use game instants and distinguish paused time from a real wait', () => {
-  assert.equal(executionWait('2027-03-01T14:30:00Z', '2027-03-01T08:00:00Z', false), '6h 30m of game time remaining · clock paused.');
+  assert.equal(
+    executionWait('2027-03-01T14:30:00Z', '2027-03-01T08:00:00Z', false),
+    '6h 30m of game time remaining · clock paused.',
+  );
   assert.equal(executionWait('2027-03-01T14:30:00Z', '2027-03-01T08:00:00Z', true), 'About 6h 30m at 1× speed.');
   assert.equal(executionWait('2027-03-02T08:01:00Z', '2027-03-01T08:00:00Z', true), 'About 1d 1m at 1× speed.');
 });

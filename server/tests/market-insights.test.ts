@@ -17,7 +17,13 @@ async function fixture(data: Dataset = dataset) {
     await store.transaction(async tx => {
       const saved = (await tx.get<World>(`worlds/${world.id}`))!;
       const event = [...data.events].reverse().find(item => Date.parse(item.at) <= Date.parse(now));
-      tx.set(`worlds/${world.id}`, { ...saved, now, status, snapshot: event?.snapshot ?? data.initialSnapshot, revision: saved.revision + 1 });
+      tx.set(`worlds/${world.id}`, {
+        ...saved,
+        now,
+        status,
+        snapshot: event?.snapshot ?? data.initialSnapshot,
+        revision: saved.revision + 1,
+      });
     });
   }
   return { store, service, world, setTime };
@@ -40,7 +46,11 @@ describe('private market history', () => {
 
   it('bounds long history while preserving its first and last known samples', async () => {
     const base = dataset.events.find(event => event.kind === 'MARKET_OPEN' && event.market === 'TA')!;
-    const events = Array.from({ length: 300 }, (_, index) => ({ ...base, id: `sample-${index}`, at: new Date(Date.parse(base.at) + index * 60_000).toISOString() }));
+    const events = Array.from({ length: 300 }, (_, index) => ({
+      ...base,
+      id: `sample-${index}`,
+      at: new Date(Date.parse(base.at) + index * 60_000).toISOString(),
+    }));
     const { service, setTime } = await fixture({ ...dataset, events });
     await setTime(events.at(-1)!.at);
     const history = await service.history('LUMI.TA');
@@ -65,7 +75,11 @@ describe('private market history', () => {
     const closes = dataset.events.filter(event => event.kind === 'MARKET_CLOSE' && event.market === 'TA');
     const opens = dataset.events.filter(event => event.kind === 'MARKET_OPEN' && event.market === 'TA');
     await setTime(opens[1]!.at);
-    const expected = decimal(opens[1]!.snapshot.prices['LUMI.TA']!).div(closes[0]!.snapshot.prices['LUMI.TA']!).sub(1).mul(100).toFixed(6);
+    const expected = decimal(opens[1]!.snapshot.prices['LUMI.TA']!)
+      .div(closes[0]!.snapshot.prices['LUMI.TA']!)
+      .sub(1)
+      .mul(100)
+      .toFixed(6);
     const history = await service.history('LUMI.TA');
     expect(history).toMatchObject({ dailyChangePct: expected, previousCloseAt: closes[0]!.at });
     expect(history.points.some(point => point.at === closes[1]!.at)).toBe(false);
@@ -77,7 +91,11 @@ describe('private market history', () => {
     // israel is on the next calendar day; new york is still on the quote date.
     const afterIsraelMidnight = new Date(Date.parse(closes[1]!.at) + 2 * 60 * 60_000).toISOString();
     await setTime(afterIsraelMidnight);
-    const expected = decimal(closes[1]!.snapshot.prices.AAPL!).div(closes[0]!.snapshot.prices.AAPL!).sub(1).mul(100).toFixed(6);
+    const expected = decimal(closes[1]!.snapshot.prices.AAPL!)
+      .div(closes[0]!.snapshot.prices.AAPL!)
+      .sub(1)
+      .mul(100)
+      .toFixed(6);
     expect(await service.history('AAPL')).toMatchObject({ dailyChangePct: expected, previousCloseAt: closes[0]!.at });
   });
 });
@@ -103,7 +121,11 @@ describe('personal target watchlist', () => {
     const { service } = await fixture();
     const price = dataset.initialSnapshot.prices.AAPL!;
     await service.setWatch('alice', { instrumentId: 'AAPL', targetPrice: price, direction: 'at_or_below' });
-    expect((await service.getWatchlist('alice')).items[0]).toMatchObject({ reached: true, currentPrice: price, currency: 'USD' });
+    expect((await service.getWatchlist('alice')).items[0]).toMatchObject({
+      reached: true,
+      currentPrice: price,
+      currency: 'USD',
+    });
     await service.setWatch('alice', { instrumentId: 'AAPL', targetPrice: '0.01', direction: 'at_or_above' });
     expect((await service.getWatchlist('alice')).items[0]!.reached).toBe(true);
     await service.setWatch('alice', { instrumentId: 'AAPL', targetPrice: '0.01', direction: 'at_or_below' });
@@ -113,19 +135,33 @@ describe('personal target watchlist', () => {
   it('validates target input and direction before writing', async () => {
     const { service } = await fixture();
     for (const targetPrice of ['0', '-1', 'NaN', 'Infinity', '1e3', ' 10', '1.1234567', '1000000000000']) {
-      await expect(service.setWatch('alice', { instrumentId: 'AAPL', targetPrice, direction: 'at_or_below' })).rejects.toMatchObject({ code: 'INVALID_TARGET' });
+      await expect(
+        service.setWatch('alice', { instrumentId: 'AAPL', targetPrice, direction: 'at_or_below' }),
+      ).rejects.toMatchObject({ code: 'INVALID_TARGET' });
     }
-    await expect(service.setWatch('alice', { instrumentId: 'AAPL', targetPrice: '10', direction: 'cancel' as WatchDirection })).rejects.toMatchObject({ code: 'INVALID_DIRECTION' });
-    await expect(service.setWatch('alice', { instrumentId: 'UNKNOWN', targetPrice: '10', direction: 'at_or_below' })).rejects.toMatchObject({ code: 'UNKNOWN_INSTRUMENT' });
+    await expect(
+      service.setWatch('alice', { instrumentId: 'AAPL', targetPrice: '10', direction: 'cancel' as WatchDirection }),
+    ).rejects.toMatchObject({ code: 'INVALID_DIRECTION' });
+    await expect(
+      service.setWatch('alice', { instrumentId: 'UNKNOWN', targetPrice: '10', direction: 'at_or_below' }),
+    ).rejects.toMatchObject({ code: 'UNKNOWN_INSTRUMENT' });
   });
 
   it('caps preferences at 20, even with competing writes', async () => {
     const extra = { ...dataset.instruments[0]!, id: 'EXTRA', symbol: 'EXTRA' };
     const { service } = await fixture({ ...dataset, instruments: [...dataset.instruments, extra] });
-    const results = await Promise.allSettled([...dataset.instruments, extra].map(instrument => service.setWatch('alice', { instrumentId: instrument.id, targetPrice: '10', direction: 'at_or_below' })));
+    const results = await Promise.allSettled(
+      [...dataset.instruments, extra].map(instrument =>
+        service.setWatch('alice', { instrumentId: instrument.id, targetPrice: '10', direction: 'at_or_below' }),
+      ),
+    );
     expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(20);
     expect(results.filter(result => result.status === 'rejected')).toHaveLength(1);
-    await service.setWatch('alice', { instrumentId: dataset.instruments[0]!.id, targetPrice: '20', direction: 'at_or_above' });
+    await service.setWatch('alice', {
+      instrumentId: dataset.instruments[0]!.id,
+      targetPrice: '20',
+      direction: 'at_or_above',
+    });
   });
 
   it('does not publish partial world state while a clock job is running', async () => {
@@ -133,6 +169,8 @@ describe('personal target watchlist', () => {
     await setTime(dataset.startsAt, 'advancing');
     await expect(service.history('AAPL')).rejects.toMatchObject({ code: 'WORLD_ADVANCING' });
     await expect(service.getWatchlist('alice')).rejects.toMatchObject({ code: 'WORLD_ADVANCING' });
-    await expect(service.setWatch('alice', { instrumentId: 'AAPL', targetPrice: '10', direction: 'at_or_below' })).rejects.toMatchObject({ code: 'WORLD_ADVANCING' });
+    await expect(
+      service.setWatch('alice', { instrumentId: 'AAPL', targetPrice: '10', direction: 'at_or_below' }),
+    ).rejects.toMatchObject({ code: 'WORLD_ADVANCING' });
   });
 });

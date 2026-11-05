@@ -8,8 +8,12 @@ import type { BoiLatestRate } from '../src/world/boi.js';
 import { createDataset } from '../src/world/index.js';
 
 const quote: BoiLatestRate = {
-  source: 'boi', rate: '3.1570000000', observedAt: '2026-11-03T13:21:05.866Z', date: '2026-11-03',
-  sourceUrl: 'https://www.boi.org.il/PublicApi/GetExchangeRate?key=USD', kind: 'representative',
+  source: 'boi',
+  rate: '3.1570000000',
+  observedAt: '2026-11-03T13:21:05.866Z',
+  date: '2026-11-03',
+  sourceUrl: 'https://www.boi.org.il/PublicApi/GetExchangeRate?key=USD',
+  kind: 'representative',
 };
 const now = () => new Date('2026-11-04T00:00:00Z');
 
@@ -17,13 +21,18 @@ function setup(bankIsrael?: BankIsraelService) {
   const store = new MemoryStore();
   const logs: Record<string, unknown>[] = [];
   const app = createApp({
-    game: new GameService(store, createDataset('bank-israel-api-test')), bankIsrael,
-    corsOrigins: [], adminUids: new Set(), rateLimitEnabled: false,
+    game: new GameService(store, createDataset('bank-israel-api-test')),
+    bankIsrael,
+    corsOrigins: [],
+    adminUids: new Set(),
+    rateLimitEnabled: false,
     verifyToken: async token => {
       if (token !== 'alice') throw new Error('invalid token');
       return { uid: token };
     },
-    logger: entry => { logs.push(entry); },
+    logger: entry => {
+      logs.push(entry);
+    },
   });
   return { app, store, logs };
 }
@@ -52,7 +61,12 @@ describe('Bank of Israel reference HTTP contract', () => {
 
   it('returns safe retryable 503 responses for missing or failing provider services', async () => {
     const privateDetail = 'private-provider-debug-information';
-    const failing = new BankIsraelService({ now, load: async () => { throw new Error(privateDetail); } });
+    const failing = new BankIsraelService({
+      now,
+      load: async () => {
+        throw new Error(privateDetail);
+      },
+    });
     for (const { app, logs } of [setup(), setup(failing)]) {
       const response = await request(app).get('/api/reference/fx').auth('alice', { type: 'bearer' });
       expect(response.status).toBe(503);

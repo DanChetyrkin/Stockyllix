@@ -9,7 +9,12 @@ export function previousSessionClose(dataset: Dataset, market: Market, asOf: str
   // closed markets keep their latest trading day's move, even after midnight.
   for (let index = dataset.events.length - 1; index >= 0; index -= 1) {
     const event = dataset.events[index]!;
-    if (Date.parse(event.at) > cutoff || event.market !== market || !['MARKET_OPEN', 'MARKET_CLOSE'].includes(event.kind)) continue;
+    if (
+      Date.parse(event.at) > cutoff ||
+      event.market !== market ||
+      !['MARKET_OPEN', 'MARKET_CLOSE'].includes(event.kind)
+    )
+      continue;
     const date = DateTime.fromISO(event.at, { zone }).toISODate()!;
     quoteDate ??= date;
     if (event.kind === 'MARKET_CLOSE' && date < quoteDate) return event;

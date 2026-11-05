@@ -43,9 +43,15 @@ export function calendarMonthAllowed(month: string, minDate?: string, maxDate?: 
 
 export function calendarDateLabel(date: string) {
   const instant = dateInstant(date);
-  return instant ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(instant) : 'Choose date';
+  return instant
+    ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
+        instant,
+      )
+    : 'Choose date';
 }
 
 export function calendarMonthLabel(month: string) {
-  return new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${month}-01T00:00:00Z`));
+  return new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
+    new Date(`${month}-01T00:00:00Z`),
+  );
 }

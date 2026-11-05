@@ -24,16 +24,27 @@ test('manual choices override the clock and only known preferences are accepted'
 });
 
 function luminance(hex) {
-  const rgb = hex.slice(1).match(/../g).map(value => parseInt(value, 16) / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+  const rgb = hex
+    .slice(1)
+    .match(/../g)
+    .map(value => parseInt(value, 16) / 255)
+    .map(value => (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4));
   return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
 }
 
 test('core text, status and button colors remain readable in both appearances', () => {
   for (const palette of [lightPalette, darkPalette]) {
     for (const [foreground, background] of [
-      ['ink', 'paper'], ['muted', 'paper'], ['ink', 'background'], ['muted', 'background'],
-      ['green', 'mint'], ['red', 'redBg'], ['amber', 'amberBg'],
-      ['onPrimary', 'primary'], ['onDanger', 'danger'], ['mutedOnDark', 'dark'],
+      ['ink', 'paper'],
+      ['muted', 'paper'],
+      ['ink', 'background'],
+      ['muted', 'background'],
+      ['green', 'mint'],
+      ['red', 'redBg'],
+      ['amber', 'amberBg'],
+      ['onPrimary', 'primary'],
+      ['onDanger', 'danger'],
+      ['mutedOnDark', 'dark'],
     ]) {
       const values = [luminance(palette[foreground]), luminance(palette[background])].sort((a, b) => b - a);
       assert.ok((values[0] + 0.05) / (values[1] + 0.05) >= 4.5, `${foreground} on ${background}`);

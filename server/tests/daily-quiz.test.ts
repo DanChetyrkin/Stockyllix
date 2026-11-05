@@ -17,11 +17,21 @@ async function setup() {
   let now = new Date('2026-11-04T10:00:00Z');
   const quiz = new DailyQuizService(store, { now: () => now });
   const world = await game.getWorld();
-  const setWorldNow = async (at: string) => store.transaction(async tx => {
-    const current = (await tx.get<World>(`worlds/${world.id}`))!;
-    tx.set(`worlds/${world.id}`, { ...current, now: at, revision: current.revision + 1 });
-  });
-  return { store, quiz, game, world, setWorldNow, setRealNow: (at: string) => { now = new Date(at); } };
+  const setWorldNow = async (at: string) =>
+    store.transaction(async tx => {
+      const current = (await tx.get<World>(`worlds/${world.id}`))!;
+      tx.set(`worlds/${world.id}`, { ...current, now: at, revision: current.revision + 1 });
+    });
+  return {
+    store,
+    quiz,
+    game,
+    world,
+    setWorldNow,
+    setRealNow: (at: string) => {
+      now = new Date(at);
+    },
+  };
 }
 
 function answerInput(day: QuizView, answerIndex = 0) {
@@ -36,10 +46,13 @@ async function clockQuizSetup() {
   const game = new GameService(store, dataset, { now });
   const world = await game.getWorld();
   const clock = new WorldClockService(store, game, dataset, { now });
-  const quiz = new DailyQuizService(store, { now, gameTime: async (world, tx) => {
-    const clockState = await tx.get<WorldClock>(clockPath(world.id));
-    return clockState ? clockTarget(clockState, world, dataset.endsAt, milliseconds) : world.now;
-  } });
+  const quiz = new DailyQuizService(store, {
+    now,
+    gameTime: async (world, tx) => {
+      const clockState = await tx.get<WorldClock>(clockPath(world.id));
+      return clockState ? clockTarget(clockState, world, dataset.endsAt, milliseconds) : world.now;
+    },
+  });
   const settle = async () => {
     for (let attempt = 0; attempt < 1000; attempt += 1) {
       clock.invalidate();
@@ -48,7 +61,16 @@ async function clockQuizSetup() {
     }
     throw new Error('quiz clock did not settle');
   };
-  return { game, world, quiz, clock, settle, elapse: (elapsed: number) => { milliseconds += elapsed; } };
+  return {
+    game,
+    world,
+    quiz,
+    clock,
+    settle,
+    elapse: (elapsed: number) => {
+      milliseconds += elapsed;
+    },
+  };
 }
 
 async function advanceTo(game: GameService, target: string) {
@@ -130,7 +152,9 @@ describe('game-day financial quiz', () => {
     const { quiz, store } = await setup();
     const day = await quiz.get('alice');
     const before = store.operations.writes;
-    const answers = await Promise.all([0, 1, 2, 3].map(answerIndex => quiz.answer('alice', answerInput(day, answerIndex))));
+    const answers = await Promise.all(
+      [0, 1, 2, 3].map(answerIndex => quiz.answer('alice', answerInput(day, answerIndex))),
+    );
     for (const result of answers) expect(result).toEqual(answers[0]);
     expect(store.operations.writes - before).toBe(1);
   });
@@ -139,7 +163,9 @@ describe('game-day financial quiz', () => {
     const { quiz, store } = await setup();
     const day = await quiz.get('alice');
     const before = store.operations.writes;
-    await expect(quiz.answer('alice', answerInput(day, answerIndex))).rejects.toMatchObject({ code: 'INVALID_QUIZ_ANSWER' });
+    await expect(quiz.answer('alice', answerInput(day, answerIndex))).rejects.toMatchObject({
+      code: 'INVALID_QUIZ_ANSWER',
+    });
     expect(store.operations.writes).toBe(before);
   });
 
@@ -154,7 +180,10 @@ describe('game-day financial quiz', () => {
     expect(next.date).toBe('2026-10-06');
     expect(next.question.id).not.toBe(previous.question.id);
     expect(next.answer).toBeNull();
-    await expect(quiz.answer('alice', answerInput(previous))).rejects.toMatchObject({ code: 'QUIZ_EXPIRED', status: 409 });
+    await expect(quiz.answer('alice', answerInput(previous))).rejects.toMatchObject({
+      code: 'QUIZ_EXPIRED',
+      status: 409,
+    });
   });
 
   it('keeps the question and answer during the same game day even if real days pass', async () => {
@@ -230,7 +259,10 @@ describe('game-day financial quiz', () => {
     const before = await store.get(playerPath);
     await game.advance('2026-10-05T12:00:00Z', randomUUID(), world.id);
     await expect(quiz.get('alice')).rejects.toMatchObject({ code: 'WORLD_ADVANCING', status: 423 });
-    await expect(quiz.answer('alice', answerInput(question))).rejects.toMatchObject({ code: 'WORLD_ADVANCING', status: 423 });
+    await expect(quiz.answer('alice', answerInput(question))).rejects.toMatchObject({
+      code: 'WORLD_ADVANCING',
+      status: 423,
+    });
     expect(await store.get(playerPath)).toEqual(before);
     expect(await store.get(`${playerPath}/quiz/current`)).toBeUndefined();
   });
@@ -249,23 +281,48 @@ describe('game-day financial quiz', () => {
   it('protects quiz routes and rejects forged identity, result and stale world fields', async () => {
     const { quiz, store, game } = await setup();
     const app = createApp({
-      quiz, game, adminUids: new Set(), corsOrigins: [], rateLimitEnabled: false,
+      quiz,
+      game,
+      adminUids: new Set(),
+      corsOrigins: [],
+      rateLimitEnabled: false,
       verifyToken: async token => {
         if (!['alice', 'bob'].includes(token)) throw new Error('invalid token');
         return { uid: token };
-      }, logger: () => {},
+      },
+      logger: () => {},
     });
     expect((await request(app).get('/api/daily-quiz')).status).toBe(401);
     const day = await request(app).get('/api/daily-quiz').auth('alice', { type: 'bearer' });
     expect(day.status).toBe(200);
     const input = answerInput(day.body);
-    expect((await request(app).post('/api/daily-quiz/answer').auth('alice', { type: 'bearer' })
-      .send({ ...input, uid: 'bob', correct: true })).status).toBe(400);
-    expect((await request(app).post('/api/daily-quiz/answer').auth('alice', { type: 'bearer' })
-      .send({ ...input, answerIndex: 4 })).status).toBe(400);
-    expect((await request(app).post('/api/daily-quiz/answer').auth('alice', { type: 'bearer' })
-      .send({ ...input, worldId: 'old-world' })).status).toBe(409);
-    expect((await request(app).post('/api/daily-quiz/answer').auth('alice', { type: 'bearer' }).send(input)).status).toBe(200);
+    expect(
+      (
+        await request(app)
+          .post('/api/daily-quiz/answer')
+          .auth('alice', { type: 'bearer' })
+          .send({ ...input, uid: 'bob', correct: true })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await request(app)
+          .post('/api/daily-quiz/answer')
+          .auth('alice', { type: 'bearer' })
+          .send({ ...input, answerIndex: 4 })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await request(app)
+          .post('/api/daily-quiz/answer')
+          .auth('alice', { type: 'bearer' })
+          .send({ ...input, worldId: 'old-world' })
+      ).status,
+    ).toBe(409);
+    expect(
+      (await request(app).post('/api/daily-quiz/answer').auth('alice', { type: 'bearer' }).send(input)).status,
+    ).toBe(200);
     expect((await request(app).get('/api/daily-quiz').auth('bob', { type: 'bearer' })).body.answer).toBeNull();
     expect(await store.list(`worlds/${input.worldId}/players/alice/orders`)).toEqual([]);
   });

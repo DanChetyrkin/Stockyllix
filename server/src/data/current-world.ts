@@ -20,7 +20,14 @@ export async function readCurrentWorld(reader: Pick<Transaction, 'get'>): Promis
 // player reads wait until the clock job has applied every reached event.
 export async function readIdleWorld(reader: Pick<Transaction, 'get'>): Promise<World> {
   const world = await readCurrentWorld(reader);
-  if (!world) throw new GameError('WORLD_NOT_FOUND', 'The game world is not available. Refresh and try again.', 503, true);
-  if (world.status !== 'idle') throw new GameError('WORLD_ADVANCING', 'The game clock is processing events. Try again when it finishes.', 423, true);
+  if (!world)
+    throw new GameError('WORLD_NOT_FOUND', 'The game world is not available. Refresh and try again.', 503, true);
+  if (world.status !== 'idle')
+    throw new GameError(
+      'WORLD_ADVANCING',
+      'The game clock is processing events. Try again when it finishes.',
+      423,
+      true,
+    );
   return world;
 }

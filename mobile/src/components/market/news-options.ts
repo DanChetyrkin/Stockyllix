@@ -11,13 +11,26 @@ export const newsMarkets: { value: NewsMarket; label: string }[] = [
 
 // provider symbols are independent of the historical game's price dates.
 export const newsStocks = [
-  ['NASDAQ:AAPL', 'Apple'], ['NASDAQ:MSFT', 'Microsoft'], ['NASDAQ:AMZN', 'Amazon'],
-  ['NASDAQ:GOOGL', 'Alphabet'], ['NASDAQ:NVDA', 'NVIDIA'], ['NASDAQ:META', 'Meta'],
-  ['NYSE:JPM', 'JPMorgan'], ['NYSE:JNJ', 'Johnson & Johnson'], ['NYSE:KO', 'Coca-Cola'],
-  ['AMEX:SPY', 'S&P 500 ETF'], ['TASE:LUMI', 'Bank Leumi'], ['TASE:POLI', 'Bank Hapoalim'],
-  ['TASE:MZTF', 'Mizrahi Tefahot'], ['TASE:DSCT', 'Discount Bank'], ['TASE:BEZQ', 'Bezeq'],
-  ['TASE:AZRG', 'Azrieli'], ['TASE:ESLT', 'Elbit Systems'], ['TASE:ICL', 'ICL'],
-  ['TASE:TEVA', 'Teva'], ['TASE:NICE', 'NICE'],
+  ['NASDAQ:AAPL', 'Apple'],
+  ['NASDAQ:MSFT', 'Microsoft'],
+  ['NASDAQ:AMZN', 'Amazon'],
+  ['NASDAQ:GOOGL', 'Alphabet'],
+  ['NASDAQ:NVDA', 'NVIDIA'],
+  ['NASDAQ:META', 'Meta'],
+  ['NYSE:JPM', 'JPMorgan'],
+  ['NYSE:JNJ', 'Johnson & Johnson'],
+  ['NYSE:KO', 'Coca-Cola'],
+  ['AMEX:SPY', 'S&P 500 ETF'],
+  ['TASE:LUMI', 'Bank Leumi'],
+  ['TASE:POLI', 'Bank Hapoalim'],
+  ['TASE:MZTF', 'Mizrahi Tefahot'],
+  ['TASE:DSCT', 'Discount Bank'],
+  ['TASE:BEZQ', 'Bezeq'],
+  ['TASE:AZRG', 'Azrieli'],
+  ['TASE:ESLT', 'Elbit Systems'],
+  ['TASE:ICL', 'ICL'],
+  ['TASE:TEVA', 'Teva'],
+  ['TASE:NICE', 'NICE'],
 ] as const;
 
 export interface ProviderWidgetProps {

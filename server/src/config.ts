@@ -21,16 +21,22 @@ export function readConfig(environment: NodeJS.ProcessEnv = process.env) {
     if (environment.FIRESTORE_EMULATOR_HOST || environment.FIREBASE_AUTH_EMULATOR_HOST) {
       throw new Error('emulator settings are forbidden in production');
     }
-    if (!environment.CORS_ORIGINS?.trim() || !environment.ADMIN_UIDS?.split(',').some((uid) => uid.trim())) {
+    if (!environment.CORS_ORIGINS?.trim() || !environment.ADMIN_UIDS?.split(',').some(uid => uid.trim())) {
       throw new Error('production requires CORS_ORIGINS and ADMIN_UIDS');
     }
-    if (!value.CORS_ORIGINS.split(',').every((origin) => origin.trim().startsWith('https://'))) {
+    if (!value.CORS_ORIGINS.split(',').every(origin => origin.trim().startsWith('https://'))) {
       throw new Error('production cors origins must use https');
     }
   }
   return {
     ...value,
-    adminUids: new Set(value.ADMIN_UIDS.split(',').map((item) => item.trim()).filter(Boolean)),
-    corsOrigins: value.CORS_ORIGINS.split(',').map((item) => item.trim()).filter(Boolean),
+    adminUids: new Set(
+      value.ADMIN_UIDS.split(',')
+        .map(item => item.trim())
+        .filter(Boolean),
+    ),
+    corsOrigins: value.CORS_ORIGINS.split(',')
+      .map(item => item.trim())
+      .filter(Boolean),
   };
 }

@@ -12,6 +12,10 @@ This file separates what was checked locally, what was checked in the cloud, and
 | GitHub Write access for the reviewer | Owner handover |
 | Physical Expo Go session | Not verified. Browser phone-width checks and the Android bundle build are not a device test |
 
+## Readability pass, release 1.5.2 (November 5, 2026)
+
+The source was formatted once with Prettier (120 characters per line, layout only), the 20% rule got a named constant, and the redundant `seed` script, two unused packages (`expo-device`, `expo-web-browser`) and the Expo template file `mobile/AGENTS.md` were removed. Locally: 203 server tests, 49 app checks, typecheck, lint, the web export and the Android export passed.
+
 ## Review pass and release 1.5.1 (November 5, 2026)
 
 A second review of the deployed code removed what nothing used: the "Advance to pending execution" control and its scan of every player's orders (every order executes at a market opening or closing, so "Advance to market event" reaches it), the old `/admin/clock/advance` route, the `valuations` document written for every player at every event but never read, the review fields nothing displayed, a dead `import:market` script and six partial `test:*` scripts. The Hosting quota in the runbook was corrected to 10 GB per month. Locally: 203 server tests, 49 app checks, typecheck, lint, the web export and `check:release` passed.

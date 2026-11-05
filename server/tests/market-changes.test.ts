@@ -7,7 +7,8 @@ import { createDataset } from '../src/world/index.js';
 import { previousSessionClose, priceChangePct } from '../src/world/price-change.js';
 
 const dataset = createDataset('market-changes-test');
-const closes = (market: 'TA' | 'US') => dataset.events.filter(event => event.kind === 'MARKET_CLOSE' && event.market === market);
+const closes = (market: 'TA' | 'US') =>
+  dataset.events.filter(event => event.kind === 'MARKET_CLOSE' && event.market === market);
 
 describe('market daily changes', () => {
   it('does not invent a previous close at baseline or during the first session', () => {
@@ -18,7 +19,9 @@ describe('market daily changes', () => {
 
   it('uses the previous local trading date, not today’s close or a future event', () => {
     for (const market of ['TA', 'US'] as const) {
-      const opening = dataset.events.find(event => event.kind === 'MARKET_OPEN' && event.market === market && event.at > closes(market)[0]!.at)!;
+      const opening = dataset.events.find(
+        event => event.kind === 'MARKET_OPEN' && event.market === market && event.at > closes(market)[0]!.at,
+      )!;
       expect(previousSessionClose(dataset, market, opening.at)?.id).toBe(closes(market)[0]!.id);
       expect(previousSessionClose(dataset, market, closes(market)[1]!.at)?.id).toBe(closes(market)[0]!.id);
     }

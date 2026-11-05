@@ -20,7 +20,12 @@ export function clockTarget(clock: WorldClock, world: Pick<World, 'now'>, endsAt
 }
 
 // a world without a saved clock stays at its last processed event.
-export async function readGameTime(tx: Transaction, world: Pick<World, 'id' | 'now'>, endsAt: string, serverNow: number): Promise<string> {
+export async function readGameTime(
+  tx: Transaction,
+  world: Pick<World, 'id' | 'now'>,
+  endsAt: string,
+  serverNow: number,
+): Promise<string> {
   const clock = await tx.get<WorldClock>(clockPath(world.id));
   return clock ? clockTarget(clock, world, endsAt, serverNow) : world.now;
 }

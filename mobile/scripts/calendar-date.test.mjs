@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calendarDateAllowed, calendarDateLabel, calendarMonth, calendarMonthAllowed, calendarMonthDays, shiftCalendarMonth } from '../src/utils/calendar-date.ts';
+import {
+  calendarDateAllowed,
+  calendarDateLabel,
+  calendarMonth,
+  calendarMonthAllowed,
+  calendarMonthDays,
+  shiftCalendarMonth,
+} from '../src/utils/calendar-date.ts';
 
 test('calendar grid keeps every date once across leap years and Israel daylight changes', () => {
   const leap = calendarMonthDays('2028-02');
