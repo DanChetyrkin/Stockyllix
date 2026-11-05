@@ -14,6 +14,10 @@ interface ClockRequest { input: ClockInput; actor: string; target?: string; requ
 interface Context { world: World; clock: WorldClock; dataset: Dataset }
 
 
+// one request may process many events, but never for longer than the time budget.
+const MAX_SYNC_STEPS = 40;
+const SYNC_BUDGET_MS = 8000;
+
 function israelTarget(input: { date: string; time: string }) {
   const local = `${input.date}T${input.time}`;
   const parsed = DateTime.fromISO(local, { zone: 'Asia/Jerusalem' });
@@ -80,7 +84,7 @@ export class WorldClockService {
 
   private async synchronizeBounded() {
     const started = Date.now();
-    for (let index = 0; index < (this.options.maxSteps ?? 2); index += 1) {
+    for (let index = 0; index < (this.options.maxSteps ?? MAX_SYNC_STEPS); index += 1) {
       const context = await this.context();
       const { world, dataset, clock } = context;
       if (world.job?.lastError && (world.job.retryAfter ?? 0) > this.now().getTime()) return;
@@ -105,7 +109,7 @@ export class WorldClockService {
         else process.stdout.write(`${JSON.stringify(entry)}\n`);
         return;
       }
-      if (Date.now() - started >= (this.options.budgetMs ?? 8000)) return;
+      if (Date.now() - started >= (this.options.budgetMs ?? SYNC_BUDGET_MS)) return;
     }
   }
 

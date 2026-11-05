@@ -61,7 +61,9 @@ export default function AdminScreen() {
   const selectedDatasetId = datasetId || choices.data?.datasets.find(choice => choice.source === 'historical')?.id || world?.datasetId;
   const simulationAllowed = testRealm && choices.data?.simulationAllowed === true;
   const controlsBlocked = busy || !ready || !!saved || !!newGameDraft || world?.status !== 'idle' || finished || !clock;
-  const targetData = targets.data?.worldId === world?.id ? targets.data : null;
+  // while events are being processed the saved targets may be outdated, so none are shown.
+  const targetData = !targets.paused && targets.data?.worldId === world?.id ? targets.data : null;
+  const targetStatus = targets.paused ? 'Shown again when synchronization finishes.' : !targetData && targets.loading ? 'Checking scheduled events…' : null;
 
   useEffect(() => {
     mounted.current = true;
@@ -255,8 +257,8 @@ export default function AdminScreen() {
       </View>
       {targets.error && <Notice tone="error" action={<Button compact variant="secondary" onPress={() => void targets.refresh()}>Retry</Button>}>{targets.error}</Notice>}
       <View style={{ gap: 20 }}>
-        <TargetAction title="Next pending execution" target={targetData?.nextPendingExecution} loading={!targetData && targets.loading} empty="No pending order is waiting for execution in this game." count={targetData?.nextPendingExecution?.orderCount} disabled={controlsBlocked || !targetData?.nextPendingExecution} onPress={() => void configure('next_order')} button="Advance to pending execution" />
-        <TargetAction title="Next market opening or closing" target={targetData?.nextMarketEvent} loading={!targetData && targets.loading} empty="No market opening or closing remains in this price period." disabled={controlsBlocked || !targetData?.nextMarketEvent} onPress={() => void configure('next')} button="Advance to market event" />
+        <TargetAction title="Next pending execution" target={targetData?.nextPendingExecution} status={targetStatus} empty="No pending order is waiting for execution in this game." count={targetData?.nextPendingExecution?.orderCount} disabled={controlsBlocked || !targetData?.nextPendingExecution} onPress={() => void configure('next_order')} button="Advance to pending execution" />
+        <TargetAction title="Next market opening or closing" target={targetData?.nextMarketEvent} status={targetStatus} empty="No market opening or closing remains in this price period." disabled={controlsBlocked || !targetData?.nextMarketEvent} onPress={() => void configure('next')} button="Advance to market event" />
       </View>
       <View style={{ gap: 12 }}>
         <CardTitle>Choose game date and time</CardTitle>
@@ -320,9 +322,9 @@ export default function AdminScreen() {
   </AppShell>;
 }
 
-function TargetAction({ title, target, loading, empty, count, disabled, onPress, button }: { title: string; target?: EventTarget | null; loading: boolean; empty: string; count?: number; disabled: boolean; onPress(): void; button: string }) {
+function TargetAction({ title, target, status, empty, count, disabled, onPress, button }: { title: string; target?: EventTarget | null; status: string | null; empty: string; count?: number; disabled: boolean; onPress(): void; button: string }) {
   const { palette } = useTheme();
-  return <View style={{ gap: 8 }}><CardTitle>{title}</CardTitle>{target ? <><Text style={{ color: palette.ink, fontSize: 17, fontWeight: '600', fontVariant: ['tabular-nums'] }}>{dateTime(target.at)}</Text><Copy muted>{target.market === 'US' ? 'United States' : 'Tel Aviv'} · {target.kind === 'MARKET_OPEN' ? 'Market opens' : 'Market closes'}{count !== undefined ? ` · ${count} pending ${count === 1 ? 'order' : 'orders'}` : ''}</Copy></> : <Copy muted>{loading ? 'Checking scheduled events…' : empty}</Copy>}<Button variant="secondary" disabled={disabled} onPress={onPress}>{button}</Button></View>;
+  return <View style={{ gap: 8 }}><CardTitle>{title}</CardTitle>{target ? <><Text style={{ color: palette.ink, fontSize: 17, fontWeight: '600', fontVariant: ['tabular-nums'] }}>{dateTime(target.at)}</Text><Copy muted>{target.market === 'US' ? 'United States' : 'Tel Aviv'} · {target.kind === 'MARKET_OPEN' ? 'Market opens' : 'Market closes'}{count !== undefined ? ` · ${count} pending ${count === 1 ? 'order' : 'orders'}` : ''}</Copy></> : <Copy muted>{status ?? empty}</Copy>}<Button variant="secondary" disabled={disabled} onPress={onPress}>{button}</Button></View>;
 }
 
 interface ClockAuditResponse { worldId: string; entries: { action: ClockAction; at: string; after: { running: boolean; anchorGameAt: string } }[] }
