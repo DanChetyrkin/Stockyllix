@@ -14,7 +14,7 @@ This file separates what was checked locally, what was checked in the cloud, and
 
 ## Final cleanup checks (November 5, 2026)
 
-The cleanup started from the deployed submission commit `fc77646` on `codex/render-free-deploy` and was made on a separate branch.
+The cleanup started from the deployed submission commit `fc77646` on `codex/render-free-deploy` and was made on a separate branch. The rows below were rerun on the final code commit `5754b1d`.
 
 | Check | Before (`fc77646`) | After |
 | --- | --- | --- |
@@ -24,7 +24,7 @@ The cleanup started from the deployed submission commit `fc77646` on `codex/rend
 | App typecheck, lint | Passed | Passed |
 | App unit checks (`node --test`) | 47 passed | 49 passed (2 new: order amount, starting name) |
 | Web export, Android export | Passed | Passed |
-| Fresh clone of `5a69c56` (no `node_modules`, `.env` or data files) | — | Every row above passed again: install, typecheck, lint, 204 server tests, emulator suite, build, 49 app checks, web and Android export |
+| Fresh clone of `5754b1d` (no `node_modules`, `.env` or data files) | — | Every row above passed again: install, typecheck, lint, 204 server tests, emulator suite, build, 49 app checks, web and Android export |
 
 **Render build:** in a fresh clone, `npm ci --include=dev`, `npm run build` and `npm prune --omit=dev` passed, and the pruned API started and reported 1.5.0 / final-cleanup-v5 on `/health`. `npm run import:ecb` could not be checked here: the sandbox cannot reach ECB and has no access to the private rate cache, and the step correctly stopped with `ECB_UNAVAILABLE`. That code did not change; Render restores the rates from the private cache.
 
@@ -41,7 +41,7 @@ The cleanup started from the deployed submission commit `fc77646` on `codex/rend
 - **End of period:** the clock stopped at the final instant. New orders and "next event" returned `DATASET_FINISHED`, and moving backwards returned `CLOCK_BACKWARD`.
 - The shared league's world, revision and player balances were unchanged by all of the above.
 
-**Phone width (390 × 844, local web build, Playwright):** a ₪50,000 AMZN buy placed through the UI showed "Pending execution" and the expected execution time in Orders without horizontal scrolling (page width 390). Portfolio showed ₪950,000 available and ₪50,000 reserved. The header scrolled out of view with the page. No page errors.
+**Phone width (390 × 844, local web build, Playwright):** a ₪50,000 AMZN buy placed through the UI showed "Pending execution" and the expected execution time in Orders without horizontal scrolling (page width 390). Portfolio showed ₪950,000 available and ₪50,000 reserved. The header scrolled out of view with the page. The game-information and navigation dialogs opened and closed by tapping outside. No page errors.
 
 ## Earlier cloud evidence (release 1.4.0, November 4, 2026)
 
