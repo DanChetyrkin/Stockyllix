@@ -6,11 +6,27 @@ This file separates what was checked locally, what was checked in the cloud, and
 
 | Item | Status |
 | --- | --- |
-| Live web app | Client `7ad8335` (release 1.4.0) at https://stockyllix.web.app |
-| Live API | Server `b0b0c8e`, `/health` = 1.4.0 / demo-controls-v4 |
-| Final cleanup (this branch, API 1.5.0 / final-cleanup-v5) | Checked locally, **not deployed yet**. Deploy Hosting first, then Render ([runbook](runbook.md#deploying-a-release)) |
+| Live web app | Client `48ad777` at https://stockyllix.web.app. `index.html` and all three script bundles match the release build byte for byte |
+| Live API | Server `48ad777`, `/health` = 1.5.0 / final-cleanup-v5 |
+| CI | All three jobs passed for `48ad777` and for `main` |
 | GitHub Write access for the reviewer | Owner handover |
 | Physical Expo Go session | Not verified. Browser phone-width checks and the Android bundle build are not a device test |
+
+## Live checks after deployment (November 5, 2026)
+
+The release was built from a clean clone of `48ad777` on the owner's Windows machine: 204 server tests, 49 app checks, typecheck, lint, the web export and `check:release` passed there. The site was deployed to Hosting first, then the API on Render.
+
+The walkthrough then ran against the live API, signed in as the reviewer administrator, with every change made in the isolated test realm:
+
+- A new real-historical test game (`historical-8c9e717c12d59090`) started with ₪1,000,000.
+- An AMZN buy of ₪50,000 was pending, with ₪950,000 available, ₪50,000 reserved and ₪1,000,000 total. Sending the same request key again returned the same order.
+- **Advance to pending execution** took 33.5 s. The order executed once at the US opening on October 19 (16:30 Israel) at $255.25 and USD/ILS 3.089, the same source price and rate as the November 4 browser run. Cash was ₪950,000, reserved ₪0 and the AMZN holding ₪50,000.
+- A ₪10,000 sell executed and cash became ₪960,000. A ₪250,000 META buy was refused by the 20% rule. The daily question and the league loaded.
+- A jump to October 29 00:01 took 234 s. The next market event was correctly shown as the TA opening at 10:00.
+- A fresh, paused test game was left at the start of the period for the reviewer.
+- The shared league's world and revision were the same before and after the run.
+
+Firestore is in `me-west1` (Tel Aviv) and the API in Render's `us-west1` (Oregon), so live clock processing takes about 6 seconds per event. The runbook explains the fix.
 
 ## Final cleanup checks (November 5, 2026)
 

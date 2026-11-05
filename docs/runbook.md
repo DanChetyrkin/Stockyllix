@@ -129,6 +129,8 @@ A player's event marker is saved together with its portfolio, so replaying an ev
 
 Spark: 50k reads and 20k writes per day, 1 GiB storage, 360 MB/day of Hosting transfer. Render free: one instance that sleeps. A local 1,000-player week (`npm run test:load`) took 84.9 s, 132,575 reads and 58,223 writes. That is engine timing, not cloud throughput, and it is more than Spark allows in a day. Rate limits are per process: 180 requests per minute per user, with a separate bucket for administrator clock steps.
 
+Latency: the Render service runs in Oregon (`us-west1`) and Firestore in Tel Aviv (`me-west1`). A clock step makes several sequential transactions, each crossing the ocean, so the live server processes about one event every 6 seconds for a single player (a 10-day jump took about 4 minutes). A Render service in Frankfurt, the closest Render region, would cut each round trip several times. That means a new service URL, so update `EXPO_PUBLIC_API_URL`, `CORS_ORIGINS` and the secrets together.
+
 ## Handover checklist
 
 - GitHub **Write** access for the reviewer account, as the assignment requires.

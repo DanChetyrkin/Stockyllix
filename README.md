@@ -15,6 +15,8 @@ A weekly portfolio league: each player gets ₪1,000,000 in virtual cash, trades
 
 ## Try it in 3–5 minutes
 
+The API runs on a free server that sleeps when idle, so the first page load can take up to a minute. Moving the game clock takes from about 30 seconds to a few minutes (see [Running in production](#running-in-production)); World controls shows the progress.
+
 1. Open the link and sign in as the administrator. A new player can also register; every player starts with ₪1,000,000 once per game.
 2. Open **Menu → World controls → Open isolated test game**. Everything below now happens in your own test game. Other players and the shared league are not affected.
 3. Choose **Start a new game → Real historical prices**, type `NEW GAME` and choose **Create new test game**. You get a fresh portfolio with ₪1,000,000.
@@ -106,6 +108,7 @@ The **News** page shows one short finance question per game day. Everyone gets t
 - Each player has a rate limit. `/health` reports the version and the deployed commit. Logs carry a request ID, status and duration, without tokens.
 - CI runs on every pull request: server typecheck, lint, tests and build; app typecheck, lint, unit checks and a web export; and Firestore and Auth emulator tests.
 - Known limits: Spark quotas and one sleeping Render instance. A local 1,000-player week took about 85 seconds and about 132k reads, which is more than Spark allows in a day. Thousands of players arriving at once would need a paid plan, a background worker and load tests in the cloud first. Operations and recovery are in [docs/runbook.md](docs/runbook.md).
+- Latency I measured after deploying: the API runs in Render's Oregon region, while Firestore is in Tel Aviv (`me-west1`). Every database round trip crosses the ocean, so the live server processes about one clock event every 6 seconds, compared with well under a second locally. The first fix is to run the API next to the database (Render's Frankfurt region is the closest); batching each player's reads into fewer transactions would help next.
 
 ## What I added beyond the assignment
 
