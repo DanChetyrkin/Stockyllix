@@ -30,16 +30,13 @@ async function setup(extensions = true) {
     logger: () => undefined,
   });
   const world = await game.getWorld();
-  return { app, store, dataset, world };
+  return { app, store, dataset, world, game };
 }
 
-async function advance(app: ReturnType<typeof createApp>, worldId: string, target: string) {
-  const started = await request(app).post('/api/admin/clock/advance').auth('administrator', { type: 'bearer' })
-    .set('Idempotency-Key', randomUUID()).send({ worldId, target });
-  expect(started.status).toBe(202);
-  let state = started.body;
+async function advance(app: ReturnType<typeof createApp>, game: GameService, worldId: string, target: string) {
+  let state: { status: string; job: { id: string } | null } = await game.advance(target, randomUUID(), worldId);
   for (let attempt = 0; attempt < 40 && state.status !== 'idle'; attempt += 1) {
-    const step = await request(app).post(`/api/admin/clock/jobs/${state.job.id}/step`).auth('administrator', { type: 'bearer' });
+    const step = await request(app).post(`/api/admin/clock/jobs/${state.job!.id}/step`).auth('administrator', { type: 'bearer' });
     expect(step.status).toBe(200);
     state = step.body;
   }
@@ -63,9 +60,9 @@ describe('extension HTTP contracts with real services', () => {
   });
 
   it('accepts a dotted TA ticker and publishes only history reached by the shared clock', async () => {
-    const { app, dataset, world } = await setup();
+    const { app, dataset, world, game } = await setup();
     const opening = dataset.events.find(event => event.kind === 'MARKET_OPEN' && event.market === 'TA')!;
-    await advance(app, world.id, opening.at);
+    await advance(app, game, world.id, opening.at);
     const history = await request(app).get(`/api/instruments/LUMI.TA/history?until=${encodeURIComponent(dataset.endsAt)}`).auth('alice', { type: 'bearer' });
     expect(history.status).toBe(200);
     expect(history.body).toMatchObject({ instrumentId: 'LUMI.TA', currency: 'ILS', dataMode: 'simulated' });
@@ -184,14 +181,14 @@ describe('extension HTTP contracts with real services', () => {
   });
 
   it('reports a filled buy for its owner and never accepts a requested alternate identity', async () => {
-    const { app, dataset, world } = await setup();
+    const { app, dataset, world, game } = await setup();
     await request(app).post('/api/me/initialize').auth('alice', { type: 'bearer' }).send({ displayName: 'Alice' });
     await request(app).post('/api/me/initialize').auth('bob', { type: 'bearer' }).send({ displayName: 'Bob' });
     const order = await request(app).post('/api/orders').auth('alice', { type: 'bearer' }).set('Idempotency-Key', randomUUID())
       .send({ worldId: world.id, instrumentId: 'AAPL', side: 'buy', amountILS: '10000' });
     expect(order.status).toBe(201);
     const opening = dataset.events.find(event => event.kind === 'MARKET_OPEN' && event.market === 'US')!;
-    await advance(app, world.id, opening.at);
+    await advance(app, game, world.id, opening.at);
     const report = await request(app).get('/api/performance').auth('alice', { type: 'bearer' });
     expect(report.status).toBe(200);
     expect(report.body).toMatchObject({ worldId: world.id, realizedILS: '0.00', dataMode: 'simulated' });
@@ -206,10 +203,9 @@ describe('extension HTTP contracts with real services', () => {
   });
 
   it('blocks partial market and performance reads while the world advances', async () => {
-    const { app, dataset, world } = await setup();
-    const started = await request(app).post('/api/admin/clock/advance').auth('administrator', { type: 'bearer' }).set('Idempotency-Key', randomUUID())
-      .send({ worldId: world.id, target: dataset.events.find(event => event.kind === 'MARKET_OPEN')!.at });
-    expect(started.status).toBe(202);
+    const { app, dataset, world, game } = await setup();
+    const started = await game.advance(dataset.events.find(event => event.kind === 'MARKET_OPEN')!.at, randomUUID(), world.id);
+    expect(started.status).toBe('advancing');
     for (const path of ['/api/instruments/LUMI.TA/history', '/api/watchlist', '/api/performance', '/api/daily-quiz']) {
       const blocked = await request(app).get(path).auth('alice', { type: 'bearer' });
       expect(blocked.status).toBe(423);

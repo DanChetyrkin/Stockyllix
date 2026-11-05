@@ -15,8 +15,8 @@ import { clockActionLabels, israelDateTime, parseClockRequest, suggestedGameTime
 import { useApi } from '@/hooks/use-api';
 
 interface ReplayChoice { id: string; source: 'simulated' | 'historical'; sourceDescription: string; startsAt: string; endsAt: string }
-interface EventTarget { at: string; kind: 'MARKET_OPEN' | 'MARKET_CLOSE'; market: 'TA' | 'US'; orderCount?: number }
-interface ClockTargets { worldId: string; gameNow: string; nextMarketEvent: EventTarget | null; nextPendingExecution: EventTarget | null; pendingOrderCount: number }
+interface EventTarget { at: string; kind: 'MARKET_OPEN' | 'MARKET_CLOSE'; market: 'TA' | 'US' }
+interface ClockTargets { worldId: string; gameNow: string; nextMarketEvent: EventTarget | null }
 interface ClockReceipt { accepted: boolean; processingStatus?: 'accepted' | 'syncing' | 'completed' | 'superseded'; action?: ClockAction }
 interface NewGameRequest { key: string; worldId: string; datasetId?: string; simulation?: { startDate: string } }
 type RequestState = 'checking' | 'not_accepted' | 'unknown';
@@ -169,7 +169,7 @@ export default function AdminScreen() {
       setCustom(suggestedGameTime(result.world.clock?.targetNow || result.world.now, result.world.endsAt));
       await refreshWorld();
       if (result.world.job) await processJob(result.world.job.id, true, scope);
-      else setMessage(request.action === 'pause' ? 'Game clock paused. Pending orders remain saved.' : ['set', 'next', 'next_order'].includes(request.action) ? 'Game time applied. All reached events were processed and the clock is paused.' : 'Game clock running at one game second per server second.');
+      else setMessage(request.action === 'pause' ? 'Game clock paused. Pending orders remain saved.' : ['set', 'next'].includes(request.action) ? 'Game time applied. All reached events were processed and the clock is paused.' : 'Game clock running at one game second per server second.');
     } catch (cause) {
       if (!isCurrent(scope)) return;
       if (cause instanceof ApiError && cause.status >= 400 && cause.status < 500 && !['WORLD_ADVANCING', 'WORLD_CHANGED', 'JOB_BUSY', 'LEASE_LOST', 'CLOCK_SYNCING', 'RATE_LIMITED', 'IDEMPOTENCY_CONFLICT'].includes(cause.code)) {
@@ -257,7 +257,6 @@ export default function AdminScreen() {
       </View>
       {targets.error && <Notice tone="error" action={<Button compact variant="secondary" onPress={() => void targets.refresh()}>Retry</Button>}>{targets.error}</Notice>}
       <View style={{ gap: 20 }}>
-        <TargetAction title="Next pending execution" target={targetData?.nextPendingExecution} status={targetStatus} empty="No pending order is waiting for execution in this game." count={targetData?.nextPendingExecution?.orderCount} disabled={controlsBlocked || !targetData?.nextPendingExecution} onPress={() => void configure('next_order')} button="Advance to pending execution" />
         <TargetAction title="Next market opening or closing" target={targetData?.nextMarketEvent} status={targetStatus} empty="No market opening or closing remains in this price period." disabled={controlsBlocked || !targetData?.nextMarketEvent} onPress={() => void configure('next')} button="Advance to market event" />
       </View>
       <View style={{ gap: 12 }}>
@@ -322,9 +321,16 @@ export default function AdminScreen() {
   </AppShell>;
 }
 
-function TargetAction({ title, target, status, empty, count, disabled, onPress, button }: { title: string; target?: EventTarget | null; status: string | null; empty: string; count?: number; disabled: boolean; onPress(): void; button: string }) {
+function TargetAction({ title, target, status, empty, disabled, onPress, button }: { title: string; target?: EventTarget | null; status: string | null; empty: string; disabled: boolean; onPress(): void; button: string }) {
   const { palette } = useTheme();
-  return <View style={{ gap: 8 }}><CardTitle>{title}</CardTitle>{target ? <><Text style={{ color: palette.ink, fontSize: 17, fontWeight: '600', fontVariant: ['tabular-nums'] }}>{dateTime(target.at)}</Text><Copy muted>{target.market === 'US' ? 'United States' : 'Tel Aviv'} · {target.kind === 'MARKET_OPEN' ? 'Market opens' : 'Market closes'}{count !== undefined ? ` · ${count} pending ${count === 1 ? 'order' : 'orders'}` : ''}</Copy></> : <Copy muted>{status ?? empty}</Copy>}<Button variant="secondary" disabled={disabled} onPress={onPress}>{button}</Button></View>;
+  return <View style={{ gap: 8 }}>
+    <CardTitle>{title}</CardTitle>
+    {target ? <>
+      <Text style={{ color: palette.ink, fontSize: 17, fontWeight: '600', fontVariant: ['tabular-nums'] }}>{dateTime(target.at)}</Text>
+      <Copy muted>{target.market === 'US' ? 'United States' : 'Tel Aviv'} · {target.kind === 'MARKET_OPEN' ? 'Market opens' : 'Market closes'}</Copy>
+    </> : <Copy muted>{status ?? empty}</Copy>}
+    <Button variant="secondary" disabled={disabled} onPress={onPress}>{button}</Button>
+  </View>;
 }
 
 interface ClockAuditResponse { worldId: string; entries: { action: ClockAction; at: string; after: { running: boolean; anchorGameAt: string } }[] }

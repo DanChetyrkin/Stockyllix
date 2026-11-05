@@ -1,6 +1,6 @@
 {
   "name": "stockyllix-server",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "private": true,
   "type": "module",
   "engines": {
@@ -19,7 +19,6 @@
     "test:load": "tsx src/scripts/load-test.ts",
     "import:ecb": "tsx src/scripts/import-ecb.ts",
     "import:boi": "tsx src/scripts/import-boi.ts",
-    "import:market": "tsx src/scripts/import-market.ts",
     "import:yahoo": "tsx src/scripts/import-yahoo.ts",
     "test:emulator": "vitest run tests/firestore.integration.test.ts"
   },

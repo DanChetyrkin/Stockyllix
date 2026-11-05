@@ -126,16 +126,6 @@ export interface World {
   weekId: string;
 }
 
-export interface Valuation {
-  uid: string;
-  eventId: string;
-  at: string;
-  valueILS: string;
-  weekId: string;
-  weeklyReturnPct: string;
-  mddPct: string;
-}
-
 export interface LeaderboardRow {
   uid: string;
   displayName: string;

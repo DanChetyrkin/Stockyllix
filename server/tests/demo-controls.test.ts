@@ -53,43 +53,27 @@ async function drain(clock: WorldClockService) {
 const admin = (app: ReturnType<typeof createApp>, path: string) => request(app).get(path).auth('administrator', { type: 'bearer' });
 
 describe('precise shared clock targets and recovery receipts', () => {
-  it('finds the earliest pending execution across players, counts its orders and distinguishes the next opening', async () => {
+  it('reports the next market event, executes pending orders there and ignores a repeated request key', async () => {
     const { main } = await fixture();
     const { game, clock } = main;
     const world = await game.getWorld();
-    await Promise.all(['administrator', 'bob', 'carol'].map(uid => game.initialize(uid, uid)));
+    await Promise.all(['administrator', 'bob'].map(uid => game.initialize(uid, uid)));
     await clock!.getWorld();
     await game.submitOrder('administrator', { worldId: world.id, instrumentId: 'AMZN', side: 'buy', amountILS: '50000' }, randomUUID());
     await game.submitOrder('bob', { worldId: world.id, instrumentId: 'LUMI.TA', side: 'buy', amountILS: '10000' }, randomUUID());
-    await game.submitOrder('carol', { worldId: world.id, instrumentId: 'TEVA.TA', side: 'buy', amountILS: '20000' }, randomUUID());
-    expect(await clock!.targets()).toMatchObject({ pendingOrderCount: 3,
-      nextMarketEvent: { at: '2026-10-05T07:00:00Z', kind: 'MARKET_OPEN', market: 'TA' },
-      nextPendingExecution: { at: '2026-10-05T07:00:00Z', kind: 'MARKET_OPEN', market: 'TA', orderCount: 2 } });
+    expect(await clock!.targets()).toEqual({ worldId: world.id, gameNow: new Date(world.now).toISOString(), nextMarketEvent: { at: '2026-10-05T07:00:00Z', kind: 'MARKET_OPEN', market: 'TA' } });
     const key = randomUUID();
-    await clock!.configure('administrator', { worldId: world.id, action: 'next_order' }, key);
+    await clock!.configure('administrator', { worldId: world.id, action: 'next' }, key);
     await drain(clock!);
     expect((await game.getOrders('bob')).orders[0]?.status).toBe('executed');
-    expect((await game.getOrders('carol')).orders[0]?.status).toBe('executed');
     expect((await game.getOrders('administrator')).orders[0]?.status).toBe('pending');
-    expect(await clock!.targets()).toMatchObject({ pendingOrderCount: 1, nextPendingExecution: { kind: 'MARKET_OPEN', market: 'US', orderCount: 1 } });
+    expect((await clock!.targets()).nextMarketEvent).toMatchObject({ kind: 'MARKET_OPEN', market: 'US' });
     const auditCount = (await clock!.audit()).entries.length;
-    await clock!.configure('administrator', { worldId: world.id, action: 'next_order' }, key);
+    await clock!.configure('administrator', { worldId: world.id, action: 'next' }, key);
     expect((await clock!.audit()).entries).toHaveLength(auditCount);
-  });
-
-  it('distinguishes closing targets and reports no pending orders without moving time', async () => {
-    const { main } = await fixture();
-    const world = await main.game.getWorld();
-    await main.clock!.configure('administrator', { worldId: world.id, action: 'next' }, randomUUID());
-    await drain(main.clock!);
-    await main.game.initialize('bob', 'Bob');
-    const order = await main.game.submitOrder('bob', { worldId: world.id, instrumentId: 'LUMI.TA', side: 'buy', amountILS: '10000' }, randomUUID());
-    expect(await main.clock!.targets()).toMatchObject({ nextPendingExecution: { at: order.executeAt, kind: 'MARKET_CLOSE', market: 'TA' } });
-    await main.clock!.configure('administrator', { worldId: world.id, action: 'next_order' }, randomUUID());
-    await drain(main.clock!);
-    const before = await main.clock!.getWorld();
-    await expect(main.clock!.configure('administrator', { worldId: world.id, action: 'next_order' }, randomUUID())).rejects.toMatchObject({ code: 'NO_PENDING_ORDERS' });
-    expect(await main.clock!.getWorld()).toEqual(before);
+    await clock!.configure('administrator', { worldId: world.id, action: 'next' }, randomUUID());
+    await drain(clock!);
+    expect((await game.getOrders('administrator')).orders[0]?.status).toBe('executed');
   });
 
   it('looks up accepted and unknown receipts without writes, pumping work or replaying a request', async () => {
@@ -124,7 +108,7 @@ describe('precise shared clock targets and recovery receipts', () => {
       expect((await request(app).get(path).auth('bob', { type: 'bearer' })).status).toBe(403);
       expect((await request(app).get(path)).status).toBe(401);
     }
-    expect((await request(app).post('/api/admin/clock/configure').auth('bob', { type: 'bearer' }).set('Idempotency-Key', randomUUID()).send({ worldId: world.id, action: 'next_order' })).status).toBe(403);
+    expect((await request(app).post('/api/admin/clock/configure').auth('bob', { type: 'bearer' }).set('Idempotency-Key', randomUUID()).send({ worldId: world.id, action: 'next' })).status).toBe(403);
   });
 
   it('parses Israel local time and rejects skipped and repeated daylight-saving minutes', async () => {
@@ -195,8 +179,11 @@ describe('isolated deterministic simulation worlds', () => {
     const restarted = await setup.restartTestRealm();
     expect((await restarted.game.getWorld()).id).toBe(created.body.id);
     expect(await restarted.game.getMarket()).toEqual(priorMarket);
-    await restarted.clock!.configure('administrator', { worldId: created.body.id, action: 'next_order' }, randomUUID());
-    await drain(restarted.clock!);
+    // the simulated game starts before tel aviv opens; the us order fills at the second market event.
+    for (let jumps = 0; jumps < 2; jumps += 1) {
+      await restarted.clock!.configure('administrator', { worldId: created.body.id, action: 'next' }, randomUUID());
+      await drain(restarted.clock!);
+    }
     expect((await restarted.game.getOrders('administrator')).orders[0]).toMatchObject({ id: pending.id, status: 'executed' });
     expect((await restarted.game.getPortfolio('administrator')).summary.cashILS).toBe('950000.00');
     expect(await store.get(`worlds/${mainWorld.id}`)).toEqual(before.world);

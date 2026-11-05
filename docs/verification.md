@@ -12,6 +12,10 @@ This file separates what was checked locally, what was checked in the cloud, and
 | GitHub Write access for the reviewer | Owner handover |
 | Physical Expo Go session | Not verified. Browser phone-width checks and the Android bundle build are not a device test |
 
+## Review pass after the live checks (November 5, 2026)
+
+A second review of the deployed code removed what nothing used: the "Advance to pending execution" control and its scan of every player's orders (every order executes at a market opening or closing, so "Advance to market event" reaches it), the old `/admin/clock/advance` route, the `valuations` document written for every player at every event but never read, the review fields nothing displayed, a dead `import:market` script and six partial `test:*` scripts. The Hosting quota in the runbook was corrected to 10 GB per month. Locally: 203 server tests, 49 app checks, typecheck and lint passed. This is release 1.5.1; the rows above describe what is live until it is deployed.
+
 ## Live checks after deployment (November 5, 2026)
 
 The release was built from a clean clone of `48ad777` on the owner's Windows machine: 204 server tests, 49 app checks, typecheck, lint, the web export and `check:release` passed there. The site was deployed to Hosting first, then the API on Render.
@@ -20,7 +24,7 @@ The walkthrough then ran against the live API, signed in as the reviewer adminis
 
 - A new real-historical test game (`historical-8c9e717c12d59090`) started with ₪1,000,000.
 - An AMZN buy of ₪50,000 was pending, with ₪950,000 available, ₪50,000 reserved and ₪1,000,000 total. Sending the same request key again returned the same order.
-- **Advance to pending execution** took 33.5 s. The order executed once at the US opening on October 19 (16:30 Israel) at $255.25 and USD/ILS 3.089, the same source price and rate as the November 4 browser run. Cash was ₪950,000, reserved ₪0 and the AMZN holding ₪50,000.
+- Advancing to the order's execution event took 33.5 s. The order executed once at the US opening on October 19 (16:30 Israel) at $255.25 and USD/ILS 3.089, the same source price and rate as the November 4 browser run. Cash was ₪950,000, reserved ₪0 and the AMZN holding ₪50,000.
 - A ₪10,000 sell executed and cash became ₪960,000. A ₪250,000 META buy was refused by the 20% rule. The daily question and the league loaded.
 - A jump to October 29 00:01 took 234 s. The next market event was correctly shown as the TA opening at 10:00.
 - A fresh, paused test game was left at the start of the period for the reviewer.
@@ -49,7 +53,7 @@ The cleanup started from the deployed submission commit `fc77646` on `codex/rend
 - Permissions: no token → 401, a player using the test-realm header → 403, a player changing the clock → 403.
 - New test game: ₪1,000,000 total cash and value.
 - AMZN buy of ₪50,000: pending, with ₪950,000 available, ₪50,000 reserved, ₪1,000,000 total cash and value, and ₪0 holdings. The same request key returned the same order with no second reservation; the same key with a different amount was rejected.
-- **Advance to pending execution:** executed once at the US opening (16:30 Israel). Dollar price × USD/ILS × units = ₪50,000.00. Cash ₪950,000, reserved ₪0. Repeating the same clock request did not execute or charge again.
+- Advancing to the execution event: executed once at the US opening (16:30 Israel). Dollar price × USD/ILS × units = ₪50,000.00. Cash ₪950,000, reserved ₪0. Repeating the same clock request did not execute or charge again.
 - A ₪10,000 sell reserved all AMZN units, a second sell was refused while it was pending, and after execution cash was ₪960,000. Refreshing gave the same balances.
 - Two parallel buys on different assets were both accepted (₪200,000 reserved). Two parallel ₪150,000 GOOGL buys gave one acceptance and one `CONCENTRATION_LIMIT`. A single ₪250,000 buy was refused by the 20% rule. Four parallel ₪190,000 buys with ₪610,000 available gave 3 acceptances and one `INSUFFICIENT_CASH`.
 - A jump to Monday March 8 archived week 2027-03-01 (rank 1, score 100 as the only eligible player) and restarted weekly return and MDD.

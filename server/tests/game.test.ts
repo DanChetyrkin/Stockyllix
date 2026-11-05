@@ -267,7 +267,7 @@ describe('durable game service', () => {
       get: base.get.bind(base), list: base.list.bind(base),
       transaction: async <T>(work: (tx: Transaction) => Promise<T>) => {
         let sampled = false;
-        const result = await base.transaction((tx) => work({ get: tx.get, set: (path, value) => { sampled ||= path.includes('/valuations/'); tx.set(path, value); } }));
+        const result = await base.transaction((tx) => work({ get: tx.get, set: (path, value) => { sampled ||= path.endsWith('/players/alice'); tx.set(path, value); } }));
         if (sampled && crashAfterSample) { crashAfterSample = false; throw new Error('simulated process crash after commit'); }
         return result;
       },
@@ -293,7 +293,6 @@ describe('durable game service', () => {
     while (next.job) next = await service.step(next.job.id);
     expect((await service.getPortfolio('alice')).portfolio.cashAgorot).toBe(90_000_000);
     expect((await service.getOrders('alice')).orders[0]?.status).toBe('executed');
-    expect(await base.list(`worlds/${world.id}/players/alice/valuations`)).toHaveLength(1);
   });
 
   it('archives a completed week and starts a new baseline without resetting cash or holdings', async () => {
@@ -390,9 +389,7 @@ describe('durable game service', () => {
     await service.submitOrder('alice', { worldId: world.id, instrumentId, side: 'buy', amountILS: '100000' }, 'review-initial-buy');
     await advanceDone(service, '2026-10-06T14:30:00Z');
     const first = await service.recordReview('alice');
-    expect(first.baselineValueILS).toBe('1000000.000000000000');
-    expect(first.previousReviewDate).toBeNull();
-    expect(first.viewedValueILS).not.toBe(first.baselineValueILS);
+    expect(first).toMatchObject({ realDate: '2026-11-03', worldDate: '2026-10-06', returnedOnLaterRealDay: false });
 
     await advanceDone(service, '2026-10-07T14:30:00Z');
     expect(await service.recordReview('alice')).toEqual(first);
@@ -400,14 +397,12 @@ describe('durable game service', () => {
     // moving the game is not a real return visit; the next real date is.
     realNow = new Date('2026-11-04T10:00:00Z');
     const second = await service.recordReview('alice');
-    expect(second.previousReviewDate).toBe(first.realDate);
-    expect(second.baselineValueILS).toBe(first.viewedValueILS);
-    expect(second.returnedOnLaterRealDay).toBe(true);
+    expect(second).toMatchObject({ realDate: '2026-11-04', worldDate: '2026-10-07', returnedOnLaterRealDay: true });
 
     await advanceDone(service, '2026-10-08T07:00:00Z');
     expect(await service.recordReview('alice')).toEqual(second);
-    const activity = await store.get<{ distinctRealDays: number; lastValueILS: string }>(`worlds/${world.id}/players/alice/activity/current`);
-    expect(activity).toMatchObject({ distinctRealDays: 2, lastValueILS: second.viewedValueILS });
+    const activity = await store.get<{ distinctRealDays: number; lastRealDate: string }>(`worlds/${world.id}/players/alice/activity/current`);
+    expect(activity).toMatchObject({ firstRealDate: '2026-11-03', lastRealDate: '2026-11-04', distinctRealDays: 2 });
     expect((await service.getPortfolio('alice')).insight).toMatch(/largest holding/);
   });
 

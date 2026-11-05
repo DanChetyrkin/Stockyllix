@@ -3,10 +3,10 @@ import { DateTime } from 'luxon';
 import { CURRENT_WORLD, keyHash, playerPath, worldPath } from '../data/current-world.js';
 import type { DocumentStore, Transaction } from '../data/store.js';
 import { GameError } from '../domain/errors.js';
-import type { ClockJob, Dataset, LeaderboardRow, Order, OrderInput, Portfolio, Valuation, World, WorldEvent } from '../domain/model.js';
+import type { ClockJob, Dataset, LeaderboardRow, Order, OrderInput, Portfolio, World, WorldEvent } from '../domain/model.js';
 import { rankPortfolios } from '../domain/scoring.js';
 import { executeOrder, parseAmount, reserveOrder } from '../domain/trading.js';
-import { decimal, formatDecimal, instrumentPriceILS, portfolioSummary, portfolioValue, sampleWeek, weeklyReturn } from '../domain/valuation.js';
+import { decimal, instrumentPriceILS, portfolioSummary, portfolioValue, sampleWeek } from '../domain/valuation.js';
 import { dueEvents, getWeekId, isEligibleJoin, isMarketOpen, nextExecution } from '../world/index.js';
 import { previousSessionClose, priceChangePct } from '../world/price-change.js';
 import { DatasetRegistry, datasetRegistry } from '../world/registry.js';
@@ -17,16 +17,8 @@ const RANKING_PAGE_BATCH = 100;
 interface Pointer { worldId: string }
 interface RankingPage { rows: LeaderboardRow[] }
 interface RankingMeta { total: number; weekId: string; generation: string; pageCount: number }
-interface ReviewRecord {
-  realDate: string;
-  worldDate: string;
-  firstSeenAt: string;
-  returnedOnLaterRealDay: boolean;
-  baselineValueILS: string;
-  previousReviewDate: string | null;
-  viewedValueILS: string;
-}
-interface VisitRecord { lastRealDate: string; firstRealDate: string; distinctRealDays: number; lastValueILS: string }
+interface ReviewRecord { realDate: string; worldDate: string; returnedOnLaterRealDay: boolean }
+interface VisitRecord { firstRealDate: string; lastRealDate: string; distinctRealDays: number }
 
 export function createWorld(dataset: Dataset, id: string): World {
   return { id, now: dataset.startsAt, revision: 0, status: 'idle', snapshot: dataset.initialSnapshot, datasetId: dataset.id, job: null, leaderboardGeneration: null, weekId: getWeekId(dataset.startsAt) };
@@ -367,10 +359,8 @@ export class GameService {
       const value = portfolioValue(dataset, event.snapshot, portfolio);
       portfolio = { ...portfolio, lastEventId: event.id, week: sampleWeek(portfolio.week, value) };
       if (event.kind === 'WEEK_END') portfolio.week = { ...portfolio.week, finalValueILS: value.toFixed(12) };
-      const valuation: Valuation = { uid, eventId: event.id, at: event.at, valueILS: value.toFixed(12), weekId: portfolio.week.weekId, weeklyReturnPct: formatDecimal(weeklyReturn(value, portfolio.week), 12), mddPct: formatDecimal(decimal(portfolio.week.mddRatio).mul(100), 12) };
       tx.set(path, portfolio);
       changed.forEach((order) => tx.set(`${path}/orders/${order.id}`, order));
-      tx.set(`${path}/valuations/${keyHash(event.id)}`, valuation);
     });
   }
 
@@ -451,12 +441,12 @@ export class GameService {
 
   private realDate() { return DateTime.fromJSDate(this.now()).setZone('Asia/Jerusalem').toISODate()!; }
 
+  // one review per real israel date; moving the game clock is not a return visit.
   async recordReview(uid: string) {
     const initial = await this.current();
     const realDate = this.realDate();
     return this.store.transaction(async (tx) => {
       const world = await this.txWorld(tx, initial.id);
-      const dataset = this.datasets.get(world.datasetId);
       const path = playerPath(world.id, uid);
       const portfolio = await tx.get<Portfolio>(path);
       const existing = await tx.get<ReviewRecord>(`${path}/reviews/${realDate}`);
@@ -466,12 +456,10 @@ export class GameService {
       if (existing) return existing;
       const review: ReviewRecord = {
         realDate, worldDate: DateTime.fromISO(world.now).setZone('Asia/Jerusalem').toISODate()!,
-        firstSeenAt: this.now().toISOString(), returnedOnLaterRealDay: Boolean(visit && visit.firstRealDate < realDate),
-        baselineValueILS: visit?.lastValueILS ?? '1000000.000000000000', previousReviewDate: visit?.lastRealDate ?? null,
-        viewedValueILS: portfolioValue(dataset, world.snapshot, portfolio).toFixed(12),
+        returnedOnLaterRealDay: Boolean(visit && visit.firstRealDate < realDate),
       };
       tx.set(`${path}/reviews/${realDate}`, review);
-      tx.set(`${path}/activity/current`, { lastRealDate: realDate, firstRealDate: visit?.firstRealDate ?? realDate, distinctRealDays: (visit?.distinctRealDays ?? 0) + 1, lastValueILS: review.viewedValueILS });
+      tx.set(`${path}/activity/current`, { firstRealDate: visit?.firstRealDate ?? realDate, lastRealDate: realDate, distinctRealDays: (visit?.distinctRealDays ?? 0) + 1 });
       return review;
     });
   }

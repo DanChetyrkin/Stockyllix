@@ -50,8 +50,7 @@ const worldIdInput = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
 const instrumentIdInput = z.string().min(1).max(40).regex(/^[a-zA-Z0-9_.-]+$/);
 const watchInput = z.object({ instrumentId: instrumentIdInput, targetPrice: z.string().max(30), direction: z.enum(['at_or_below', 'at_or_above']) }).strict();
 const quizInput = z.object({ worldId: worldIdInput, date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), questionId: z.string().min(1).max(60), answerIndex: z.number().int().min(0).max(3) }).strict();
-const advanceInput = z.object({ worldId: worldIdInput, target: z.iso.datetime({ offset: true }) }).strict();
-const clockInput = z.object({ worldId: worldIdInput, action: z.enum(['pause', 'resume', 'set', 'next', 'next_order']),
+const clockInput = z.object({ worldId: worldIdInput, action: z.enum(['pause', 'resume', 'set', 'next']),
   target: z.iso.datetime({ offset: true }).optional(),
   targetIsrael: z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), time: z.string().regex(/^\d{2}:\d{2}$/) }).strict().optional(),
 }).strict().refine(input => input.action === 'set' ? Number(input.target !== undefined) + Number(input.targetIsrael !== undefined) === 1
@@ -104,7 +103,7 @@ export function createApp(options: AppOptions) {
   // a resized profile photo fits here without raising limits for trading routes.
   app.use('/api/me/profile', express.json({ limit: '64kb' }));
   app.use(express.json({ limit: '12kb' }));
-  app.get('/health', (_request, response) => response.json({ status: 'ok', version: '1.5.0', release: 'final-cleanup-v5',
+  app.get('/health', (_request, response) => response.json({ status: 'ok', version: '1.5.1', release: 'review-pass-v6',
     commit: /^[a-f0-9]{40}$/i.test(process.env.RENDER_GIT_COMMIT ?? '') ? process.env.RENDER_GIT_COMMIT : null }));
 
   const router = express.Router();
@@ -241,11 +240,6 @@ export function createApp(options: AppOptions) {
     const key = z.string().uuid().parse(request.params.key);
     const worldId = request.query.worldId === undefined ? undefined : worldIdInput.parse(request.query.worldId);
     response.json(await clock(response).requestStatus(key, worldId));
-  });
-  router.post('/admin/clock/advance', async (request, response) => {
-    const input = advanceInput.parse(request.body);
-    const services = selected(response);
-    response.status(202).json(services.clock ? await services.clock.jump(uid(response), input.target, requestKey(request), input.worldId) : await services.game.advance(input.target, requestKey(request), input.worldId));
   });
   router.post('/admin/clock/jobs/:id/step', async (request, response) => {
     const id = z.string().regex(/^[a-zA-Z0-9_-]+$/).max(100).parse(request.params.id);

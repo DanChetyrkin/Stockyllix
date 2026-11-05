@@ -6,7 +6,7 @@ A weekly portfolio league: each player gets ₪1,000,000 in virtual cash, trades
 
 **Play in the browser: [stockyllix.web.app](https://stockyllix.web.app)** (no installation).
 
-> **Rotem, this one is for you.** To try everything, including the game clock controls, sign in with:
+> To try everything, including the game clock controls, sign in with:
 >
 > - Email: `admin@stockyllix.com`
 > - Password: `Watermelon2001@Mango!`
@@ -21,7 +21,7 @@ The API runs on a free server that sleeps when idle, so the first page load can 
 2. Open **Menu → World controls → Open isolated test game**. Everything below now happens in your own test game. Other players and the shared league are not affected.
 3. Choose **Start a new game → Real historical prices**, type `NEW GAME` and choose **Create new test game**. You get a fresh portfolio with ₪1,000,000.
 4. Open **Demo trading → AMZN → Buy**, enter `50000`, choose **Review** and **Confirm & send order**. The order is **pending**. Portfolio shows ₪950,000 available, ₪50,000 reserved, and ₪1,000,000 total cash and total value.
-5. Open **World controls → Advance to pending execution**. **Orders** now shows **Executed**, the units, the dollar price and the USD/ILS rate. Portfolio shows ₪950,000 cash, ₪0 reserved and about ₪50,000 of AMZN.
+5. Open **World controls → Advance to market event**. The first jump reaches the Tel Aviv opening; choose it once more to reach the US opening, where the AMZN order executes. **Orders** now shows **Executed**, the units, the dollar price and the USD/ILS rate. Portfolio shows ₪950,000 cash, ₪0 reserved and about ₪50,000 of AMZN.
 6. Optional: sell ₪10,000 of AMZN and advance again, open **The league**, and answer the daily question on **News**.
 7. Choose **Return to shared league** when you finish.
 
@@ -58,7 +58,7 @@ An older simulated world based on ECB rates is still loaded, so games created wi
 
 - Every game has one saved clock. While it runs, game time moves one second per real second from the historical date. Phones only display it; they never decide execution.
 - Render's free plan sleeps, so there is no background worker. Each API request lets the server process reached events in small, saved steps. Trading pauses with a clear message until every reached event has been applied to all portfolios.
-- **To advance:** sign in as an administrator and open **World controls**. You can **Pause / Resume**, **Advance to pending execution**, **Advance to market event**, or pick a date and time in Israel time and choose **Apply time and pause**. Every jump goes forward only, stays inside the price period, and processes every event in between, in order, once.
+- **To advance:** sign in as an administrator and open **World controls**. You can **Pause / Resume**, **Advance to market event** (the next opening or closing, which is where every pending order executes), or pick a date and time in Israel time and choose **Apply time and pause**. Every jump goes forward only, stays inside the price period, and processes every event in between, in order, once.
 - **Permission:** the API allows these actions only for Firebase user IDs listed in its `ADMIN_UIDS` setting. Reviewers use the administrator account above. In a local setup, add your own user ID to `ADMIN_UIDS`. Administrators can also open an isolated test realm, so experiments never touch the shared league.
 - A game cannot move backwards and does not loop at the end of its data. To start again, create a new game. Old games and their results stay saved.
 

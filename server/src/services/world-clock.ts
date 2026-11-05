@@ -1,14 +1,14 @@
 import { DateTime } from 'luxon';
-import { CURRENT_WORLD, keyHash, playerPath, readCurrentWorld, worldPath } from '../data/current-world.js';
+import { CURRENT_WORLD, keyHash, readCurrentWorld, worldPath } from '../data/current-world.js';
 import type { DocumentStore } from '../data/store.js';
-import type { Dataset, Order, Portfolio, World } from '../domain/model.js';
+import type { Dataset, World } from '../domain/model.js';
 import { clockPath, clockTarget, type WorldClock } from '../domain/clock.js';
 import { GameError } from '../domain/errors.js';
 import { dueEvents, nextMarketEvent } from '../world/index.js';
 import { datasetRegistry, type DatasetRegistry } from '../world/registry.js';
 import type { GameService } from './game-service.js';
 
-type ClockAction = 'pause' | 'resume' | 'set' | 'next' | 'next_order';
+type ClockAction = 'pause' | 'resume' | 'set' | 'next';
 interface ClockInput { worldId: string; action: ClockAction; target?: string; targetIsrael?: { date: string; time: string } }
 interface ClockRequest { input: ClockInput; actor: string; target?: string; requestedAt?: string; clockVersion?: number }
 interface Context { world: World; clock: WorldClock; dataset: Dataset }
@@ -113,45 +113,12 @@ export class WorldClockService {
     }
   }
 
-  private async pendingOrders(world: World, dataset: Dataset) {
-    let after: string | undefined;
-    let scanned = 0;
-    let pendingOrderCount = 0;
-    let earliest: Order | null = null;
-    let orderCount = 0;
-    for (;;) {
-      const players = await this.store.list<Portfolio>(`${worldPath(world.id)}/players`, { limit: 100, ...(after ? { startAfter: after } : {}) });
-      if (!players.length) break;
-      scanned += players.length;
-      if (scanned > 5000) throw new GameError('CLOCK_TARGET_LIMIT', 'This administrator overview supports up to 5,000 players. Advance a selected market event instead.', 422);
-      for (let offset = 0; offset < players.length; offset += 10) {
-        const orders = await Promise.all(players.slice(offset, offset + 10).flatMap(player => player.data.pendingOrderIds.map(id => this.store.get<Order>(`${playerPath(world.id, player.id)}/orders/${id}`))));
-        for (const order of orders) {
-          if (!order || order.status !== 'pending') continue;
-          pendingOrderCount += 1;
-          if (!earliest || Date.parse(order.executeAt) < Date.parse(earliest.executeAt)) { earliest = order; orderCount = 1; }
-          else if (order.executeEventId === earliest.executeEventId) orderCount += 1;
-        }
-      }
-      after = players.at(-1)!.id;
-      if (players.length < 100) break;
-    }
-    const event = earliest && dataset.events.find(event => event.id === earliest.executeEventId);
-    if (earliest && (!event?.market || !['MARKET_OPEN', 'MARKET_CLOSE'].includes(event.kind) || event.at !== earliest.executeAt)) {
-      throw new GameError('INVALID_PENDING_EVENT', 'A pending order has no matching execution event. Check the order before advancing.', 503);
-    }
-    return { earliest, pendingOrderCount, nextPendingExecution: event ? { at: event.at, kind: event.kind, market: event.market!, orderCount } : null };
-  }
-
+  // every order executes at a market opening or closing, so this is the next possible fill.
   async targets() {
     const { world, dataset, clock } = await this.context();
     const gameNow = clockTarget(clock, world, dataset.endsAt, this.now().getTime());
     const event = nextMarketEvent(dataset, gameNow);
-    const pending = await this.pendingOrders(world, dataset);
-    const latest = await readCurrentWorld(this.store);
-    if (latest?.id !== world.id || latest.revision !== world.revision || latest.status !== world.status) throw new GameError('WORLD_CHANGED', 'The world changed while loading clock targets. Refresh the controls.', 409, true);
-    return { worldId: world.id, gameNow, nextMarketEvent: event ? { at: event.at, kind: event.kind, market: event.market! } : null,
-      nextPendingExecution: pending.nextPendingExecution, pendingOrderCount: pending.pendingOrderCount };
+    return { worldId: world.id, gameNow, nextMarketEvent: event ? { at: event.at, kind: event.kind, market: event.market! } : null };
   }
 
   // receipt lookup reads saved state only; it never starts or advances clock work.
@@ -175,8 +142,6 @@ export class WorldClockService {
   async configure(actor: string, input: ClockInput, key: string) {
     const initial = await this.context();
     const requestPath = `${worldPath(input.worldId)}/clockRequests/${keyHash(key)}`;
-    const previousRequest = await this.store.get<ClockRequest>(requestPath);
-    const pending = input.action === 'next_order' && !previousRequest ? await this.pendingOrders(initial.world, initial.dataset) : null;
     await this.store.transaction(async tx => {
       const world = await readCurrentWorld(tx);
       const saved = await tx.get<ClockRequest>(requestPath);
@@ -191,7 +156,6 @@ export class WorldClockService {
       const dataset = this.datasets.get(world.datasetId);
       const serverNow = this.now().toISOString();
       const currentTarget = clockTarget(before, world, dataset.endsAt, Date.parse(serverNow));
-      const pendingOrder = pending?.earliest ? await tx.get<Order>(`${playerPath(world.id, pending.earliest.uid)}/orders/${pending.earliest.id}`) : null;
       let target = currentTarget;
       if (input.action === 'set') {
         if (input.targetIsrael) target = israelTarget(input.targetIsrael);
@@ -203,10 +167,6 @@ export class WorldClockService {
         const next = nextMarketEvent(dataset, currentTarget);
         if (!next) throw new GameError('DATASET_FINISHED', 'No future market event remains. Create a separate historical test world to start earlier.', 422);
         target = next.at;
-      } else if (input.action === 'next_order') {
-        if (!pendingOrder || pendingOrder.status !== 'pending') throw new GameError('NO_PENDING_ORDERS', 'There are no pending orders to execute. Submit an order, or advance to the next market event.', 422);
-        target = pendingOrder.executeAt;
-        if (Date.parse(target) < Date.parse(currentTarget)) throw new GameError('CLOCK_SYNCING', 'The server is completing this pending order. Refresh its status shortly.', 423, true);
       }
       if (Date.parse(target) < Date.parse(currentTarget)) throw new GameError('CLOCK_BACKWARD', 'A world cannot move backwards. Create a separate test world for an earlier date.', 422);
       if (Date.parse(target) > Date.parse(dataset.endsAt)) throw new GameError('DATASET_FINISHED', 'The selected time is outside the historical price period.', 422);
@@ -221,12 +181,6 @@ export class WorldClockService {
     this.checkedAt = 0;
     await this.synchronize();
     return { world: await this.getWorld() };
-  }
-
-  async jump(actor: string, target: string, key: string, worldId: string) {
-    await this.configure(actor, { worldId, action: 'set', target }, key);
-    const world = await this.game.getWorld();
-    return { worldId: world.id, revision: world.revision, status: world.status, job: world.job };
   }
 
   async audit() {

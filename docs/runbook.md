@@ -94,7 +94,7 @@ Render: Blueprint `render.yaml`, free plan, auto-deploy off, manual deploys from
    ```
 
    The new web app also works with the previous API, so deploying it first leaves no broken window.
-3. **Then deploy the API.** Manually deploy the same commit on Render and check that `/health` shows `version 1.5.0`, `release final-cleanup-v5` and that commit.
+3. **Then deploy the API.** Manually deploy the same commit on Render and check that `/health` shows the version and release from `server/src/api/app.ts` and that commit.
 4. In the browser, sign in, open the isolated test game and run the 3–5 minute walkthrough from the README. Check a phone-width window as well. Do not trade or move time in the shared league to test.
 5. Record what was actually checked in [verification](verification.md).
 
@@ -106,7 +106,7 @@ Firestore rules and indexes are deployed separately, only when they change. A wr
 
 ## Clock operations and recovery
 
-- A running clock saves an anchor (game time + server time) in Firestore and advances 1×. A paused clock stays fixed. Jumps (pending execution, next market event, chosen date and time) become a saved job that processes every event in order.
+- A running clock saves an anchor (game time + server time) in Firestore and advances 1×. A paused clock stays fixed. Jumps (next market event, or a chosen date and time) become a saved job that processes every event in order.
 - Render sleeps after inactivity, and its disk is temporary. Nothing depends on a timer or the disk: the next authenticated request continues the saved job. While events are processed, trading returns `CLOCK_SYNCING` and the app keeps the last completed data on screen.
 - For a different period or an earlier date, create a new game (in the test realm for experiments). Never move a world backwards, change price timestamps, or add money to fix a display.
 
@@ -127,7 +127,7 @@ A player's event marker is saved together with its portfolio, so replaying an ev
 
 ## Capacity and limits
 
-Spark: 50k reads and 20k writes per day, 1 GiB storage, 360 MB/day of Hosting transfer. Render free: one instance that sleeps. A local 1,000-player week (`npm run test:load`) took 84.9 s, 132,575 reads and 58,223 writes. That is engine timing, not cloud throughput, and it is more than Spark allows in a day. Rate limits are per process: 180 requests per minute per user, with a separate bucket for administrator clock steps.
+Spark: 50k reads and 20k writes per day, 1 GiB storage, 10 GB of Hosting transfer per month. Render free: one instance that sleeps. A local 1,000-player week (`npm run test:load`) took 84.9 s, 132,575 reads and 58,223 writes. That is engine timing, not cloud throughput, and it is more than Spark allows in a day. Rate limits are per process: 180 requests per minute per user, with a separate bucket for administrator clock steps.
 
 Latency: the Render service runs in Oregon (`us-west1`) and Firestore in Tel Aviv (`me-west1`). A clock step makes several sequential transactions, each crossing the ocean, so the live server processes about one event every 6 seconds for a single player (a 10-day jump took about 4 minutes). A Render service in Frankfurt, the closest Render region, would cut each round trip several times. That means a new service URL, so update `EXPO_PUBLIC_API_URL`, `CORS_ORIGINS` and the secrets together.
 

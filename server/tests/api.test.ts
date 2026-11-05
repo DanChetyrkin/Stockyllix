@@ -43,7 +43,7 @@ describe('authenticated game api', () => {
     expect(initialized.body.cashAgorot).toBe(100_000_000);
     const forged = await request(app).post('/api/me/initialize').auth('bob', { type: 'bearer' }).send({ displayName: 'Bob', cashAgorot: 999999999 });
     expect(forged.status).toBe(400);
-    expect((await request(app).post('/api/admin/clock/advance').auth('alice', { type: 'bearer' }).send({ target: '2026-10-05T12:00:00Z' })).status).toBe(403);
+    expect((await request(app).post('/api/admin/clock/jobs/any/step').auth('alice', { type: 'bearer' })).status).toBe(403);
     const world = await request(app).get('/api/world').auth('alice', { type: 'bearer' });
     const order = { worldId: world.body.world.id, instrumentId: 'AAPL', side: 'buy', amountILS: '1000' };
     const forgedPrice = await request(app).post('/api/orders').auth('alice', { type: 'bearer' }).set('Idempotency-Key', randomUUID()).send({ ...order, price: '0.01' });
@@ -81,16 +81,16 @@ describe('authenticated game api', () => {
   });
 
   it('provides a resumable admin workflow and rejects game reads during processing', async () => {
-    const { app, dataset } = setup();
+    const { app, game, dataset } = setup();
     await request(app).post('/api/me/initialize').auth('alice', { type: 'bearer' }).send({ displayName: 'Alice' });
     const target = dataset.events.find((event) => event.kind === 'MARKET_OPEN')!.at;
     const world = await request(app).get('/api/world').auth('alice', { type: 'bearer' });
-    const started = await request(app).post('/api/admin/clock/advance').auth('administrator', { type: 'bearer' }).set('Idempotency-Key', randomUUID()).send({ target, worldId: world.body.world.id });
-    expect(started.status).toBe(202);
+    const started = await game.advance(target, randomUUID(), world.body.world.id);
+    expect(started.status).toBe('advancing');
     expect((await request(app).get('/api/portfolio').auth('alice', { type: 'bearer' })).status).toBe(423);
-    let state = started.body;
+    let state: { status: string; job: { id: string } | null } = started;
     for (let attempt = 0; attempt < 15 && state.status !== 'idle'; attempt += 1) {
-      const step = await request(app).post(`/api/admin/clock/jobs/${state.job.id}/step`).auth('administrator', { type: 'bearer' });
+      const step = await request(app).post(`/api/admin/clock/jobs/${state.job!.id}/step`).auth('administrator', { type: 'bearer' });
       expect(step.status).toBe(200);
       state = step.body;
     }

@@ -69,7 +69,7 @@ export function buildHistoricalDataset(instruments: Instrument[], bars: Record<s
     snapshot = { at: draft.at, prices: { ...snapshot.prices, ...draft.prices }, fx: draft.fx?.rate ?? snapshot.fx, fxAsOf: draft.fx?.date ?? snapshot.fxAsOf };
     return { id: draft.id, at: draft.at, kind: draft.kind, weekId: draft.weekId, ...(draft.market ? { market: draft.market } : {}), snapshot };
   });
-  const sourceDescription = options.sourceDescription ?? 'Unadjusted daily stock opening/closing prices from Twelve Data; Bank of Israel representative USD/ILS. Prices replay on the assignment trading hours. Reference FX is available from the following Israel day; no live or future prices are used.';
+  const sourceDescription = options.sourceDescription ?? 'Historical daily opening and closing prices with Bank of Israel USD/ILS, replayed on the assignment trading hours. Each rate is usable from the following Israel day; no live or future prices are used.';
   const hash = createHash('sha256').update(JSON.stringify({ instruments, initialSnapshot, events, sourceDescription, closedDates: options.closedDates ?? {} })).digest('hex').slice(0, 16);
   return validateDataset({ id: `historical-${hash}`, startsAt, endsAt, source: 'historical',
     sourceDescription,

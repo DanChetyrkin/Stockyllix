@@ -40,10 +40,11 @@ const first = await api<OrderResult>('/orders', player, input, orderKey);
 const retry = await api<OrderResult>('/orders', player, input, orderKey);
 if (first.order.id !== retry.order.id) throw new Error('idempotency failed');
 type JobResult = { status: string; job: { id: string } | null };
-let job = await api<JobResult>('/admin/clock/advance', admin,
-  { worldId: initial.world.id, target: first.order.executeAt }, '22222222-2222-4222-8222-222222222222');
+// the admin screen does the same: jump to the next market event, then step the saved job.
+await api('/admin/clock/configure', admin, { worldId: initial.world.id, action: 'set', target: first.order.executeAt }, '22222222-2222-4222-8222-222222222222');
+let job = await api<{ world: JobResult }>('/world', admin).then(result => result.world);
 let steps = 0;
-while (job.status !== 'idle') {
+while (job.status !== 'idle' || job.job) {
   job = await api<JobResult>(`/admin/clock/jobs/${job.job!.id}/step`, admin, {});
   if (++steps > 500) throw new Error('clock did not finish within the smoke-test bound');
 }

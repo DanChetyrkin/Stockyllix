@@ -45,12 +45,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test:config": "node --test scripts/api-config.test.mjs",
-    "test:auth": "node --test scripts/auth-validation.test.mjs",
-    "test:theme": "node --test scripts/theme.test.mjs",
-    "test:requests": "node --test scripts/request-lifecycle.test.mjs",
-    "test:name": "node --test scripts/player-name.test.mjs",
-    "test:market": "node --test scripts/market-sort.test.mjs",
+    "test": "node --test scripts/*.test.mjs",
     "check:release": "node scripts/check-release.mjs",
     "build:web": "expo export --platform web"
   },
