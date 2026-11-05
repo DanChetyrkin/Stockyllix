@@ -41,6 +41,8 @@ The cleanup started from the deployed submission commit `fc77646` on `codex/rend
 - **End of period:** the clock stopped at the final instant. New orders and "next event" returned `DATASET_FINISHED`, and moving backwards returned `CLOCK_BACKWARD`.
 - The shared league's world, revision and player balances were unchanged by all of the above.
 
+**Clock synchronization speed (after the review):** with a dataset on the real calendar, 12 players and 10 of them polling every 3 seconds, a 40-event jump to October 29 took 71 seconds when each request processed at most 2 events, and 12 seconds after raising that to 40 events within the existing 8-second budget. There were no failed steps. While synchronizing, World controls now says the next events will be shown after it finishes, instead of wrongly saying none remain.
+
 **Phone width (390 × 844, local web build, Playwright):** a ₪50,000 AMZN buy placed through the UI showed "Pending execution" and the expected execution time in Orders without horizontal scrolling (page width 390). Portfolio showed ₪950,000 available and ₪50,000 reserved. The header scrolled out of view with the page. The game-information and navigation dialogs opened and closed by tapping outside. No page errors.
 
 ## Earlier cloud evidence (release 1.4.0, November 4, 2026)
