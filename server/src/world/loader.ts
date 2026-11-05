@@ -40,7 +40,7 @@ export async function loadDataset(): Promise<Dataset> {
     if (process.env.ALLOW_SIMULATED_FX !== 'true') {
       throw new Error(`Real FX file could not be loaded. Run npm run import:ecb, or explicitly set ALLOW_SIMULATED_FX=true for a labelled simulation. ${error instanceof Error ? error.message : ''}`);
     }
-    // fallback is explicit and createDataset labels it as simulated fx
+    // the fallback must be enabled explicitly, and createDataset labels it as simulated fx.
   }
   return createDataset(seed, rows);
 }

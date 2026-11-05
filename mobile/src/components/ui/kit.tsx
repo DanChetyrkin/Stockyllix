@@ -1,5 +1,5 @@
 import { PropsWithChildren } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, TextInputProps, useWindowDimensions, View, ViewStyle } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TextInput, TextInputProps, useWindowDimensions, View, ViewStyle } from 'react-native';
 import { darkPalette, lightPalette, type ThemePalette, type ThemePreference } from '@/config/theme';
 import { useTheme } from '@/context/ThemeContext';
 import { useGame } from '@/context/GameContext';
@@ -84,6 +84,16 @@ export function Empty({ title, detail, action }: { title: string; detail: string
   const { palette } = useTheme();
   const ui = useThemedStyles();
   return <View style={ui.empty}><View style={ui.emptyMark}><Text style={{ color: palette.green, fontSize: 24 }}>↗</Text></View><CardTitle>{title}</CardTitle><Copy muted style={{ textAlign: 'center', maxWidth: 440 }}>{detail}</Copy>{action}</View>;
+}
+
+// a centred panel over a dimmed page. with a dismiss label, tapping outside closes it.
+export function Dialog({ visible, onClose, dismissLabel, children }: PropsWithChildren<{ visible: boolean; onClose(): void; dismissLabel?: string }>) {
+  return <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <View style={{ flex: 1, backgroundColor: 'rgba(7, 30, 23, 0.45)', alignItems: 'center', justifyContent: 'center', padding: 18 }}>
+      {dismissLabel && <Pressable accessibilityRole="button" accessibilityLabel={dismissLabel} style={StyleSheet.absoluteFill} onPress={onClose} />}
+      {children}
+    </View>
+  </Modal>;
 }
 
 export function DataState({ loading, error, retry, children, hasData }: PropsWithChildren<{ loading: boolean; error: string | null; retry(): void; hasData: boolean }>) {

@@ -1,6 +1,7 @@
+import { playerPath, readCurrentWorld, readIdleWorld } from '../data/current-world.js';
 import type { DocumentStore } from '../data/store.js';
 import { GameError } from '../domain/errors.js';
-import type { Dataset, Order, Portfolio, World } from '../domain/model.js';
+import type { Dataset, Order, Portfolio } from '../domain/model.js';
 import { decimal, formatDecimal, instrumentPriceILS, portfolioValue } from '../domain/valuation.js';
 import { snapshotAt } from '../world/index.js';
 import { DatasetRegistry, datasetRegistry } from '../world/registry.js';
@@ -35,22 +36,17 @@ export class PerformanceService {
   }
 
   async get(uid: string) {
-    const pointer = await this.store.get<{ worldId: string }>('system/current');
-    if (!pointer) throw new GameError('WORLD_NOT_FOUND', 'The world is not available.', 503, true);
-    const world = await this.store.get<World>(`worlds/${pointer.worldId}`);
-    if (!world) throw new GameError('WORLD_NOT_FOUND', 'The world data is not available.', 503);
+    const world = await readIdleWorld(this.store);
     const dataset = this.datasets.get(world.datasetId);
-    if (world.status !== 'idle') throw new GameError('WORLD_ADVANCING', 'Wait for the shared world to finish advancing.', 423, true);
-    const playerPath = `worlds/${world.id}/players/${uid}`;
-    const portfolio = await this.store.get<Portfolio>(playerPath);
+    const path = playerPath(world.id, uid);
+    const portfolio = await this.store.get<Portfolio>(path);
     if (!portfolio) throw new GameError('PLAYER_NOT_INITIALIZED', 'Create your portfolio first.', 404);
     // this optional report is bounded; never present a partial ledger as a full result.
-    const rows = await this.store.list<Order>(`${playerPath}/orders`, { orderBy: 'sequence', direction: 'asc', limit: 1001 });
+    const rows = await this.store.list<Order>(`${path}/orders`, { orderBy: 'sequence', direction: 'asc', limit: 1001 });
     // reject a moving snapshot before diagnosing differences as a broken ledger.
     await this.store.transaction(async tx => {
-      const latestPointer = await tx.get<{ worldId: string }>('system/current');
-      const latest = await tx.get<World>(`worlds/${world.id}`);
-      if (latestPointer?.worldId !== world.id || latest?.revision !== world.revision || latest.status !== 'idle') {
+      const latest = await readCurrentWorld(tx);
+      if (latest?.id !== world.id || latest.revision !== world.revision || latest.status !== 'idle') {
         throw new GameError('WORLD_CHANGED', 'The shared world changed. Refresh this report.', 409, true);
       }
     });

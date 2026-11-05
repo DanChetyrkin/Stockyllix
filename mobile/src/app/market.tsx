@@ -15,9 +15,9 @@ import { useAuth } from '@/context/AuthContext';
 import { useGame } from '@/context/GameContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useApi } from '@/hooks/use-api';
-import { dateTime, money, number, observationDate } from '@/utils/format';
+import { assetPrice, dateTime, money, number, observationDate, percent } from '@/utils/format';
 import { dailyChangeValue, sortMarketAssets, type MarketSort, type SortDirection } from '@/utils/market-sort';
-import { orderBlockReason, parseOrderDraft } from '@/utils/order-draft';
+import { isOrderAmount, orderBlockReason, parseOrderDraft } from '@/utils/order-draft';
 
 interface SavedRequest { key: string; input: OrderInput }
 
@@ -118,7 +118,7 @@ export default function MarketScreen() {
   function reviewOrder() {
     setError(null);
     setSuccess(null);
-    if (!/^(?:0|[1-9]\d{0,12})(?:\.\d{1,2})?$/.test(amount) || Number(amount) <= 0) { setError('Enter a positive shekel amount with up to two decimal places.'); return; }
+    if (!isOrderAmount(amount)) { setError('Enter a positive shekel amount with up to two decimal places.'); return; }
     setReviewing(true);
   }
 
@@ -160,12 +160,34 @@ export default function MarketScreen() {
               <Copy muted style={{ fontSize: 11, lineHeight: 18 }}>The final price is set at execution, including the available USD/ILS rate for US assets. Fractional units are supported. {side === 'buy' ? 'A buy may be rejected if the total position exceeds 20% at execution.' : 'The quoted maximum is an estimate. A lower execution price can reject the sell. Your existing units are reserved while it waits.'}</Copy>
               {error && <Notice tone="error">{error}</Notice>}
               {saved && !busy && <Notice>Check the outcome of your previous order request. Retrying is safe and will not create a duplicate.</Notice>}
-              {hasPendingSell && !saved && <Notice>This holding has units reserved by a pending sell. Wait for that order to finish before sending another sell.</Notice>}
-              {outcome && <Notice tone={outcome.status === 'rejected' ? 'error' : 'success'}>{outcome.status === 'pending' ? `Order accepted and waiting. Expected execution: ${dateTime(outcome.executeAt)} (game time, Israel). ${outcome.side === 'buy' ? 'Cash is reserved, not spent.' : 'Your existing units are reserved.'}` : outcome.status === 'executed' ? `${outcome.side === 'buy' ? 'Purchase' : 'Sale'} executed on ${dateTime(outcome.fill?.executedAt || outcome.executeAt)} (game time, Israel).` : `Order rejected: ${outcome.rejection?.message || 'A trading rule prevented execution.'}`} <Link href="/orders" style={{ color: palette.green, fontWeight: '700' }}>View orders →</Link></Notice>}
-              {reviewing && !saved && <View style={{ gap: 9, paddingVertical: 10 }}><Copy>Confirm {side} of {money(amount)} in {selected.symbol}. Once accepted, the order cannot be cancelled.</Copy>{side === 'buy' && <Detail label="Available after reservation" value={money(availableCash === undefined ? undefined : Math.max(0, availableCash - Number(amount)))} />}<Detail label="Expected execution (Israel)" value={dateTime(selected.nextExecutionAt)} /><Copy muted style={{ fontSize: 12 }}>A pending buy moves available cash into reserved cash. Total portfolio value does not fall by the order amount.</Copy></View>}
-              {blocked && <View style={{ gap: 8 }}><Copy style={{ color: palette.amber, fontSize: 12 }}>{blocked}</Copy><View style={[ui.row, { flexWrap: 'wrap' }]}><Button compact variant="quiet" onPress={() => void refreshWorld()}>Refresh status</Button>{isAdmin && <Link href="/admin" asChild><Button compact variant="quiet" onPress={() => undefined}>World controls</Button></Link>}</View></View>}
-              {(storageProblem || (saved && saved.input.worldId !== world?.id)) && <View style={{ gap: 9 }}><Link href="/orders" style={{ color: palette.green }}>Check accepted orders first →</Link><Button compact variant="secondary" disabled={busy} onPress={() => void clearLocalDraft()}>Clear local draft only</Button><Copy muted style={{ fontSize: 11 }}>This does not cancel or remove an accepted server order.</Copy></View>}
-              {saved ? <><Copy muted style={{ fontSize: 12 }}>{busy ? 'Waiting for server confirmation…' : 'A previous response is unknown. Retry this same request safely; do not create a second order.'}</Copy><Button loading={busy} disabled={!!blocked} onPress={() => void sendOrder()}>{busy ? 'Sending order…' : 'Retry saved request safely'}</Button></> : reviewing ? <><Button loading={busy} disabled={!!blocked} onPress={() => void sendOrder()}>Confirm & send order</Button><Button variant="quiet" disabled={busy} compact onPress={() => setReviewing(false)}>Back to editing</Button></> : <Button disabled={!!blocked} onPress={reviewOrder}>Review {side} order  →</Button>}
+              {outcome && <Notice tone={outcome.status === 'rejected' ? 'error' : 'success'}>
+                {orderOutcomeText(outcome)} <Link href="/orders" style={{ color: palette.green, fontWeight: '700' }}>View orders →</Link>
+              </Notice>}
+              {reviewing && !saved && <View style={{ gap: 9, paddingVertical: 10 }}>
+                <Copy>Confirm {side} of {money(amount)} in {selected.symbol}. Once accepted, the order cannot be cancelled.</Copy>
+                {side === 'buy' && <Detail label="Available after reservation" value={money(availableCash === undefined ? undefined : Math.max(0, availableCash - Number(amount)))} />}
+                <Detail label="Expected execution (Israel)" value={dateTime(selected.nextExecutionAt)} />
+                <Copy muted style={{ fontSize: 12 }}>{side === 'buy' ? 'A pending buy moves available cash into reserved cash. Total portfolio value does not fall by the order amount.' : 'A pending sell reserves your existing units. Cash is added only when the sale executes.'}</Copy>
+              </View>}
+              {blocked && <View style={{ gap: 8 }}>
+                <Copy style={{ color: palette.amber, fontSize: 12 }}>{blocked}</Copy>
+                <View style={[ui.row, { flexWrap: 'wrap' }]}>
+                  <Button compact variant="quiet" onPress={() => void refreshWorld()}>Refresh status</Button>
+                  {isAdmin && <Link href="/admin" asChild><Button compact variant="quiet" onPress={() => undefined}>World controls</Button></Link>}
+                </View>
+              </View>}
+              {(storageProblem || (saved && saved.input.worldId !== world?.id)) && <View style={{ gap: 9 }}>
+                <Link href="/orders" style={{ color: palette.green }}>Check accepted orders first →</Link>
+                <Button compact variant="secondary" disabled={busy} onPress={() => void clearLocalDraft()}>Clear local draft only</Button>
+                <Copy muted style={{ fontSize: 11 }}>This does not cancel or remove an accepted server order.</Copy>
+              </View>}
+              {saved ? <>
+                <Copy muted style={{ fontSize: 12 }}>{busy ? 'Waiting for server confirmation…' : 'A previous response is unknown. Retry this same request safely; do not create a second order.'}</Copy>
+                <Button loading={busy} disabled={!!blocked} onPress={() => void sendOrder()}>{busy ? 'Sending order…' : 'Retry saved request safely'}</Button>
+              </> : reviewing ? <>
+                <Button loading={busy} disabled={!!blocked} onPress={() => void sendOrder()}>Confirm & send order</Button>
+                <Button variant="quiet" disabled={busy} compact onPress={() => setReviewing(false)}>Back to editing</Button>
+              </> : <Button disabled={!!blocked} onPress={reviewOrder}>Review {side} order  →</Button>}
             </> : <Copy muted>Select an asset to explore your next investment.</Copy>}
           </Card>
           {selected && <WatchlistPanel key={selected.id} instrument={selected} selectionDisabled={!!saved || busy} onSelect={id => { setSelectedId(id); setReviewing(false); setSuccess(null); setError(null); }} />}
@@ -174,6 +196,14 @@ export default function MarketScreen() {
       </View>
     </DataState>
   </AppShell>;
+}
+
+function orderOutcomeText(order: Order) {
+  if (order.status === 'pending') {
+    return `Order accepted and waiting. Expected execution: ${dateTime(order.executeAt)} (game time, Israel). ${order.side === 'buy' ? 'Cash is reserved, not spent.' : 'Your existing units are reserved.'}`;
+  }
+  if (order.status === 'executed') return `${order.side === 'buy' ? 'Purchase' : 'Sale'} executed on ${dateTime(order.fill?.executedAt || order.executeAt)} (game time, Israel).`;
+  return `Order rejected: ${order.rejection?.message || 'A trading rule prevented execution.'}`;
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
@@ -186,6 +216,6 @@ function AssetRow({ asset, selected, disabled, onPress }: { asset: Instrument; s
   return <Pressable accessibilityRole="button" accessibilityLabel={`Trade ${asset.name}`} accessibilityState={{ selected, disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 15, backgroundColor: selected ? palette.mint : palette.paper, borderRadius: 12, padding: 18, borderWidth: 1, borderColor: selected ? palette.green : palette.line }, pressed && { opacity: 0.8 }]}>
     <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: selected ? palette.mint : palette.background, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 16, color: palette.green, fontWeight: '700' }}>{asset.symbol.slice(0, 1)}</Text></View>
     <View style={{ flex: 1, gap: 4 }}><Text style={{ fontSize: 14, color: palette.ink, fontWeight: '700' }}>{asset.symbol}</Text><Copy muted style={{ fontSize: 11 }}>{asset.name}</Copy><Copy muted style={{ fontSize: 9 }}>{asset.market === 'TA' ? 'TEL AVIV' : 'UNITED STATES'} · {asset.sector.toUpperCase()}</Copy></View>
-    <View style={{ alignItems: 'flex-end', gap: 7 }}><Text style={{ fontSize: 16, fontWeight: '700', color: palette.ink }}>{asset.currency === 'USD' ? '$' : '₪'}{number(asset.price)}</Text><Text style={{ fontSize: 11, fontWeight: '600', color: dailyChange === null ? palette.muted : dailyChange < 0 ? palette.red : palette.green }}>Daily {dailyChange === null ? '—' : `${dailyChange > 0 ? '+' : ''}${dailyChange.toFixed(2)}%`}</Text><Badge tone={asset.marketOpen ? 'positive' : 'neutral'}>{asset.marketOpen ? 'Open' : 'Closed'}</Badge></View>
+    <View style={{ alignItems: 'flex-end', gap: 7 }}><Text style={{ fontSize: 16, fontWeight: '700', color: palette.ink }}>{assetPrice(asset.price, asset.currency)}</Text><Text style={{ fontSize: 11, fontWeight: '600', color: dailyChange === null ? palette.muted : dailyChange < 0 ? palette.red : palette.green }}>Daily {dailyChange === null ? '—' : percent(dailyChange, true)}</Text><Badge tone={asset.marketOpen ? 'positive' : 'neutral'}>{asset.marketOpen ? 'Open' : 'Closed'}</Badge></View>
   </Pressable>;
 }

@@ -4,6 +4,7 @@ import { auth, firebaseConfigured } from '@/config/firebase';
 import { api, ApiError, errorMessage } from '@/api/client';
 import { apiConfigurationError, apiConfigured } from '@/config/api-config';
 import { firstValidationError, normalizeEmail, registrationErrors, signInErrors } from '@/auth/validation';
+import { startingPlayerName } from '@/utils/player-name';
 
 interface AuthValue {
   user: User | null;
@@ -39,8 +40,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setError(null);
       try {
         // the server creates the initial balance only when this uid has no portfolio.
-        const name = pendingName.current || current.displayName || current.email?.split('@')[0] || 'Investor';
-        await api('/me/initialize', { method: 'POST', body: { displayName: name.trim().length >= 2 ? name : 'Investor' } });
+        const displayName = startingPlayerName(pendingName.current || current.displayName, current.email);
+        await api('/me/initialize', { method: 'POST', body: { displayName } });
         if (generation.current === currentGeneration) setInitialized(true);
       } catch (cause) {
         if (generation.current === currentGeneration) setError(cause instanceof ApiError && ['WORLD_ADVANCING', 'CLOCK_SYNCING'].includes(cause.code) ? null : errorMessage(cause));

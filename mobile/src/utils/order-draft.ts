@@ -3,6 +3,11 @@ export interface SavedOrderRequest {
   input: { worldId: string; instrumentId: string; side: 'buy' | 'sell'; amountILS: string };
 }
 
+// the server applies the same rule; this check only gives a faster message.
+export function isOrderAmount(value: string) {
+  return /^(?:0|[1-9]\d{0,9})(?:\.\d{1,2})?$/.test(value) && Number(value) > 0;
+}
+
 export function parseOrderDraft(value: string | null): SavedOrderRequest | null {
   if (!value) return null;
   const draft = JSON.parse(value) as SavedOrderRequest;
@@ -10,7 +15,7 @@ export function parseOrderDraft(value: string | null): SavedOrderRequest | null 
     || typeof draft.input?.worldId !== 'string' || !draft.input.worldId
     || typeof draft.input.instrumentId !== 'string' || !draft.input.instrumentId
     || !['buy', 'sell'].includes(draft.input.side)
-    || typeof draft.input.amountILS !== 'string' || !/^\d{1,10}(\.\d{1,2})?$/.test(draft.input.amountILS) || Number(draft.input.amountILS) <= 0) {
+    || typeof draft.input.amountILS !== 'string' || !isOrderAmount(draft.input.amountILS)) {
     throw new Error('Unreadable saved request. Check Orders before clearing this local draft.');
   }
   return draft;
@@ -30,6 +35,6 @@ export function orderBlockReason(input: {
   if (!input.hasExecution) return 'No later execution event remains for this asset. Choose another asset, or ask an administrator to start a separate historical world.';
   if (input.pendingSell) return 'Units are reserved for a pending sell. Follow that order before submitting another sell for this asset.';
   if (input.side === 'sell' && input.units <= 0) return 'You do not own units of this asset. Choose an existing holding to sell.';
-  if (!input.savedWorldId && input.side === 'buy' && input.availableCash !== undefined && input.amount > input.availableCash) return 'The amount exceeds available cash. Lower it; money reserved for pending buys cannot be spent twice.';
+  if (input.side === 'buy' && input.availableCash !== undefined && input.amount > input.availableCash) return 'The amount exceeds available cash. Lower it; money reserved for pending buys cannot be spent twice.';
   return null;
 }

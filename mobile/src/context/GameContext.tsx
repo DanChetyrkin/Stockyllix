@@ -5,6 +5,7 @@ import { api, ApiError, errorMessage } from '@/api/client';
 import { setTestRealm } from '@/api/realm';
 import { World } from '@/api/types';
 import { RequestCoordinator } from '@/hooks/request-state';
+import { startingPlayerName } from '@/utils/player-name';
 import { useAuth } from './AuthContext';
 
 interface GameValue {
@@ -23,7 +24,7 @@ const GameContext = createContext<GameValue | null>(null);
 export function GameProvider({ children }: PropsWithChildren) {
   const { user, initialized, retryInitialization } = useAuth();
   const uid = user?.uid;
-  const displayName = user?.displayName || user?.email?.split('@')[0] || 'Investor';
+  const displayName = startingPlayerName(user?.displayName, user?.email);
   const [realm, setRealm] = useState<{ uid: string; testing: boolean } | null>(null);
   const testRealm = Boolean(realm && realm.uid === uid && realm.testing);
   const realmReady = !uid || realm?.uid === uid;
@@ -70,7 +71,7 @@ export function GameProvider({ children }: PropsWithChildren) {
               // initialization reports its own errors; read the clock again after a possible pause.
               data = await api('/world', { signal });
             }
-            else if (currentWorldId.current !== data.world.id) await api('/me/initialize', { method: 'POST', body: { displayName: displayName.trim().length >= 2 ? displayName : 'Investor' }, signal });
+            else if (currentWorldId.current !== data.world.id) await api('/me/initialize', { method: 'POST', body: { displayName }, signal });
           } catch (cause) {
             if (!(cause instanceof ApiError) || !['WORLD_ADVANCING', 'CLOCK_SYNCING'].includes(cause.code)) throw cause;
             data = await api('/world', { signal });
@@ -97,7 +98,6 @@ export function GameProvider({ children }: PropsWithChildren) {
   const isAdmin = ownSnapshot?.isAdmin ?? false;
   const switchRealm = useCallback(async (testing: boolean) => {
     if (!uid || (testing && !isAdmin)) throw new Error('An administrator is required for a test world.');
-    if (testing && !world?.clock?.autoProgresses) throw new Error('Update the server before opening an isolated test world.');
     await AsyncStorage.setItem(`stockyllix.realm.${uid}`, testing ? 'test' : 'shared');
     requests.cancel();
     currentWorldId.current = null;
@@ -107,7 +107,7 @@ export function GameProvider({ children }: PropsWithChildren) {
     setRequest(null);
     setRealm({ uid, testing });
     setRefreshKey(key => key + 1);
-  }, [uid, isAdmin, world?.clock?.autoProgresses, requests]);
+  }, [uid, isAdmin, requests]);
 
   useEffect(() => {
     const timer = setTimeout(() => { void loadWorld(false); }, 0);

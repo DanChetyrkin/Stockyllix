@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
@@ -10,7 +10,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useGame } from '@/context/GameContext';
 import { useTheme } from '@/context/ThemeContext';
 import type { ThemePalette } from '@/config/theme';
-import { Button, Copy, Field, Notice } from '@/components/ui/kit';
+import { Button, Copy, Dialog, Field, Notice } from '@/components/ui/kit';
 
 interface Profile {
   displayName: string;
@@ -168,29 +168,27 @@ function ProfileControls({ user, compact }: { user: User; compact: boolean }) {
       {!compact && <View style={styles.nameColumn}><Text numberOfLines={1} style={styles.triggerName}>{displayName}</Text><Text style={styles.triggerHint}>My profile</Text></View>}
       <Avatar name={displayName} photo={profile?.photoDataUrl ?? null} />
     </Pressable>
-    <Modal visible={open} transparent animationType="fade" onRequestClose={() => { if (!busy) setOpen(false); }}>
-      <View style={styles.overlay}>
-        <View accessibilityViewIsModal style={styles.panel}>
-          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-            <View style={styles.heading}><View><Text accessibilityRole="header" style={styles.title}>Your profile</Text><Copy muted>A name and photo for your account.</Copy></View>
-              <Pressable accessibilityRole="button" accessibilityLabel="Close profile" disabled={busy} onPress={() => setOpen(false)} style={styles.close}><Text style={styles.closeText}>×</Text></Pressable>
-            </View>
-            <View style={styles.photoRow}><Avatar name={name || displayName} photo={photo} large /><View style={styles.photoActions}>
-              <Button compact variant="secondary" disabled={loading || busy || !profile} loading={choosing} onPress={() => { void choosePhoto(); }}>Choose photo</Button>
-              {photo && <Button compact variant="quiet" disabled={busy} onPress={() => setPhoto(null)}>Remove photo</Button>}
-            </View></View>
-            <Copy muted style={{ fontSize: 12 }}>Photos are resized to 128 × 128 and stored privately. They are not included in the league table.</Copy>
-            {loading && <View style={styles.loading}><ActivityIndicator color={palette.green} /><Copy muted>Loading your profile…</Copy></View>}
-            {loadError && <Notice tone="error" action={<Button compact variant="secondary" onPress={() => { setLoading(true); setLoadError(null); setReload(value => value + 1); }}>Retry</Button>}>{loadError}</Notice>}
-            <Field label="Display name" value={name} onChangeText={setName} maxLength={40} autoCapitalize="words" autoComplete="name" editable={!loading && !busy && Boolean(profile)} hint="2–40 characters. This is a display name, not your sign-in email." />
-            <View style={styles.email}><Text style={styles.emailLabel}>Sign-in email</Text><Copy>{user.email || 'Not available'}</Copy></View>
-            {message && <Notice tone={noticeTone}>{message}</Notice>}
-            <View style={styles.buttons}><Button variant="secondary" disabled={busy} onPress={() => setOpen(false)}>Close</Button><Button disabled={loading || choosing || !profile} loading={saving} onPress={() => { void saveProfile(); }}>Save profile</Button></View>
-            <View style={styles.footer}><Button compact variant="quiet" disabled={busy} onPress={() => { void leave(); }}>Sign out</Button></View>
-          </ScrollView>
-        </View>
+    <Dialog visible={open} onClose={() => { if (!busy) setOpen(false); }}>
+      <View accessibilityViewIsModal style={styles.panel}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <View style={styles.heading}><View><Text accessibilityRole="header" style={styles.title}>Your profile</Text><Copy muted>A name and photo for your account.</Copy></View>
+            <Pressable accessibilityRole="button" accessibilityLabel="Close profile" disabled={busy} onPress={() => setOpen(false)} style={styles.close}><Text style={styles.closeText}>×</Text></Pressable>
+          </View>
+          <View style={styles.photoRow}><Avatar name={name || displayName} photo={photo} large /><View style={styles.photoActions}>
+            <Button compact variant="secondary" disabled={loading || busy || !profile} loading={choosing} onPress={() => { void choosePhoto(); }}>Choose photo</Button>
+            {photo && <Button compact variant="quiet" disabled={busy} onPress={() => setPhoto(null)}>Remove photo</Button>}
+          </View></View>
+          <Copy muted style={{ fontSize: 12 }}>Photos are resized to 128 × 128 and stored privately. They are not included in the league table.</Copy>
+          {loading && <View style={styles.loading}><ActivityIndicator color={palette.green} /><Copy muted>Loading your profile…</Copy></View>}
+          {loadError && <Notice tone="error" action={<Button compact variant="secondary" onPress={() => { setLoading(true); setLoadError(null); setReload(value => value + 1); }}>Retry</Button>}>{loadError}</Notice>}
+          <Field label="Display name" value={name} onChangeText={setName} maxLength={40} autoCapitalize="words" autoComplete="name" editable={!loading && !busy && Boolean(profile)} hint="2–40 characters. This is a display name, not your sign-in email." />
+          <View style={styles.email}><Text style={styles.emailLabel}>Sign-in email</Text><Copy>{user.email || 'Not available'}</Copy></View>
+          {message && <Notice tone={noticeTone}>{message}</Notice>}
+          <View style={styles.buttons}><Button variant="secondary" disabled={busy} onPress={() => setOpen(false)}>Close</Button><Button disabled={loading || choosing || !profile} loading={saving} onPress={() => { void saveProfile(); }}>Save profile</Button></View>
+          <View style={styles.footer}><Button compact variant="quiet" disabled={busy} onPress={() => { void leave(); }}>Sign out</Button></View>
+        </ScrollView>
       </View>
-    </Modal>
+    </Dialog>
   </>;
 }
 
@@ -201,7 +199,6 @@ const createStyles = (palette: ThemePalette) => StyleSheet.create({
   triggerHint: { color: palette.muted, fontSize: 11 },
   avatar: { backgroundColor: palette.mint, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderWidth: 1, borderColor: palette.line },
   initials: { color: palette.green, fontSize: 14, fontWeight: '700' },
-  overlay: { flex: 1, backgroundColor: 'rgba(12, 32, 25, 0.55)', alignItems: 'center', justifyContent: 'center', padding: 18 },
   panel: { width: '100%', maxWidth: 480, maxHeight: '95%', backgroundColor: palette.paper, borderRadius: 18 },
   content: { padding: 24, gap: 20 },
   heading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },

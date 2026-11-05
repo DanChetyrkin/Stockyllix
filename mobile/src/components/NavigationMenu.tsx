@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, usePathname, type Href } from 'expo-router';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/context/ThemeContext';
+import { Dialog } from './ui/kit';
 
 const pages = [
   { href: '/', label: 'Portfolio', group: 'INVEST', detail: 'Cash and your holdings' },
@@ -25,20 +26,17 @@ export function NavigationMenu({ isAdmin, compact }: { isAdmin: boolean; compact
     <Pressable accessibilityRole="button" accessibilityLabel={`Open navigation menu. Current page: ${current}`} accessibilityState={{ expanded: open }} onPress={() => setOpen(true)} style={[styles.trigger, compact ? { width: 96, minWidth: 96, gap: 8 } : { minWidth: 140, maxWidth: 190 }]}>
       <Text style={styles.current}>{compact ? 'Menu' : current}</Text><View style={[styles.chevron, { transform: [{ rotate: open ? '225deg' : '45deg' }] }]} />
     </Pressable>
-    <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-      <View style={styles.overlay}>
-        <Pressable accessibilityLabel="Dismiss navigation menu" style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} />
-        <View accessibilityViewIsModal style={styles.panel}>
-          <View style={styles.panelHeader}><Text accessibilityRole="header" style={styles.title}>Your league</Text><Pressable accessibilityRole="button" accessibilityLabel="Close navigation menu" onPress={() => setOpen(false)} style={styles.close}><Text style={styles.closeText}>×</Text></Pressable></View>
-          <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ paddingBottom: 3 }}>{items.map((item, index) => <View key={item.href}>
-            {items[index - 1]?.group !== item.group && <Text style={styles.group}>{item.group}</Text>}
-            <Link href={item.href as Href} asChild><Pressable accessibilityRole="link" accessibilityLabel={item.label} onPress={() => setOpen(false)} style={StyleSheet.flatten([styles.item, pathname === item.href && styles.active])}>
-              <View style={{ flex: 1, gap: 4 }}><Text style={styles.label}>{item.label}</Text><Text style={styles.detail}>{item.detail}</Text></View><Text style={styles.arrow}>{pathname === item.href ? '●' : '→'}</Text>
-            </Pressable></Link>
-          </View>)}</ScrollView>
-        </View>
+    <Dialog visible={open} onClose={() => setOpen(false)} dismissLabel="Dismiss navigation menu">
+      <View accessibilityViewIsModal style={styles.panel}>
+        <View style={styles.panelHeader}><Text accessibilityRole="header" style={styles.title}>Your league</Text><Pressable accessibilityRole="button" accessibilityLabel="Close navigation menu" onPress={() => setOpen(false)} style={styles.close}><Text style={styles.closeText}>×</Text></Pressable></View>
+        <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ paddingBottom: 3 }}>{items.map((item, index) => <View key={item.href}>
+          {items[index - 1]?.group !== item.group && <Text style={styles.group}>{item.group}</Text>}
+          <Link href={item.href as Href} asChild><Pressable accessibilityRole="link" accessibilityLabel={item.label} onPress={() => setOpen(false)} style={StyleSheet.flatten([styles.item, pathname === item.href && styles.active])}>
+            <View style={{ flex: 1, gap: 4 }}><Text style={styles.label}>{item.label}</Text><Text style={styles.detail}>{item.detail}</Text></View><Text style={styles.arrow}>{pathname === item.href ? '●' : '→'}</Text>
+          </Pressable></Link>
+        </View>)}</ScrollView>
       </View>
-    </Modal>
+    </Dialog>
   </>;
 }
 
@@ -46,7 +44,6 @@ const makeStyles = (palette: ReturnType<typeof useTheme>['palette']) => StyleShe
   trigger: { minHeight: 44, borderRadius: 10, borderWidth: 1, borderColor: palette.inputBorder, backgroundColor: palette.paper, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   current: { color: palette.ink, fontSize: 14, fontWeight: '600', textAlign: 'center', flexShrink: 1 },
   chevron: { width: 7, height: 7, borderRightWidth: 1.5, borderBottomWidth: 1.5, borderColor: palette.green, marginTop: -3 },
-  overlay: { flex: 1, backgroundColor: 'rgba(7, 30, 23, 0.38)', alignItems: 'center', justifyContent: 'center', padding: 18 },
   panel: { width: '100%', maxWidth: 420, maxHeight: '90%', borderRadius: 20, backgroundColor: palette.paper, padding: 22, borderWidth: 1, borderColor: palette.line, gap: 4 },
   panelHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, title: { color: palette.ink, fontSize: 23, fontWeight: '700' },
   close: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20, backgroundColor: palette.background }, closeText: { color: palette.ink, fontSize: 25 },

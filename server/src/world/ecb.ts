@@ -3,7 +3,6 @@ import { DateTime } from 'luxon';
 import { validateFxRows, WORLD_ZONE, type FxRow } from './index.js';
 import { readResponseText } from './http.js';
 
-export const ECB_SOURCE_URL = 'https://data-api.ecb.europa.eu/service/data/EXR/D.USD+ILS.EUR.SP00.A?startPeriod=2026-10-02&endPeriod=2026-11-02&format=csvdata';
 export const ECB_ATTRIBUTION = 'Source: European Central Bank euro foreign exchange reference rates. USD/ILS is calculated as ILS per EUR divided by USD per EUR.';
 export const ECB_XML_URL = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml';
 
@@ -25,7 +24,7 @@ function observation(date: string, usd: string, ils: string): FxRow {
   return { date, rate: new Decimal(ils).div(usd).toFixed(10), availableAt, source: 'ecb' };
 }
 
-// this small csv reader handles quoted metadata and escaped quotes in the official feed
+// a small csv reader for the quoted fields in the official ecb file.
 export function csvRows(csv: string): string[][] {
   const result: string[][] = [];
   let row: string[] = [];
@@ -79,7 +78,7 @@ export function parseEcbCsv(csv: string, from = '2026-10-02', to = '2026-11-02')
   return valid;
 }
 
-// parse only the documented small ecb cube format, never execute imported content
+// parse only the documented ecb xml format; imported content is never executed.
 export function parseEcbXml(xml: string, from = '2026-10-02', to = '2026-11-02'): FxRow[] {
   if (xml.length > 1_000_000) throw new Error('ECB document exceeds the size limit');
   if (!xml.includes('www.ecb.int/vocabulary/2002-08-01/eurofxref')) throw new Error('Unexpected ECB XML document');

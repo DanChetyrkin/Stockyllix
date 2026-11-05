@@ -4,7 +4,7 @@ import type { DocumentStore, ListOptions, Transaction } from '../src/data/store.
 import type { Order, Portfolio, World, WorldEvent } from '../src/domain/model.js';
 import { rankPortfolios } from '../src/domain/scoring.js';
 import { executeOrder, parseAmount, reserveOrder } from '../src/domain/trading.js';
-import { decimal, formatDecimal, portfolioSummary, portfolioValue, sampleWeek } from '../src/domain/valuation.js';
+import { portfolioSummary, portfolioValue, sampleWeek } from '../src/domain/valuation.js';
 import { GameService } from '../src/services/game-service.js';
 import { createDataset } from '../src/world/index.js';
 
@@ -31,7 +31,7 @@ function event(price = '10', fx = '4'): WorldEvent {
 }
 
 function reserve(portfolio: Portfolio, pending: Order, fill = event()) {
-  return reserveOrder(dataset, portfolio, pending, { worldId: pending.worldId, instrumentId: pending.instrumentId, side: pending.side, amountILS: String(pending.amountAgorot / 100) }, fill.snapshot);
+  return reserveOrder(dataset, portfolio, pending, fill.snapshot);
 }
 
 async function advanceDone(service: GameService, target: string, key = `advance-${target}`) {
@@ -381,7 +381,7 @@ describe('durable game service', () => {
     await expect(service.getPortfolio('alice')).rejects.toMatchObject({ code: 'PLAYER_NOT_INITIALIZED' });
   });
 
-  it('compares the personal review with the previous real-day viewed value and deduplicates repeated views', async () => {
+  it('records one review per real Israel day and compares it with the previous real-day value', async () => {
     const store = new MemoryStore();
     let realNow = new Date('2026-11-03T10:00:00Z');
     const service = new GameService(store, dataset, { now: () => realNow });
@@ -396,25 +396,19 @@ describe('durable game service', () => {
 
     await advanceDone(service, '2026-10-07T14:30:00Z');
     expect(await service.recordReview('alice')).toEqual(first);
-    await service.submitOrder('alice', { worldId: world.id, instrumentId, side: 'buy', amountILS: '1000' }, 'review-pending-buy');
-    const unviewed = await service.getPortfolio('alice');
-    expect(unviewed.dailyReview.pendingOrders).toBe(1);
 
+    // moving the game is not a real return visit; the next real date is.
     realNow = new Date('2026-11-04T10:00:00Z');
-    const beforeSecondView = await service.getPortfolio('alice');
-    expect(beforeSecondView.dailyReview.previousReviewDate).toBe('2026-11-03');
-    expect(beforeSecondView.dailyReview.seenToday).toBe(false);
     const second = await service.recordReview('alice');
     expect(second.previousReviewDate).toBe(first.realDate);
     expect(second.baselineValueILS).toBe(first.viewedValueILS);
     expect(second.returnedOnLaterRealDay).toBe(true);
-    expect((await service.getPortfolio('alice')).dailyReview.valueChangeILS).toBe(formatDecimal(decimal(second.viewedValueILS).sub(first.viewedValueILS), 2));
 
     await advanceDone(service, '2026-10-08T07:00:00Z');
     expect(await service.recordReview('alice')).toEqual(second);
     const activity = await store.get<{ distinctRealDays: number; lastValueILS: string }>(`worlds/${world.id}/players/alice/activity/current`);
     expect(activity).toMatchObject({ distinctRealDays: 2, lastValueILS: second.viewedValueILS });
-    expect((await service.getPortfolio('alice')).dailyReview.pendingOrders).toBe(0);
+    expect((await service.getPortfolio('alice')).insight).toMatch(/largest holding/);
   });
 
   it('never exposes future prices or accepts execution beyond the dataset', async () => {

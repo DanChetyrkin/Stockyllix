@@ -39,7 +39,7 @@ export function firstValidationError(errors: AuthFieldErrors): string | undefine
   return Object.values(errors).find(value => typeof value === 'string');
 }
 
-// sign-in errors do not reveal whether an email is registered
+// sign-in errors do not reveal whether an email is registered.
 export function authErrorMessage(code: string): string | undefined {
   const messages: Record<string, string> = {
     'auth/invalid-credential': 'The email or password is incorrect.',

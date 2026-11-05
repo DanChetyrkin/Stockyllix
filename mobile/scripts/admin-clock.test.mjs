@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { israelDateTime, parseClockRequest, validCalendarDate, validIsraelDateTime } from '../src/utils/admin-clock.ts';
+import { israelDateTime, parseClockRequest, suggestedGameTime, validCalendarDate, validIsraelDateTime } from '../src/utils/admin-clock.ts';
 
 test('israel fields follow daylight saving independently of the device zone', () => {
   assert.deepEqual(israelDateTime('2026-10-19T13:30:00Z'), { date: '2026-10-19', time: '16:30' });
@@ -13,6 +13,13 @@ test('calendar inputs reject impossible days and times rather than normalizing t
   assert.equal(validCalendarDate('2028-02-29'), true);
   assert.equal(validIsraelDateTime({ date: '2027-03-01', time: '23:59' }), true);
   assert.equal(validIsraelDateTime({ date: '2027-03-01', time: '24:00' }), false);
+});
+
+test('suggested game time keeps a future minute without proposing a date beyond the covered period', () => {
+  const end = '2027-03-28T20:59:59.999Z';
+  assert.deepEqual(suggestedGameTime('2027-03-28T20:30:00Z', end), { date: '2027-03-28', time: '23:31' });
+  assert.deepEqual(suggestedGameTime('2027-03-28T20:59:30Z', end), { date: '2027-03-28', time: '23:59' });
+  assert.deepEqual(suggestedGameTime(end, end), { date: '2027-03-28', time: '23:59' });
 });
 
 test('restored requests retain the original world, action, target and idempotency key', () => {

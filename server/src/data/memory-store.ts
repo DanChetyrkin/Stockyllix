@@ -1,6 +1,6 @@
 import type { DocumentStore, ListOptions, Transaction } from './store.js';
 
-// this adapter is for deterministic tests, not cloud persistence
+// in-memory store for tests; transactions run one at a time like a strict database.
 export class MemoryStore implements DocumentStore {
   private documents = new Map<string, unknown>();
   private queue: Promise<unknown> = Promise.resolve();

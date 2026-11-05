@@ -13,6 +13,7 @@ export function canonicalValueILS(value: Decimal.Value): Decimal {
   return decimal(formatDecimal(value, 12));
 }
 
+// us prices use the snapshot's usd/ils rate: the latest rate published before this event.
 export function instrumentPriceILS(dataset: Dataset, snapshot: MarketSnapshot, instrumentId: string): Decimal {
   const instrument = dataset.instruments.find((item) => item.id === instrumentId);
   const price = snapshot.prices[instrumentId];
@@ -33,6 +34,7 @@ export function weeklyReturn(value: Decimal.Value, week: WeekStats): Decimal {
   return decimal(week.finalValueILS ?? value).div(week.startValueILS).sub(1).mul(100);
 }
 
+// drawdown is the largest fall from the week's highest value to a later value.
 export function sampleWeek(week: WeekStats, value: Decimal.Value): WeekStats {
   if (week.finalValueILS !== undefined) return week;
   const current = decimal(value);
