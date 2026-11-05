@@ -6,15 +6,17 @@ This file separates what was checked locally, what was checked in the cloud, and
 
 | Item | Status |
 | --- | --- |
-| Live web app | Built from `8299242` at https://stockyllix.web.app. `index.html` and all three script bundles match the release build byte for byte |
-| Live API | Server `8299242`, `/health` = 1.5.2 / readability-v7 |
-| CI | All three jobs passed for `d780399`; see GitHub Actions for later commits |
+| Live web app | Built from `5f4b2ff` at https://stockyllix.web.app. `index.html` and all script bundles match the release build byte for byte |
+| Live API | Server `5f4b2ff`, `/health` = 1.5.3 / market-list-v8 |
+| CI | All three jobs passed for `5f4b2ff` on `main` and `codex/render-free-deploy` |
 | GitHub Write access for the reviewer | Owner handover |
 | Physical Expo Go session | Not verified. Browser phone-width checks and the Android bundle build are not a device test |
 
 ## Market list fix and price watch removal, release 1.5.3 (November 5, 2026)
 
 A manual run found that the order panel always opened on LUMI, the first asset in the catalogue, even when the market filter showed only US assets. The panel now follows the visible list, and a saved or reviewed request keeps its asset. The price watch was removed: the assignment does not ask for it, and without notifications it could only show a badge inside the app. Existing `users/<uid>/watchlist/current` documents are no longer read. Locally: 197 server tests (the 6 removed tests covered only the watchlist), 50 app checks (1 new for the order panel), typecheck, lint, the server build and the web export passed.
+
+After both deploys, the live walkthrough passed in the isolated test realm: the AMZN buy reserved ₪50,000 and executed once after two **Advance to market event** jumps (51.3 s) at $255.25 and USD/ILS 3.089, the ₪10,000 sale brought cash to ₪960,000, the 20% rule held, the removed `/api/watchlist` route returned 404 and a jump to October 29 took 245 s. A fresh, paused test game was left for the reviewer, and the shared league's world and revision were unchanged.
 
 ## Readability pass, release 1.5.2 (November 5, 2026)
 
