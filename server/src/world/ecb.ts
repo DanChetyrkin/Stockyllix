@@ -3,7 +3,6 @@ import { DateTime } from 'luxon';
 import { validateFxRows, WORLD_ZONE, type FxRow } from './index.js';
 import { readResponseText } from './http.js';
 
-export const ECB_SOURCE_URL = 'https://data-api.ecb.europa.eu/service/data/EXR/D.USD+ILS.EUR.SP00.A?startPeriod=2026-10-02&endPeriod=2026-11-02&format=csvdata';
 export const ECB_ATTRIBUTION = 'Source: European Central Bank euro foreign exchange reference rates. USD/ILS is calculated as ILS per EUR divided by USD per EUR.';
 export const ECB_XML_URL = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml';
 

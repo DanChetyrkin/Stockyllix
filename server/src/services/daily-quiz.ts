@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { DateTime } from 'luxon';
+import { playerPath, readIdleWorld } from '../data/current-world.js';
 import type { DocumentStore, Transaction } from '../data/store.js';
 import { GameError } from '../domain/errors.js';
 import type { World } from '../domain/model.js';
@@ -82,14 +83,6 @@ export class DailyQuizService {
     this.gameTime = options.gameTime ?? (world => world.now);
   }
 
-  private async world(tx: Transaction): Promise<World> {
-    const pointer = await tx.get<{ worldId: string }>('system/current');
-    const world = pointer && await tx.get<World>(`worlds/${pointer.worldId}`);
-    if (!world) throw new GameError('WORLD_NOT_FOUND', 'The game world is not available. Refresh and try again.', 503, true);
-    if (world.status !== 'idle') throw new GameError('WORLD_ADVANCING', 'The game clock is moving. Your daily question will update when it finishes.', 423, true);
-    return world;
-  }
-
   private async day(world: World, tx: Transaction) {
     const date = DateTime.fromISO(await this.gameTime(world, tx)).setZone('Asia/Jerusalem').toISODate()!;
     return { date, question: questionFor(world.id, date) };
@@ -106,16 +99,16 @@ export class DailyQuizService {
 
   async get(uid: string): Promise<QuizView> {
     return this.store.transaction(async tx => {
-      const world = await this.world(tx);
+      const world = await readIdleWorld(tx);
       const day = await this.day(world, tx);
-      const saved = await tx.get<SavedAnswer>(`worlds/${world.id}/players/${uid}/quiz/current`);
+      const saved = await tx.get<SavedAnswer>(`${playerPath(world.id, uid)}/quiz/current`);
       return this.view(world, day, saved);
     });
   }
 
   async answer(uid: string, input: { worldId: string; date: string; questionId: string; answerIndex: number }): Promise<QuizView> {
     return this.store.transaction(async tx => {
-      const world = await this.world(tx);
+      const world = await readIdleWorld(tx);
       const day = await this.day(world, tx);
       if (input.worldId !== world.id || input.date !== day.date || input.questionId !== day.question.id) {
         throw new GameError('QUIZ_EXPIRED', 'The game day changed. Refresh to answer the current question.', 409, true);
@@ -123,7 +116,7 @@ export class DailyQuizService {
       if (!Number.isInteger(input.answerIndex) || input.answerIndex < 0 || input.answerIndex >= day.question.options.length) {
         throw new GameError('INVALID_QUIZ_ANSWER', 'Choose one of the available answers.', 400);
       }
-      const path = `worlds/${world.id}/players/${uid}/quiz/current`;
+      const path = `${playerPath(world.id, uid)}/quiz/current`;
       const existing = await tx.get<SavedAnswer>(path);
       if (existing?.date === day.date && existing.questionId === day.question.id) return this.view(world, day, existing);
       // the next game day replaces this one document; there is no question history.

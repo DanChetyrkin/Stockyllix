@@ -1,6 +1,7 @@
-import type { DocumentStore, Transaction } from '../data/store.js';
+import { readIdleWorld } from '../data/current-world.js';
+import type { DocumentStore } from '../data/store.js';
 import { GameError } from '../domain/errors.js';
-import type { Dataset, Instrument, World } from '../domain/model.js';
+import type { Dataset, Instrument } from '../domain/model.js';
 import { decimal } from '../domain/valuation.js';
 import { previousSessionClose, priceChangePct } from '../world/price-change.js';
 import { DatasetRegistry, datasetRegistry } from '../world/registry.js';
@@ -20,15 +21,6 @@ export class MarketInsightsService {
     this.datasets = datasetRegistry(dataset);
   }
 
-  private async world(tx: Transaction): Promise<World> {
-    const pointer = await tx.get<{ worldId: string }>('system/current');
-    const world = pointer && await tx.get<World>(`worlds/${pointer.worldId}`);
-    if (!world) throw new GameError('WORLD_NOT_FOUND', 'The shared world is not available. Refresh and try again.', 503, true);
-    this.datasets.get(world.datasetId);
-    if (world.status !== 'idle') throw new GameError('WORLD_ADVANCING', 'The shared world is advancing. Try again when it finishes.', 423, true);
-    return world;
-  }
-
   private instrument(id: string, dataset: Dataset): Instrument {
     const instrument = dataset.instruments.find(item => item.id === id);
     if (!instrument) throw new GameError('UNKNOWN_INSTRUMENT', 'Choose an asset from the game catalogue.', 404);
@@ -37,7 +29,7 @@ export class MarketInsightsService {
 
   async history(instrumentId: string) {
     return this.store.transaction(async tx => {
-      const world = await this.world(tx);
+      const world = await readIdleWorld(tx);
       const dataset = this.datasets.get(world.datasetId);
       const instrument = this.instrument(instrumentId, dataset);
       const points: PricePoint[] = [{ at: dataset.startsAt, price: dataset.initialSnapshot.prices[instrumentId]!, kind: 'baseline' }];
@@ -61,7 +53,7 @@ export class MarketInsightsService {
 
   async getWatchlist(uid: string) {
     return this.store.transaction(async tx => {
-      const world = await this.world(tx);
+      const world = await readIdleWorld(tx);
       const dataset = this.datasets.get(world.datasetId);
       const watchlist = await tx.get<Watchlist>(`users/${uid}/watchlist/current`);
       const items = Object.values(watchlist?.items ?? {}).flatMap(entry => {
@@ -82,7 +74,7 @@ export class MarketInsightsService {
     if (!['at_or_below', 'at_or_above'].includes(input.direction)) throw new GameError('INVALID_DIRECTION', 'Choose whether to watch above or below the target.');
     const entry: WatchEntry = { instrumentId: input.instrumentId, targetPrice: decimal(input.targetPrice).toString(), direction: input.direction, updatedAt: this.now().toISOString() };
     return this.store.transaction(async tx => {
-      const world = await this.world(tx);
+      const world = await readIdleWorld(tx);
       this.instrument(input.instrumentId, this.datasets.get(world.datasetId));
       const path = `users/${uid}/watchlist/current`;
       const watchlist = await tx.get<Watchlist>(path) ?? { items: {} };
@@ -94,7 +86,7 @@ export class MarketInsightsService {
 
   async removeWatch(uid: string, instrumentId: string) {
     return this.store.transaction(async tx => {
-      const world = await this.world(tx);
+      const world = await readIdleWorld(tx);
       this.instrument(instrumentId, this.datasets.get(world.datasetId));
       const path = `users/${uid}/watchlist/current`;
       const watchlist = await tx.get<Watchlist>(path);

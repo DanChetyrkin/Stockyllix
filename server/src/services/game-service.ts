@@ -1,5 +1,6 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { DateTime } from 'luxon';
+import { CURRENT_WORLD, keyHash, playerPath, worldPath } from '../data/current-world.js';
 import type { DocumentStore, Transaction } from '../data/store.js';
 import { GameError } from '../domain/errors.js';
 import type { ClockJob, Dataset, LeaderboardRow, Order, OrderInput, Portfolio, Valuation, World, WorldEvent } from '../domain/model.js';
@@ -13,10 +14,6 @@ import { readGameTime } from '../domain/clock.js';
 
 const PAGE_SIZE = 25;
 const RANKING_PAGE_BATCH = 100;
-const hash = (value: string) => createHash('sha256').update(value).digest('hex');
-const worldPath = (worldId: string) => `worlds/${worldId}`;
-const playerPath = (worldId: string, uid: string) => `${worldPath(worldId)}/players/${uid}`;
-const requestId = (key: string) => hash(key);
 interface Pointer { worldId: string }
 interface RankingPage { rows: LeaderboardRow[] }
 interface RankingMeta { total: number; weekId: string; generation: string; pageCount: number }
@@ -55,7 +52,7 @@ export class GameService {
 
   private async current(): Promise<World> {
     return this.store.transaction(async (tx) => {
-      const pointer = await tx.get<Pointer>('system/current');
+      const pointer = await tx.get<Pointer>(CURRENT_WORLD);
       if (pointer) {
         const world = await tx.get<World>(worldPath(pointer.worldId));
         if (!world) throw new GameError('WORLD_NOT_FOUND', 'The world is not available.', 503, true);
@@ -64,7 +61,7 @@ export class GameService {
       }
       const world = this.freshWorld(`world-${randomUUID()}`);
       tx.set(worldPath(world.id), world);
-      tx.set('system/current', { worldId: world.id });
+      tx.set(CURRENT_WORLD, { worldId: world.id });
       return world;
     });
   }
@@ -99,7 +96,7 @@ export class GameService {
   }
 
   private async txWorld(tx: Transaction, expectedId?: string): Promise<World> {
-    const pointer = await tx.get<Pointer>('system/current');
+    const pointer = await tx.get<Pointer>(CURRENT_WORLD);
     if (!pointer || (expectedId && pointer.worldId !== expectedId)) throw new GameError('WORLD_CHANGED', 'The world was reset. Refresh and try again.', 409, true);
     const world = await tx.get<World>(worldPath(pointer.worldId));
     if (!world) throw new GameError('WORLD_NOT_FOUND', 'The world is not available.', 503, true);
@@ -223,7 +220,7 @@ export class GameService {
       const path = playerPath(world.id, uid);
       const portfolio = await tx.get<Portfolio>(path);
       // the same request key returns the saved order instead of reserving cash again.
-      const id = requestId(key);
+      const id = keyHash(key);
       const existing = await tx.get<Order>(`${path}/orders/${id}`);
       if (existing) {
         if (existing.instrumentId !== input.instrumentId || existing.side !== input.side || existing.amountAgorot !== amountAgorot) throw new GameError('IDEMPOTENCY_CONFLICT', 'This request key was already used with different order details.', 409);
@@ -255,7 +252,7 @@ export class GameService {
     await this.store.transaction(async (tx) => {
       const world = await this.txWorld(tx, expectedWorldId ?? initial.id);
       const dataset = this.datasets.get(world.datasetId);
-      const requestPath = `${worldPath(world.id)}/advanceRequests/${requestId(key)}`;
+      const requestPath = `${worldPath(world.id)}/advanceRequests/${keyHash(key)}`;
       const existing = await tx.get<{ target: string; jobId: string }>(requestPath);
       if (existing) {
         if (Date.parse(existing.target) !== timestamp) throw new GameError('IDEMPOTENCY_CONFLICT', 'This request key was already used for another target.', 409);
@@ -373,7 +370,7 @@ export class GameService {
       const valuation: Valuation = { uid, eventId: event.id, at: event.at, valueILS: value.toFixed(12), weekId: portfolio.week.weekId, weeklyReturnPct: formatDecimal(weeklyReturn(value, portfolio.week), 12), mddPct: formatDecimal(decimal(portfolio.week.mddRatio).mul(100), 12) };
       tx.set(path, portfolio);
       changed.forEach((order) => tx.set(`${path}/orders/${order.id}`, order));
-      tx.set(`${path}/valuations/${hash(event.id)}`, valuation);
+      tx.set(`${path}/valuations/${keyHash(event.id)}`, valuation);
     });
   }
 
@@ -423,7 +420,7 @@ export class GameService {
     if (datasetId && !this.datasets.summaries().some(item => item.id === datasetId)) throw new GameError('UNKNOWN_DATASET', 'Choose an available demonstration dataset.', 400);
     const request = { worldId: expectedWorldId ?? null, datasetId: datasetId ?? null };
     const world = await this.store.transaction(async (tx) => {
-      const path = `adminRequests/${requestId(key)}`;
+      const path = `adminRequests/${keyHash(key)}`;
       const existing = await tx.get<{ worldId: string; request?: typeof request; simulationInput?: unknown }>(path);
       const existingWorld = existing ? await tx.get<World>(worldPath(existing.worldId)) : undefined;
       if (existingWorld) {
@@ -433,7 +430,7 @@ export class GameService {
         }
         return existingWorld;
       }
-      const pointer = await tx.get<Pointer>('system/current');
+      const pointer = await tx.get<Pointer>(CURRENT_WORLD);
       if (expectedWorldId && pointer?.worldId !== expectedWorldId) throw new GameError('WORLD_CHANGED', 'The world was reset. Refresh and try again.', 409, true);
       const active = pointer ? await tx.get<World>(worldPath(pointer.worldId)) : undefined;
       if (active) this.requireIdle(active);
@@ -445,7 +442,7 @@ export class GameService {
       const selected = datasetId ?? currentChoice?.id ?? choices[0]!.id;
       const created = this.freshWorld(`world-${randomUUID()}`, selected);
       tx.set(worldPath(created.id), created);
-      tx.set('system/current', { worldId: created.id });
+      tx.set(CURRENT_WORLD, { worldId: created.id });
       tx.set(path, { worldId: created.id, request });
       return created;
     });

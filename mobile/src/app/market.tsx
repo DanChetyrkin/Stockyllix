@@ -15,7 +15,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useGame } from '@/context/GameContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useApi } from '@/hooks/use-api';
-import { dateTime, money, number, observationDate } from '@/utils/format';
+import { assetPrice, dateTime, money, number, observationDate, percent } from '@/utils/format';
 import { dailyChangeValue, sortMarketAssets, type MarketSort, type SortDirection } from '@/utils/market-sort';
 import { isOrderAmount, orderBlockReason, parseOrderDraft } from '@/utils/order-draft';
 
@@ -216,6 +216,6 @@ function AssetRow({ asset, selected, disabled, onPress }: { asset: Instrument; s
   return <Pressable accessibilityRole="button" accessibilityLabel={`Trade ${asset.name}`} accessibilityState={{ selected, disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 15, backgroundColor: selected ? palette.mint : palette.paper, borderRadius: 12, padding: 18, borderWidth: 1, borderColor: selected ? palette.green : palette.line }, pressed && { opacity: 0.8 }]}>
     <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: selected ? palette.mint : palette.background, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 16, color: palette.green, fontWeight: '700' }}>{asset.symbol.slice(0, 1)}</Text></View>
     <View style={{ flex: 1, gap: 4 }}><Text style={{ fontSize: 14, color: palette.ink, fontWeight: '700' }}>{asset.symbol}</Text><Copy muted style={{ fontSize: 11 }}>{asset.name}</Copy><Copy muted style={{ fontSize: 9 }}>{asset.market === 'TA' ? 'TEL AVIV' : 'UNITED STATES'} · {asset.sector.toUpperCase()}</Copy></View>
-    <View style={{ alignItems: 'flex-end', gap: 7 }}><Text style={{ fontSize: 16, fontWeight: '700', color: palette.ink }}>{asset.currency === 'USD' ? '$' : '₪'}{number(asset.price)}</Text><Text style={{ fontSize: 11, fontWeight: '600', color: dailyChange === null ? palette.muted : dailyChange < 0 ? palette.red : palette.green }}>Daily {dailyChange === null ? '—' : `${dailyChange > 0 ? '+' : ''}${dailyChange.toFixed(2)}%`}</Text><Badge tone={asset.marketOpen ? 'positive' : 'neutral'}>{asset.marketOpen ? 'Open' : 'Closed'}</Badge></View>
+    <View style={{ alignItems: 'flex-end', gap: 7 }}><Text style={{ fontSize: 16, fontWeight: '700', color: palette.ink }}>{assetPrice(asset.price, asset.currency)}</Text><Text style={{ fontSize: 11, fontWeight: '600', color: dailyChange === null ? palette.muted : dailyChange < 0 ? palette.red : palette.green }}>Daily {dailyChange === null ? '—' : percent(dailyChange, true)}</Text><Badge tone={asset.marketOpen ? 'positive' : 'neutral'}>{asset.marketOpen ? 'Open' : 'Closed'}</Badge></View>
   </Pressable>;
 }

@@ -1,3 +1,4 @@
+import { CURRENT_WORLD, playerPath } from '../data/current-world.js';
 import type { DocumentStore } from '../data/store.js';
 import { GameError } from '../domain/errors.js';
 import type { Portfolio } from '../domain/model.js';
@@ -47,9 +48,9 @@ export class ProfileService {
 
     return this.store.transaction(async (tx) => {
       const existing = await tx.get<PlayerProfile>(`profiles/${uid}`);
-      const pointer = await tx.get<{ worldId: string }>('system/current');
-      const playerPath = pointer ? `worlds/${pointer.worldId}/players/${uid}` : null;
-      const player = playerPath ? await tx.get<Portfolio>(playerPath) : undefined;
+      const pointer = await tx.get<{ worldId: string }>(CURRENT_WORLD);
+      const path = pointer ? playerPath(pointer.worldId, uid) : null;
+      const player = path ? await tx.get<Portfolio>(path) : undefined;
       const profile = {
         displayName,
         photoDataUrl: input.photoDataUrl === undefined ? existing?.photoDataUrl ?? null : input.photoDataUrl,
@@ -57,7 +58,7 @@ export class ProfileService {
 
       // all reads happen before writes; only the player's name changes here.
       tx.set(`profiles/${uid}`, profile);
-      if (player && playerPath) tx.set(playerPath, { ...player, displayName });
+      if (player && path) tx.set(path, { ...player, displayName });
       return profile;
     });
   }

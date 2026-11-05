@@ -7,7 +7,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { useGame } from '@/context/GameContext';
 import { useApi } from '@/hooks/use-api';
 import { Order } from '@/api/types';
-import { dateTime, money, number } from '@/utils/format';
+import { assetPrice, dateTime, money, number } from '@/utils/format';
 
 interface OrdersResponse { orders: Order[]; hasMore: boolean; nextBeforeSequence: number | null }
 
@@ -63,6 +63,6 @@ function OrderBadge({ order }: { order: Order }) {
 function OrderOutcome({ order }: { order: Order }) {
   const { palette } = useTheme();
   if (order.rejection) return <Copy style={{ color: palette.red, fontSize: 12 }}>{order.rejection.message} Review the reason before placing another order.</Copy>;
-  if (order.fill) return <Copy muted style={{ fontSize: 12 }}>{order.side === 'buy' ? 'Bought' : 'Sold'} {number(order.fill.units, 6)} units at {order.currency === 'USD' ? '$' : order.currency === 'ILS' ? '₪' : ''}{number(order.fill.price, 4)}{order.currency === 'USD' ? ` · USD / ILS ${number(order.fill.fx, 6)}` : ''}</Copy>;
+  if (order.fill) return <Copy muted style={{ fontSize: 12 }}>{order.side === 'buy' ? 'Bought' : 'Sold'} {number(order.fill.units, 6)} units at {assetPrice(order.fill.price, order.currency, 4)}{order.currency === 'USD' ? ` · USD / ILS ${number(order.fill.fx, 6)}` : ''}</Copy>;
   return <Copy muted style={{ fontSize: 12 }}>{order.side === 'buy' ? `${money(order.amountAgorot / 100)} is reserved, not spent. Your available cash is lower while this order waits.` : 'Your existing units are reserved while this order waits.'} Execution uses the shared game clock.</Copy>;
 }

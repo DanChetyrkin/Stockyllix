@@ -1,12 +1,12 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { api } from '@/api/client';
 import { AppShell } from '@/components/AppShell';
 import { DailyQuiz } from '@/components/DailyQuiz';
 import { ProviderWidget } from '@/components/market/ProviderWidget';
 import { newsMarkets, newsStocks, type NewsMarket } from '@/components/market/news-options';
-import { Button, Card, CardTitle, Copy, Field, PageTitle } from '@/components/ui/kit';
+import { Button, Card, CardTitle, Copy, Dialog, Field, PageTitle } from '@/components/ui/kit';
 import { useGame } from '@/context/GameContext';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -38,6 +38,6 @@ export default function NewsScreen() {
       <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}><Button compact variant="secondary" onPress={() => setChoosing(true)}>{selected ? `${selected[1]} · ${symbol.split(':')[1]}` : 'Choose a company'}</Button>{symbol && <Button compact variant="quiet" onPress={() => setSymbol('')}>Clear company</Button>}<Copy muted style={{ fontSize: 11, flex: 1, minWidth: 160 }}>Filters use the source’s markets and symbols. Some companies may have no stories.</Copy></View>
       <ProviderWidget kind="news" newsMarket={market} newsSymbol={symbol} />
     </Card>
-    <Modal visible={choosing} transparent animationType="fade" onRequestClose={() => setChoosing(false)}><View style={{ flex: 1, padding: 20, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(7,30,23,0.45)' }}><Card style={{ width: '100%', maxWidth: 440, maxHeight: '85%', gap: 14 }}><View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}><CardTitle>Company news</CardTitle><Button compact variant="quiet" onPress={() => setChoosing(false)}>Close</Button></View><Field label="Find a company" value={query} onChangeText={setQuery} placeholder="Name or symbol" /><ScrollView keyboardShouldPersistTaps="handled">{stocks.map(([value, label]) => <Pressable key={value} accessibilityRole="button" onPress={() => { setSymbol(value); setChoosing(false); }} style={{ paddingVertical: 13, borderBottomWidth: 1, borderColor: palette.line }}><Text style={{ color: palette.ink, fontSize: 14 }}>{label}</Text><Copy muted style={{ fontSize: 11 }}>{value}</Copy></Pressable>)}{!stocks.length && <Copy muted>No matching company.</Copy>}</ScrollView></Card></View></Modal>
+    <Dialog visible={choosing} onClose={() => setChoosing(false)} dismissLabel="Close company list"><Card style={{ width: '100%', maxWidth: 440, maxHeight: '85%', gap: 14 }}><View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}><CardTitle>Company news</CardTitle><Button compact variant="quiet" onPress={() => setChoosing(false)}>Close</Button></View><Field label="Find a company" value={query} onChangeText={setQuery} placeholder="Name or symbol" /><ScrollView keyboardShouldPersistTaps="handled">{stocks.map(([value, label]) => <Pressable key={value} accessibilityRole="button" onPress={() => { setSymbol(value); setChoosing(false); }} style={{ paddingVertical: 13, borderBottomWidth: 1, borderColor: palette.line }}><Text style={{ color: palette.ink, fontSize: 14 }}>{label}</Text><Copy muted style={{ fontSize: 11 }}>{value}</Copy></Pressable>)}{!stocks.length && <Copy muted>No matching company.</Copy>}</ScrollView></Card></Dialog>
   </AppShell>;
 }

@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto';
 import { DateTime } from 'luxon';
+import { CURRENT_WORLD, keyHash, playerPath, readCurrentWorld, worldPath } from '../data/current-world.js';
 import type { DocumentStore } from '../data/store.js';
 import type { Dataset, Order, Portfolio, World } from '../domain/model.js';
 import { clockPath, clockTarget, type WorldClock } from '../domain/clock.js';
@@ -13,7 +13,6 @@ interface ClockInput { worldId: string; action: ClockAction; target?: string; ta
 interface ClockRequest { input: ClockInput; actor: string; target?: string; requestedAt?: string; clockVersion?: number }
 interface Context { world: World; clock: WorldClock; dataset: Dataset }
 
-const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 
 function israelTarget(input: { date: string; time: string }) {
   const local = `${input.date}T${input.time}`;
@@ -38,10 +37,9 @@ export class WorldClockService {
   }
 
   private async context(): Promise<Context> {
-    if (!await this.store.get('system/current')) await this.game.getWorld();
+    if (!await this.store.get(CURRENT_WORLD)) await this.game.getWorld();
     return this.store.transaction(async tx => {
-      const pointer = await tx.get<{ worldId: string }>('system/current');
-      const world = pointer && await tx.get<World>(`worlds/${pointer.worldId}`);
+      const world = await readCurrentWorld(tx);
       if (!world) throw new GameError('WORLD_NOT_FOUND', 'The world is not available.', 503, true);
       const dataset = this.datasets.get(world.datasetId);
       let clock = await tx.get<WorldClock>(clockPath(world.id));
@@ -91,7 +89,7 @@ export class WorldClockService {
         const due = dueEvents(dataset, world.now, target);
         const advanceTo = due.at(-1)?.at ?? (Date.parse(target) >= Date.parse(dataset.endsAt) && Date.parse(world.now) < Date.parse(dataset.endsAt) ? dataset.endsAt : null);
         if (!advanceTo) return;
-        try { await this.game.advance(advanceTo, `automatic-${hash(`${world.id}/${advanceTo}`)}`, world.id); }
+        try { await this.game.advance(advanceTo, `automatic-${keyHash(`${world.id}/${advanceTo}`)}`, world.id); }
         catch (cause) {
           if (!(cause instanceof GameError) || !['WORLD_ADVANCING', 'WORLD_CHANGED'].includes(cause.code)) throw cause;
         }
@@ -118,12 +116,12 @@ export class WorldClockService {
     let earliest: Order | null = null;
     let orderCount = 0;
     for (;;) {
-      const players = await this.store.list<Portfolio>(`worlds/${world.id}/players`, { limit: 100, ...(after ? { startAfter: after } : {}) });
+      const players = await this.store.list<Portfolio>(`${worldPath(world.id)}/players`, { limit: 100, ...(after ? { startAfter: after } : {}) });
       if (!players.length) break;
       scanned += players.length;
       if (scanned > 5000) throw new GameError('CLOCK_TARGET_LIMIT', 'This administrator overview supports up to 5,000 players. Advance a selected market event instead.', 422);
       for (let offset = 0; offset < players.length; offset += 10) {
-        const orders = await Promise.all(players.slice(offset, offset + 10).flatMap(player => player.data.pendingOrderIds.map(id => this.store.get<Order>(`worlds/${world.id}/players/${player.id}/orders/${id}`))));
+        const orders = await Promise.all(players.slice(offset, offset + 10).flatMap(player => player.data.pendingOrderIds.map(id => this.store.get<Order>(`${playerPath(world.id, player.id)}/orders/${id}`))));
         for (const order of orders) {
           if (!order || order.status !== 'pending') continue;
           pendingOrderCount += 1;
@@ -146,23 +144,22 @@ export class WorldClockService {
     const gameNow = clockTarget(clock, world, dataset.endsAt, this.now().getTime());
     const event = nextMarketEvent(dataset, gameNow);
     const pending = await this.pendingOrders(world, dataset);
-    const pointer = await this.store.get<{ worldId: string }>('system/current');
-    const latest = await this.store.get<World>(`worlds/${world.id}`);
-    if (pointer?.worldId !== world.id || latest?.revision !== world.revision || latest?.status !== world.status) throw new GameError('WORLD_CHANGED', 'The world changed while loading clock targets. Refresh the controls.', 409, true);
+    const latest = await readCurrentWorld(this.store);
+    if (latest?.id !== world.id || latest.revision !== world.revision || latest.status !== world.status) throw new GameError('WORLD_CHANGED', 'The world changed while loading clock targets. Refresh the controls.', 409, true);
     return { worldId: world.id, gameNow, nextMarketEvent: event ? { at: event.at, kind: event.kind, market: event.market! } : null,
       nextPendingExecution: pending.nextPendingExecution, pendingOrderCount: pending.pendingOrderCount };
   }
 
   // receipt lookup reads saved state only; it never starts or advances clock work.
   async requestStatus(key: string, requestedWorldId?: string) {
-    const pointer = requestedWorldId ? undefined : await this.store.get<{ worldId: string }>('system/current');
+    const pointer = requestedWorldId ? undefined : await this.store.get<{ worldId: string }>(CURRENT_WORLD);
     const worldId = requestedWorldId ?? pointer?.worldId;
     if (!worldId) return { accepted: false as const, requestKey: key, worldId: null };
-    const saved = await this.store.get<ClockRequest>(`worlds/${worldId}/clockRequests/${hash(key)}`);
+    const saved = await this.store.get<ClockRequest>(`${worldPath(worldId)}/clockRequests/${keyHash(key)}`);
     if (!saved) return { accepted: false as const, requestKey: key, worldId };
-    const world = await this.store.get<World>(`worlds/${worldId}`);
+    const world = await this.store.get<World>(worldPath(worldId));
     const clock = await this.store.get<WorldClock>(clockPath(worldId));
-    const audit = await this.store.get<{ at: string; after: WorldClock }>(`worlds/${worldId}/clockAudit/${hash(key)}`);
+    const audit = await this.store.get<{ at: string; after: WorldClock }>(`${worldPath(worldId)}/clockAudit/${keyHash(key)}`);
     const target = saved.target ?? audit?.after.anchorGameAt ?? saved.input.target ?? world?.now ?? null;
     const clockVersion = saved.clockVersion ?? audit?.after.version ?? null;
     const due = world && target && dueEvents(this.datasets.get(world.datasetId), world.now, target).length > 0;
@@ -173,12 +170,11 @@ export class WorldClockService {
 
   async configure(actor: string, input: ClockInput, key: string) {
     const initial = await this.context();
-    const requestPath = `worlds/${input.worldId}/clockRequests/${hash(key)}`;
+    const requestPath = `${worldPath(input.worldId)}/clockRequests/${keyHash(key)}`;
     const previousRequest = await this.store.get<ClockRequest>(requestPath);
     const pending = input.action === 'next_order' && !previousRequest ? await this.pendingOrders(initial.world, initial.dataset) : null;
     await this.store.transaction(async tx => {
-      const pointer = await tx.get<{ worldId: string }>('system/current');
-      const world = pointer && await tx.get<World>(`worlds/${pointer.worldId}`);
+      const world = await readCurrentWorld(tx);
       const saved = await tx.get<ClockRequest>(requestPath);
       if (saved) {
         if (saved.actor !== actor || JSON.stringify(saved.input) !== JSON.stringify(input)) throw new GameError('IDEMPOTENCY_CONFLICT', 'This clock request was already used for another action.', 409);
@@ -191,7 +187,7 @@ export class WorldClockService {
       const dataset = this.datasets.get(world.datasetId);
       const serverNow = this.now().toISOString();
       const currentTarget = clockTarget(before, world, dataset.endsAt, Date.parse(serverNow));
-      const pendingOrder = pending?.earliest ? await tx.get<Order>(`worlds/${world.id}/players/${pending.earliest.uid}/orders/${pending.earliest.id}`) : null;
+      const pendingOrder = pending?.earliest ? await tx.get<Order>(`${playerPath(world.id, pending.earliest.uid)}/orders/${pending.earliest.id}`) : null;
       let target = currentTarget;
       if (input.action === 'set') {
         if (input.targetIsrael) target = israelTarget(input.targetIsrael);
@@ -215,7 +211,7 @@ export class WorldClockService {
         anchorGameAt: target, anchorServerAt: serverNow, version: before.version + 1, updatedAt: serverNow, updatedBy: actor };
       tx.set(clockPath(world.id), after);
       tx.set(requestPath, { input, actor, target, requestedAt: serverNow, clockVersion: after.version });
-      tx.set(`worlds/${world.id}/clockAudit/${hash(key)}`, { actor, action: input.action, at: serverNow, before, after });
+      tx.set(`${worldPath(world.id)}/clockAudit/${keyHash(key)}`, { actor, action: input.action, at: serverNow, before, after });
     });
     await this.pending;
     this.checkedAt = 0;
@@ -231,7 +227,7 @@ export class WorldClockService {
 
   async audit() {
     const { world } = await this.context();
-    return { worldId: world.id, entries: (await this.store.list(`worlds/${world.id}/clockAudit`, { orderBy: 'at', direction: 'desc', limit: 25 })).map(row => row.data) };
+    return { worldId: world.id, entries: (await this.store.list(`${worldPath(world.id)}/clockAudit`, { orderBy: 'at', direction: 'desc', limit: 25 })).map(row => row.data) };
   }
 
   invalidate() { this.checkedAt = 0; }

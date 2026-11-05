@@ -10,7 +10,7 @@ Node / Express / TypeScript. It checks every Firebase ID token and runs every ga
 | `src/services` | `GameService` (players, orders, clock jobs, rankings), `WorldClockService` (saved 1× clock and admin controls), quiz, performance, watchlist, profile, Bank of Israel reference rate, test simulations |
 | `src/world` | Trading sessions, datasets and events, dataset loading, the historical and simulated builders, ECB/BOI rate parsing |
 | `src/api/app.ts` | Routes, input validation (zod), authentication, admin checks, the test-realm header, rate limits and error format |
-| `src/data` | The store interface, the Firestore adapter, the in-memory test store and the test-realm prefix |
+| `src/data` | Shared document paths and the current-world lookup, the store interface, the Firestore adapter, the in-memory test store and the test-realm prefix |
 | `src/scripts` | Seeding, the local smoke test, the 1,000-player load test and the private data importers |
 
 ## Commands
