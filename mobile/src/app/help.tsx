@@ -175,7 +175,7 @@ export default function HelpScreen() {
         </Copy>
         <GuideLink href="/leaderboard">See the league →</GuideLink>
       </GuideCard>
-      <GuideCard title="6. Learn, watch and make it yours">
+      <GuideCard title="6. Learn and make it yours">
         <Copy>
           Your portfolio includes a personal daily insight. Open News for current headlines and the compact daily
           question. The quiz changes at midnight in the shared game’s Israel time: advancing to a new day brings the
@@ -188,10 +188,6 @@ export default function HelpScreen() {
         <Copy>
           Asset charts show known opening and closing observations through game time. Daily price change compares the
           latest quote with the prior trading session’s close, in the asset’s currency.
-        </Copy>
-        <Copy>
-          Save a personal price target in the watchlist. A target is a reminder inside the app; it does not submit an
-          order or send a notification.
         </Copy>
         <Copy muted>
           Use the circle in the header to edit your name and profile photo. Choose Auto, Light or Dark for appearance;

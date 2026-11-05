@@ -16,21 +16,3 @@ export interface PriceHistory {
   previousCloseAt: string | null;
   points: PricePoint[];
 }
-export type WatchDirection = 'at_or_below' | 'at_or_above';
-export interface WatchItem {
-  instrumentId: string;
-  symbol: string;
-  name: string;
-  currency: 'ILS' | 'USD';
-  targetPrice: string;
-  direction: WatchDirection;
-  currentPrice: string;
-  reached: boolean;
-  updatedAt: string;
-}
-export interface WatchlistResponse {
-  worldId: string;
-  revision: number;
-  asOf: string;
-  items: WatchItem[];
-}

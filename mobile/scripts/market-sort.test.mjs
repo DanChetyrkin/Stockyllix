@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { dailyChangeValue, sortMarketAssets } from '../src/utils/market-sort.ts';
+import { dailyChangeValue, panelAsset, sortMarketAssets } from '../src/utils/market-sort.ts';
 
 const asset = (id, name, dailyChangePct, symbol = id) => ({ id, name, symbol, dailyChangePct });
 const ids = assets => assets.map(row => row.id);
@@ -48,6 +48,16 @@ test('sorts names in both directions and preserves the input and original asset 
   assert.deepEqual(ids(sortMarketAssets(assets, 'name', 'desc')), ['z', 'b', 'a']);
   assert.deepEqual(assets, original);
   assert.equal(sorted[0], assets[1]);
+});
+
+test('the order panel follows the visible list unless a request pins its asset', () => {
+  const all = [asset('LUMI.TA', 'Bank Leumi', '1'), asset('AMZN', 'Amazon', '2'), asset('AAPL', 'Apple', '3')];
+  const us = all.filter(row => !row.id.endsWith('.TA'));
+  assert.equal(panelAsset(all, us, null, null).id, 'AMZN');
+  assert.equal(panelAsset(all, us, null, 'AAPL').id, 'AAPL');
+  assert.equal(panelAsset(all, us, null, 'LUMI.TA').id, 'AMZN');
+  assert.equal(panelAsset(all, us, 'LUMI.TA', 'AAPL').id, 'LUMI.TA');
+  assert.equal(panelAsset(all, [], null, 'AAPL'), undefined);
 });
 
 test('works on empty, single-item and already-filtered lists', () => {

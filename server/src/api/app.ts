@@ -64,13 +64,6 @@ const instrumentIdInput = z
   .min(1)
   .max(40)
   .regex(/^[a-zA-Z0-9_.-]+$/);
-const watchInput = z
-  .object({
-    instrumentId: instrumentIdInput,
-    targetPrice: z.string().max(30),
-    direction: z.enum(['at_or_below', 'at_or_above']),
-  })
-  .strict();
 const quizInput = z
   .object({
     worldId: worldIdInput,
@@ -173,8 +166,8 @@ export function createApp(options: AppOptions) {
   app.get('/health', (_request, response) =>
     response.json({
       status: 'ok',
-      version: '1.5.2',
-      release: 'readability-v7',
+      version: '1.5.3',
+      release: 'market-list-v8',
       commit: /^[a-f0-9]{40}$/i.test(process.env.RENDER_GIT_COMMIT ?? '') ? process.env.RENDER_GIT_COMMIT : null,
     }),
   );
@@ -294,16 +287,6 @@ export function createApp(options: AppOptions) {
     available(selected(response).insights, 'MARKET_UNAVAILABLE', 'Market details are temporarily unavailable.');
   router.get('/instruments/:id/history', async (request, response) => {
     response.json(await insights(response).history(instrumentIdInput.parse(request.params.id)));
-  });
-  router.get('/watchlist', async (_request, response) => {
-    response.json(await insights(response).getWatchlist(uid(response)));
-  });
-  router.post('/watchlist', async (request, response) => {
-    response.json(await insights(response).setWatch(uid(response), watchInput.parse(request.body)));
-  });
-  router.post('/watchlist/remove', async (request, response) => {
-    const input = z.object({ instrumentId: instrumentIdInput }).strict().parse(request.body);
-    response.json(await insights(response).removeWatch(uid(response), input.instrumentId));
   });
   const quiz = (response: Response) =>
     available(selected(response).quiz, 'QUIZ_UNAVAILABLE', 'The daily quiz is temporarily unavailable.');

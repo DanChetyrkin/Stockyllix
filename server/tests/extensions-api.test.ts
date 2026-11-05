@@ -20,7 +20,7 @@ async function setup(extensions = true) {
     ...(extensions
       ? {
           profile: new ProfileService(store),
-          insights: new MarketInsightsService(store, dataset, now),
+          insights: new MarketInsightsService(store, dataset),
           quiz: new DailyQuizService(store, { now }),
           performance: new PerformanceService(store, dataset),
         }
@@ -55,17 +55,11 @@ async function advance(app: ReturnType<typeof createApp>, game: GameService, wor
 describe('extension HTTP contracts with real services', () => {
   it('requires a verified identity before reading or changing extension data', async () => {
     const { app } = await setup();
-    for (const path of [
-      '/api/me/profile',
-      '/api/instruments/LUMI.TA/history',
-      '/api/watchlist',
-      '/api/daily-quiz',
-      '/api/performance',
-    ]) {
+    for (const path of ['/api/me/profile', '/api/instruments/LUMI.TA/history', '/api/daily-quiz', '/api/performance']) {
       expect((await request(app).get(path)).status).toBe(401);
       expect((await request(app).get(path).auth('invalid-uid', { type: 'bearer' })).status).toBe(401);
     }
-    for (const path of ['/api/me/profile', '/api/watchlist', '/api/watchlist/remove', '/api/daily-quiz/answer']) {
+    for (const path of ['/api/me/profile', '/api/daily-quiz/answer']) {
       expect((await request(app).post(path).send({})).status).toBe(401);
     }
     const notInitialized = await request(app).get('/api/performance').auth('bob', { type: 'bearer' });
@@ -98,84 +92,6 @@ describe('extension HTTP contracts with real services', () => {
     const unknown = await request(app).get('/api/instruments/UNKNOWN/history').auth('alice', { type: 'bearer' });
     expect(unknown.status).toBe(404);
     expect(unknown.body.error.code).toBe('UNKNOWN_INSTRUMENT');
-  });
-
-  it('upserts and removes private watch targets without placing financial orders', async () => {
-    const { app, dataset } = await setup();
-    await request(app).post('/api/me/initialize').auth('alice', { type: 'bearer' }).send({ displayName: 'Alice' });
-    const input = {
-      instrumentId: 'LUMI.TA',
-      targetPrice: dataset.initialSnapshot.prices['LUMI.TA'],
-      direction: 'at_or_below',
-    };
-    const saved = await request(app).post('/api/watchlist').auth('alice', { type: 'bearer' }).send(input);
-    expect(saved.status).toBe(200);
-    expect(saved.body.instrumentId).toBe('LUMI.TA');
-    expect((await request(app).post('/api/watchlist').auth('alice', { type: 'bearer' }).send(input)).status).toBe(200);
-    const list = await request(app).get('/api/watchlist').auth('alice', { type: 'bearer' });
-    expect(list.status).toBe(200);
-    expect(list.body.items).toHaveLength(1);
-    expect(list.body.items[0]).toMatchObject({
-      instrumentId: input.instrumentId,
-      direction: input.direction,
-      reached: true,
-      currency: 'ILS',
-    });
-    expect(Number(list.body.items[0].targetPrice)).toBe(Number(input.targetPrice));
-    expect((await request(app).get('/api/watchlist').auth('bob', { type: 'bearer' })).body.items).toEqual([]);
-    expect(
-      (
-        await request(app)
-          .post('/api/watchlist/remove')
-          .auth('bob', { type: 'bearer' })
-          .send({ instrumentId: 'LUMI.TA' })
-      ).status,
-    ).toBe(200);
-    expect((await request(app).get('/api/watchlist').auth('alice', { type: 'bearer' })).body.items).toHaveLength(1);
-    const forged = await request(app)
-      .post('/api/watchlist')
-      .auth('bob', { type: 'bearer' })
-      .send({ ...input, uid: 'alice' });
-    expect(forged.status).toBe(400);
-    expect((await request(app).get('/api/orders').auth('alice', { type: 'bearer' })).body.orders).toEqual([]);
-    const portfolio = await request(app).get('/api/portfolio').auth('alice', { type: 'bearer' });
-    expect(portfolio.body.portfolio).toMatchObject({ cashAgorot: 100_000_000, reservedCashAgorot: 0 });
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const removed = await request(app)
-        .post('/api/watchlist/remove')
-        .auth('alice', { type: 'bearer' })
-        .send({ instrumentId: 'LUMI.TA' });
-      expect(removed.status).toBe(200);
-      expect(removed.body).toEqual({ removed: true });
-    }
-    expect((await request(app).get('/api/watchlist').auth('alice', { type: 'bearer' })).body.items).toEqual([]);
-  });
-
-  it('rejects invalid watch inputs and unknown assets through the public contract', async () => {
-    const { app } = await setup();
-    const input = { instrumentId: 'AAPL', targetPrice: '10', direction: 'at_or_below' };
-    for (const targetPrice of ['-1', 'NaN']) {
-      const rejected = await request(app)
-        .post('/api/watchlist')
-        .auth('alice', { type: 'bearer' })
-        .send({ ...input, targetPrice });
-      expect(rejected.status).toBe(422);
-      expect(rejected.body.error.code).toBe('INVALID_TARGET');
-    }
-    expect(
-      (
-        await request(app)
-          .post('/api/watchlist')
-          .auth('alice', { type: 'bearer' })
-          .send({ ...input, direction: 'cancel' })
-      ).status,
-    ).toBe(400);
-    const unknown = await request(app)
-      .post('/api/watchlist')
-      .auth('alice', { type: 'bearer' })
-      .send({ ...input, instrumentId: 'UNKNOWN' });
-    expect(unknown.status).toBe(404);
-    expect((await request(app).get('/api/watchlist').auth('alice', { type: 'bearer' })).body.items).toEqual([]);
   });
 
   it('keeps profile photos private and updates only the authenticated player name', async () => {
@@ -320,7 +236,7 @@ describe('extension HTTP contracts with real services', () => {
       world.id,
     );
     expect(started.status).toBe('advancing');
-    for (const path of ['/api/instruments/LUMI.TA/history', '/api/watchlist', '/api/performance', '/api/daily-quiz']) {
+    for (const path of ['/api/instruments/LUMI.TA/history', '/api/performance', '/api/daily-quiz']) {
       const blocked = await request(app).get(path).auth('alice', { type: 'bearer' });
       expect(blocked.status).toBe(423);
       expect(blocked.body.error).toMatchObject({ code: 'WORLD_ADVANCING', retryable: true });
@@ -332,7 +248,6 @@ describe('extension HTTP contracts with real services', () => {
     for (const [path, code] of [
       ['/api/me/profile', 'PROFILE_UNAVAILABLE'],
       ['/api/instruments/LUMI.TA/history', 'MARKET_UNAVAILABLE'],
-      ['/api/watchlist', 'MARKET_UNAVAILABLE'],
       ['/api/daily-quiz', 'QUIZ_UNAVAILABLE'],
       ['/api/performance', 'REPORT_UNAVAILABLE'],
     ]) {

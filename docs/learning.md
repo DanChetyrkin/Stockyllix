@@ -54,4 +54,4 @@ Create a dated 28-day simulated test game, for example March 2027, only in the a
 
 Work through weighted average cost: buy 10 units for 3,000 ILS, buy 10 for 4,000, then sell 5 for 2,000. The sold cost is 1,750, realized profit is 250, and remaining cost is 5,250. Explain why a USD position's ILS result includes FX and why SPY must use the same period/currency. A month's return is not an annual return.
 
-Explain why a price target is a preference rather than an order, and why charts and API responses must never include future world prices.
+Explain why charts and API responses must never include future world prices.

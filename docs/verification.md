@@ -12,6 +12,10 @@ This file separates what was checked locally, what was checked in the cloud, and
 | GitHub Write access for the reviewer | Owner handover |
 | Physical Expo Go session | Not verified. Browser phone-width checks and the Android bundle build are not a device test |
 
+## Market list fix and price watch removal, release 1.5.3 (November 5, 2026)
+
+A manual run found that the order panel always opened on LUMI, the first asset in the catalogue, even when the market filter showed only US assets. The panel now follows the visible list, and a saved or reviewed request keeps its asset. The price watch was removed: the assignment does not ask for it, and without notifications it could only show a badge inside the app. Existing `users/<uid>/watchlist/current` documents are no longer read. Locally: 197 server tests (the 6 removed tests covered only the watchlist), 50 app checks (1 new for the order panel), typecheck, lint, the server build and the web export passed.
+
 ## Readability pass, release 1.5.2 (November 5, 2026)
 
 The source was formatted once with Prettier (120 characters per line, layout only), the 20% rule got a named constant, and the redundant `seed` script, two unused packages (`expo-device`, `expo-web-browser`) and the Expo template file `mobile/AGENTS.md` were removed. Locally: 203 server tests, 49 app checks, typecheck, lint, the web export and the Android export passed.

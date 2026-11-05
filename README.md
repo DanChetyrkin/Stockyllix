@@ -112,13 +112,14 @@ The **News** page shows one short finance question per game day. Everyone gets t
 
 ## What I added beyond the assignment
 
-Isolated administrator test games (real or simulated, from any date), asset charts and daily change sorting, watchlist price targets, a performance report (realized and unrealized profit, compared with SPY), profile name and photo, and the latest Bank of Israel reference rate.
+Isolated administrator test games (real or simulated, from any date), asset charts and daily change sorting, a performance report (realized and unrealized profit, compared with SPY), profile name and photo, and the latest Bank of Israel reference rate.
 
 ## What I left out, and why
 
 - **Trading at today's prices.** No free source offered both markets, open and close history, and permission to display it in a public app. The game replays verified history instead.
 - **Server-side live quote and news feeds.** Yahoo requires prior permission for automated collection, and the free Alpha Vantage key needs a Premium plan for news. Those adapters were removed. TradingView widgets show the real market instead.
 - **Cancellation**, which the assignment forbids, plus partial fills, fees, dividends and splits.
+- **Price alerts.** Without push notifications, a target price could only show a badge inside the app, which would not bring anyone back. The daily question does that job.
 - **Push notifications, app-store builds and Cloud Functions**, which would need paid plans or store accounts and are not needed for the web demo.
 
 ## Run it locally

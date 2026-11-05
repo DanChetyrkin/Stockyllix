@@ -18,6 +18,16 @@ export function dailyChangeValue(value: string | null | undefined): number | nul
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+// the order panel shows a pinned request's asset, else the chosen asset while it is listed, else the first listed one.
+export function panelAsset<T extends { id: string }>(
+  assets: readonly T[],
+  listed: readonly T[],
+  pinnedId: string | null | undefined,
+  chosenId: string | null,
+): T | undefined {
+  return assets.find(item => item.id === pinnedId) || listed.find(item => item.id === chosenId) || listed[0];
+}
+
 export function sortMarketAssets<T extends SortableAsset>(
   assets: readonly T[],
   field: MarketSort,

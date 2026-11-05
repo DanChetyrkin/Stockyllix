@@ -7,7 +7,6 @@ import { api, ApiError, errorMessage } from '@/api/client';
 import { Instrument, MarketResponse, Order, OrderInput, PortfolioResponse, Side } from '@/api/types';
 import { AppShell } from '@/components/AppShell';
 import { InstrumentInsights } from '@/components/market/InstrumentInsights';
-import { WatchlistPanel } from '@/components/market/WatchlistPanel';
 import { MarketModes } from '@/components/market/MarketModes';
 import { ExecutionTiming } from '@/components/market/ExecutionTiming';
 import {
@@ -29,7 +28,13 @@ import { useGame } from '@/context/GameContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useApi } from '@/hooks/use-api';
 import { assetPrice, dateTime, money, number, observationDate, percent } from '@/utils/format';
-import { dailyChangeValue, sortMarketAssets, type MarketSort, type SortDirection } from '@/utils/market-sort';
+import {
+  dailyChangeValue,
+  panelAsset,
+  sortMarketAssets,
+  type MarketSort,
+  type SortDirection,
+} from '@/utils/market-sort';
 import { isOrderAmount, orderBlockReason, parseOrderDraft } from '@/utils/order-draft';
 
 interface SavedRequest {
@@ -64,7 +69,6 @@ export default function MarketScreen() {
   const storageKey = `stockyllix.pending-order.${user?.uid || 'signed-out'}${testRealm ? '.test' : ''}`;
   const storageReady = loadedStorageKey === storageKey;
   const assets = market.data?.instruments || [];
-  const selected = assets.find(item => item.id === (saved?.input.instrumentId || selectedId)) || assets[0];
   const filtered = sortMarketAssets(
     assets.filter(
       item =>
@@ -74,6 +78,9 @@ export default function MarketScreen() {
     sortBy,
     sortDirection,
   );
+  // a saved or reviewed request keeps its asset; otherwise the order panel follows the visible list.
+  const pinnedId = saved?.input.instrumentId || (reviewing ? selectedId : null);
+  const selected = panelAsset(assets, filtered, pinnedId, selectedId);
   const directionLabel =
     sortBy === 'name'
       ? sortDirection === 'asc'
@@ -84,7 +91,10 @@ export default function MarketScreen() {
         : 'High → low';
   const holding = portfolio.data?.summary.holdings.find(item => item.instrumentId === selected?.id);
   const hasPendingSell = side === 'sell' && Number(holding?.reservedUnits || '0') > 0;
-  const outcome = success ? recentOrders.data?.orders.find(order => order.id === success.id) || success : null;
+  const outcome =
+    success && success.instrumentId === selected?.id
+      ? recentOrders.data?.orders.find(order => order.id === success.id) || success
+      : null;
   const availableCash = portfolio.data ? Number(portfolio.data.summary.availableCashILS) : undefined;
   const blocked = !portfolio.data
     ? portfolio.error || 'Loading account balances. Refresh status if this does not finish.'
@@ -206,6 +216,8 @@ export default function MarketScreen() {
       setError('Enter a positive shekel amount with up to two decimal places.');
       return;
     }
+    // pin the asset so a filter change cannot swap it during confirmation.
+    setSelectedId(selected?.id ?? null);
     setReviewing(true);
   }
 
@@ -489,19 +501,6 @@ export default function MarketScreen() {
                 <Copy muted>Select an asset to explore your next investment.</Copy>
               )}
             </Card>
-            {selected && (
-              <WatchlistPanel
-                key={selected.id}
-                instrument={selected}
-                selectionDisabled={!!saved || busy}
-                onSelect={id => {
-                  setSelectedId(id);
-                  setReviewing(false);
-                  setSuccess(null);
-                  setError(null);
-                }}
-              />
-            )}
             <View style={{ gap: 9 }}>
               <CardTitle>Execution rules</CardTitle>
               <Copy muted style={{ fontSize: 12 }}>
