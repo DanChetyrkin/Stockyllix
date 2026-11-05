@@ -132,6 +132,6 @@ Spark: 50k reads and 20k writes per day, 1 GiB storage, 360 MB/day of Hosting tr
 ## Handover checklist
 
 - GitHub **Write** access for the reviewer account, as the assignment requires.
-- The administrator password goes privately to the reviewer. Only the email appears in this repository.
+- The reviewer's administrator login is in the README on purpose. Change that password after the review, because the repository is public.
 - The Firebase password policy in the console should match the sign-up form: 8+ characters with a letter and a number.
 - A real phone session in Expo Go, if one is needed beyond the browser.

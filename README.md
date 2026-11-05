@@ -4,7 +4,14 @@
 
 A weekly portfolio league: each player gets ₪1,000,000 in virtual cash, trades 20 Tel Aviv and US stocks and funds on replayed real historical prices, and is ranked every week on return and stability.
 
-**Play in the browser: [stockyllix.web.app](https://stockyllix.web.app)** (no installation). Reviewer administrator: `admin@stockyllix.com`. The password is sent privately.
+**Play in the browser: [stockyllix.web.app](https://stockyllix.web.app)** (no installation).
+
+> **Rotem, this one is for you.** To try everything, including the game clock controls, sign in with:
+>
+> - Email: `admin@stockyllix.com`
+> - Password: `Watermelon2001@Mango!`
+>
+> Please start with **Menu → World controls → Open isolated test game**, so the shared league stays as it is for other players. If anything doesn't work as expected, I'd be happy to help. Thank you for your time!
 
 ## Try it in 3–5 minutes
 
