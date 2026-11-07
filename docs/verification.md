@@ -54,7 +54,7 @@ The earlier release 1.5.0 passed the same walkthrough on November 5. There, send
 - After a real Render **Restart service** (22:11 UTC), the simulated test game's dataset, clock, balances and orders matched their saved fingerprint, and the shared league was unchanged.
 - A read-only audit of a reported "lost ₪50,000" found a correctly **pending** AMZN order: total ₪1,000,000 with ₪50,000 reserved. The phone layout hid the status column. Orders now shows status and execution time on phones, and the case became a [regression test](../server/tests/trade-regression.test.ts).
 
-**Clock synchronization speed** (local, after the review on November 5): with 12 players and 10 of them polling every 3 seconds, a 40-event jump to October 29 took 71 seconds when each request processed at most 2 events, and 12 seconds after raising that to 40 events within the existing 8-second budget. No step failed.
+**Clock synchronization speed** (local, November 5, the change released in 1.5.0): with 12 players and 10 of them polling every 3 seconds, a 40-event jump to October 29 took 71 seconds when each request processed at most 2 events, and 12 seconds after raising that to 40 events within the existing 8-second budget. No step failed.
 
 ## Data checks
 
