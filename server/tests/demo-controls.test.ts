@@ -34,20 +34,29 @@ async function fixture(maxSteps = 500) {
     };
   };
   const main = services(store, registry);
-  const makeTestRealm = async () => {
-    const testStore = scopedStore(store, 'testRealms/administrator/');
+  const makeTestRealm = async (uid: string) => {
+    const testStore = scopedStore(store, `testRealms/${uid}/`);
     const testRegistry = registry.fork();
     const simulations = new TestSimulationService(testStore, testRegistry);
     await simulations.hydrate();
     return { ...services(testStore, testRegistry), simulations };
   };
-  let test = await makeTestRealm();
+  const testRealms = new Map<string, Promise<GameServices>>();
+  const testRealmServices = (uid: string) => {
+    const existing = testRealms.get(uid);
+    if (existing) return existing;
+    const realm = makeTestRealm(uid);
+    testRealms.set(uid, realm);
+    return realm;
+  };
+  let test = await testRealmServices('administrator');
   const app = createApp({
     ...main,
-    testRealmServices: async () => test,
+    testRealmServices,
     rateLimitEnabled: false,
     corsOrigins: [],
     adminUids: new Set(['administrator']),
+    reviewerUids: new Set(['reviewer', 'second-reviewer']),
     verifyToken: async token => ({ uid: token }),
     logger: () => {},
   });
@@ -64,7 +73,8 @@ async function fixture(maxSteps = 500) {
       time += elapsed;
     },
     restartTestRealm: async () => {
-      test = await makeTestRealm();
+      testRealms.delete('administrator');
+      test = await testRealmServices('administrator');
       return test;
     },
   };
@@ -204,6 +214,90 @@ describe('precise shared clock targets and recovery receipts', () => {
     );
     await drain(clock);
     expect((await clock.getWorld()).clock.targetNow).toBe('2027-03-26T07:00:00.000Z');
+  });
+});
+
+describe('reviewer realm permissions', () => {
+  it('allows ordinary shared play and scopes admin controls and job details to the reviewer test realm', async () => {
+    const { app, main, store } = await fixture(1);
+    const shared = await main.game.getWorld();
+    const sharedWorld = await request(app).get('/api/world').auth('reviewer', { type: 'bearer' }).expect(200);
+    expect(sharedWorld.body).toMatchObject({ isAdmin: false, canUseTestRealm: true, testRealm: false });
+    await request(app)
+      .post('/api/me/initialize')
+      .auth('reviewer', { type: 'bearer' })
+      .send({ displayName: 'Reviewer' })
+      .expect(200);
+    await request(app)
+      .post('/api/orders')
+      .auth('reviewer', { type: 'bearer' })
+      .set('Idempotency-Key', randomUUID())
+      .send({ worldId: shared.id, instrumentId: 'AMZN', side: 'buy', amountILS: '50000' })
+      .expect(201);
+
+    const ownerKey = randomUUID();
+    const owner = await request(app)
+      .post('/api/admin/clock/configure')
+      .auth('administrator', { type: 'bearer' })
+      .set('Idempotency-Key', ownerKey)
+      .send({ worldId: shared.id, action: 'set', targetIsrael: { date: '2026-10-06', time: '11:15' } })
+      .expect(200);
+    const jobId = owner.body.world.job.id;
+    const receipt = `/api/admin/clock/requests/${ownerKey}?worldId=${shared.id}`;
+    expect((await admin(app, receipt).expect(200)).body.accepted).toBe(true);
+    const writes = store.operations.writes;
+    for (const path of ['/api/admin/clock/targets', '/api/admin/clock/audit', '/api/admin/datasets', receipt]) {
+      await request(app).get(path).auth('reviewer', { type: 'bearer' }).expect(403);
+    }
+    await request(app)
+      .post(`/api/admin/clock/jobs/${jobId}/step`)
+      .auth('reviewer', { type: 'bearer' })
+      .expect(403);
+    await request(app)
+      .post('/api/admin/clock/configure')
+      .auth('reviewer', { type: 'bearer' })
+      .set('Idempotency-Key', randomUUID())
+      .send({ worldId: shared.id, action: 'pause' })
+      .expect(403);
+    await request(app)
+      .post('/api/admin/reset')
+      .auth('reviewer', { type: 'bearer' })
+      .set('Idempotency-Key', randomUUID())
+      .send({ worldId: shared.id, confirmation: 'RESET', datasetId: history.id })
+      .expect(403);
+    expect(store.operations.writes).toBe(writes);
+    const duringSync = await request(app).get('/api/world').auth('reviewer', { type: 'bearer' }).expect(200);
+    expect(duringSync.body.world).toMatchObject({ job: null, clock: { syncing: true } });
+    expect((await admin(app, '/api/world').expect(200)).body.world.job.id).toBe(jobId);
+
+    await request(app).get('/api/world').auth('bob', { type: 'bearer' }).set('X-Stockyllix-Test', 'true').expect(403);
+    const testWorld = await request(app)
+      .get('/api/world')
+      .auth('reviewer', { type: 'bearer' })
+      .set('X-Stockyllix-Test', 'true')
+      .expect(200);
+    expect(testWorld.body).toMatchObject({ isAdmin: true, canUseTestRealm: true, testRealm: true });
+    const created = await request(app)
+      .post('/api/admin/reset')
+      .auth('reviewer', { type: 'bearer' })
+      .set('X-Stockyllix-Test', 'true')
+      .set('Idempotency-Key', randomUUID())
+      .send({ worldId: testWorld.body.world.id, confirmation: 'RESET', datasetId: history.id })
+      .expect(201);
+    await request(app)
+      .post('/api/admin/clock/configure')
+      .auth('reviewer', { type: 'bearer' })
+      .set('X-Stockyllix-Test', 'true')
+      .set('Idempotency-Key', randomUUID())
+      .send({ worldId: created.body.id, action: 'next' })
+      .expect(200);
+    const other = await request(app)
+      .get('/api/world')
+      .auth('second-reviewer', { type: 'bearer' })
+      .set('X-Stockyllix-Test', 'true')
+      .expect(200);
+    expect(other.body.world.id).not.toBe(created.body.id);
+    expect(await main.game.getWorld()).toMatchObject({ id: shared.id, job: { id: jobId } });
   });
 });
 

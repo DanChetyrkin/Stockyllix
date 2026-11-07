@@ -67,6 +67,43 @@ interface NewGameRequest {
 type RequestState = 'checking' | 'not_accepted' | 'unknown';
 
 export default function AdminScreen() {
+  const { world, isAdmin, canUseTestRealm, testRealm } = useGame();
+  if (world && canUseTestRealm && !isAdmin && !testRealm) return <ReviewerTestGame />;
+  return <WorldControls />;
+}
+
+function ReviewerTestGame() {
+  const { switchRealm } = useGame();
+  const [opening, setOpening] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function openTestGame() {
+    setOpening(true);
+    setError(null);
+    try {
+      await switchRealm(true);
+    } catch (cause) {
+      setError(errorMessage(cause));
+      setOpening(false);
+    }
+  }
+
+  return (
+    <AppShell>
+      <PageTitle title="World controls" subtitle="Review the game in your isolated test world." />
+      <Card style={{ gap: 12 }}>
+        <CardTitle>Shared league game</CardTitle>
+        <Copy>Open your isolated test game to change the clock or start a new game.</Copy>
+        {error && <Notice tone="error">{error}</Notice>}
+        <Button disabled={opening} loading={opening} onPress={() => void openTestGame()}>
+          Open isolated test game
+        </Button>
+      </Card>
+    </AppShell>
+  );
+}
+
+function WorldControls() {
   const { palette } = useTheme();
   const ui = useThemedStyles();
   const { world, isAdmin, refreshWorld, testRealm, switchRealm } = useGame();

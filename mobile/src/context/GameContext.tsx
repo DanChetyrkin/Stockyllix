@@ -11,12 +11,20 @@ import { useAuth } from './AuthContext';
 interface GameValue {
   world: World | null;
   isAdmin: boolean;
+  canUseTestRealm: boolean;
   error: string | null;
   refreshing: boolean;
   refreshWorld(): Promise<void>;
   refreshKey: number;
   testRealm: boolean;
   switchRealm(testing: boolean): Promise<void>;
+}
+
+interface WorldResponse {
+  world: World;
+  isAdmin: boolean;
+  canUseTestRealm?: boolean;
+  testRealm?: boolean;
 }
 
 const GameContext = createContext<GameValue | null>(null);
@@ -28,9 +36,7 @@ export function GameProvider({ children }: PropsWithChildren) {
   const [realm, setRealm] = useState<{ uid: string; testing: boolean } | null>(null);
   const testRealm = Boolean(realm && realm.uid === uid && realm.testing);
   const realmReady = !uid || realm?.uid === uid;
-  const [snapshot, setSnapshot] = useState<{ uid: string; testing: boolean; world: World; isAdmin: boolean } | null>(
-    null,
-  );
+  const [snapshot, setSnapshot] = useState<(WorldResponse & { uid: string; testing: boolean }) | null>(null);
   const [request, setRequest] = useState<{ uid: string; loading: boolean; error: string | null } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [requests] = useState(() => new RequestCoordinator());
@@ -75,7 +81,7 @@ export function GameProvider({ children }: PropsWithChildren) {
         if (!isCurrent()) return;
         setRequest({ uid, loading: true, error: null });
         try {
-          let data = await api<{ world: World; isAdmin: boolean; testRealm?: boolean }>('/world', { signal });
+          let data = await api<WorldResponse>('/world', { signal });
           if (!isCurrent()) return;
           if (testRealm && data.testRealm !== true)
             throw new ApiError(
@@ -100,7 +106,7 @@ export function GameProvider({ children }: PropsWithChildren) {
           }
           if (!isCurrent()) return;
           if (data.world.status === 'idle') currentWorldId.current = data.world.id;
-          setSnapshot({ uid, testing: testRealm, world: data.world, isAdmin: data.isAdmin });
+          setSnapshot({ ...data, uid, testing: testRealm });
           if (notifyResources.current) setRefreshKey(key => key + 1);
         } catch (cause) {
           if (isCurrent()) setRequest({ uid, loading: false, error: errorMessage(cause) });
@@ -119,9 +125,10 @@ export function GameProvider({ children }: PropsWithChildren) {
   const ownSnapshot = snapshot && snapshot.uid === uid && snapshot.testing === testRealm ? snapshot : null;
   const world = ownSnapshot?.world ?? null;
   const isAdmin = ownSnapshot?.isAdmin ?? false;
+  const canUseTestRealm = ownSnapshot?.canUseTestRealm ?? isAdmin;
   const switchRealm = useCallback(
     async (testing: boolean) => {
-      if (!uid || (testing && !isAdmin)) throw new Error('An administrator is required for a test world.');
+      if (!uid || (testing && !canUseTestRealm)) throw new Error('Test game access is required.');
       await AsyncStorage.setItem(`stockyllix.realm.${uid}`, testing ? 'test' : 'shared');
       requests.cancel();
       currentWorldId.current = null;
@@ -132,7 +139,7 @@ export function GameProvider({ children }: PropsWithChildren) {
       setRealm({ uid, testing });
       setRefreshKey(key => key + 1);
     },
-    [uid, isAdmin, requests],
+    [uid, canUseTestRealm, requests],
   );
 
   useEffect(() => {
@@ -164,8 +171,8 @@ export function GameProvider({ children }: PropsWithChildren) {
   const error = currentRequest?.error ?? null;
   const refreshing = currentRequest?.loading ?? false;
   const value = useMemo(
-    () => ({ world, isAdmin, error, refreshing, refreshWorld, refreshKey, testRealm, switchRealm }),
-    [world, isAdmin, error, refreshing, refreshWorld, refreshKey, testRealm, switchRealm],
+    () => ({ world, isAdmin, canUseTestRealm, error, refreshing, refreshWorld, refreshKey, testRealm, switchRealm }),
+    [world, isAdmin, canUseTestRealm, error, refreshing, refreshWorld, refreshKey, testRealm, switchRealm],
   );
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
 }

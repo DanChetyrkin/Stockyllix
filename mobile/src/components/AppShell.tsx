@@ -21,7 +21,7 @@ export function AppShell({ children }: PropsWithChildren) {
   const pathname = usePathname();
   const compact = width < 900;
   const independentPage = ['/help', '/current-market', '/news'].includes(pathname);
-  const canUseWithoutPortfolio = independentPage || (pathname === '/admin' && game.isAdmin);
+  const canUseWithoutPortfolio = independentPage || (pathname === '/admin' && game.canUseTestRealm);
   const serverAnchor = game.world?.clock?.serverNow;
   const [israelNow, setIsraelNow] = useState<string | undefined>(serverAnchor);
   useEffect(() => {
@@ -63,7 +63,7 @@ export function AppShell({ children }: PropsWithChildren) {
           </Pressable>
         </Link>
         <View style={[styles.headerActions, compact && { gap: 8 }]}>
-          <NavigationMenu isAdmin={game.isAdmin} compact={compact} />
+          <NavigationMenu canUseTestRealm={game.canUseTestRealm} compact={compact} />
           <ProfileMenu compact={compact} />
         </View>
       </View>

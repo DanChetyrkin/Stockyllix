@@ -8,7 +8,7 @@ import { Button, Copy, Dialog } from './ui/kit';
 import { ReferenceRate } from './ReferenceRate';
 
 export function WorldStatus() {
-  const { world, isAdmin, testRealm } = useGame();
+  const { world, canUseTestRealm, testRealm } = useGame();
   const { palette } = useTheme();
   const [open, setOpen] = useState(false);
   const clock = world?.clock;
@@ -133,7 +133,7 @@ export function WorldStatus() {
             {open && <ReferenceRate />}
           </ScrollView>
           <View style={{ gap: 8 }}>
-            {isAdmin && (
+            {canUseTestRealm && (
               <Link href="/admin" asChild>
                 <Button variant="secondary" onPress={() => setOpen(false)}>
                   World controls

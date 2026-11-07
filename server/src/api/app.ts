@@ -29,6 +29,7 @@ interface AppOptions extends GameServices {
   bankIsrael?: BankIsraelService;
   verifyToken: (token: string) => Promise<{ uid: string }>;
   adminUids: Set<string>;
+  reviewerUids?: Set<string>;
   corsOrigins: string[];
   rateLimitEnabled?: boolean;
   logger?: (entry: Record<string, unknown>) => void;
@@ -193,8 +194,11 @@ export function createApp(options: AppOptions) {
     try {
       const identity = await options.verifyToken(authorization.slice(7));
       if (!identity.uid || identity.uid.includes('/')) throw new Error('invalid uid');
+      const ownsSharedWorld = options.adminUids.has(identity.uid);
+      const canUseTestRealm = ownsSharedWorld || options.reviewerUids?.has(identity.uid) === true;
       response.locals.uid = identity.uid;
-      response.locals.isAdmin = options.adminUids.has(identity.uid);
+      response.locals.canUseTestRealm = canUseTestRealm;
+      response.locals.isAdmin = ownsSharedWorld || (canUseTestRealm && request.get('X-Stockyllix-Test') === 'true');
     } catch {
       throw new GameError('UNAUTHENTICATED', 'Your session expired. Please sign in again.', 401);
     }
@@ -228,13 +232,20 @@ export function createApp(options: AppOptions) {
     if (test && test !== 'true')
       throw new GameError('INVALID_INPUT', 'The test-world header must be true or absent.', 400);
     if (test) {
-      if (!response.locals.isAdmin)
-        throw new GameError('FORBIDDEN', 'An administrator is required to use an isolated test world.', 403);
+      if (!response.locals.canUseTestRealm)
+        throw new GameError('FORBIDDEN', 'This account cannot open an isolated test world.', 403);
       if (!options.testRealmServices)
         throw new GameError('TEST_WORLD_UNAVAILABLE', 'Isolated test worlds are not configured.', 503);
       response.locals.gameServices = await options.testRealmServices(uid(response));
     }
     response.locals.testRealm = Boolean(test);
+    next();
+  });
+  router.use('/admin', (_request, response, next) => {
+    if (!response.locals.isAdmin) throw new GameError('FORBIDDEN', 'This account cannot manage this world.', 403);
+    next();
+  });
+  router.use(async (request, response, next) => {
     // profile and reference rate do not depend on game time.
     const independent = /^\/(?:me\/profile|reference\/fx)(?:\/|$)/.test(request.path);
     const worker = /^\/admin\/clock\/jobs\//.test(request.path);
@@ -257,9 +268,12 @@ export function createApp(options: AppOptions) {
   });
   router.get('/world', async (_request, response) => {
     const services = selected(response);
+    const world = services.clock ? await services.clock.getWorld() : await services.game.getWorld();
+    const isAdmin = Boolean(response.locals.isAdmin);
     response.json({
-      world: services.clock ? await services.clock.getWorld() : await services.game.getWorld(),
-      isAdmin: Boolean(response.locals.isAdmin),
+      world: isAdmin ? world : { ...world, job: null },
+      isAdmin,
+      canUseTestRealm: Boolean(response.locals.canUseTestRealm),
       testRealm: Boolean(response.locals.testRealm),
     });
   });
@@ -322,10 +336,6 @@ export function createApp(options: AppOptions) {
     response.json(await selected(response).game.recordReview(uid(response))),
   );
 
-  router.use('/admin', (_request, response, next) => {
-    if (!response.locals.isAdmin) throw new GameError('FORBIDDEN', 'An administrator is required.', 403);
-    next();
-  });
   const clock = (response: Response) =>
     available(selected(response).clock, 'CLOCK_UNAVAILABLE', 'Clock controls are not configured.');
   router.post('/admin/clock/configure', async (request, response) => {

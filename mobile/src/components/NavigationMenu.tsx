@@ -19,15 +19,15 @@ const pages = [
   { href: '/help', label: 'How to play', group: 'HELP', detail: 'A friendly guide to Stockyllix' },
 ];
 
-export function NavigationMenu({ isAdmin, compact }: { isAdmin: boolean; compact: boolean }) {
+export function NavigationMenu({ canUseTestRealm, compact }: { canUseTestRealm: boolean; compact: boolean }) {
   const { palette } = useTheme();
   const styles = makeStyles(palette);
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const items = [
     ...pages,
-    ...(isAdmin
-      ? [{ href: '/admin', label: 'World controls', group: 'ADMINISTRATION', detail: 'Advance the shared game clock' }]
+    ...(canUseTestRealm
+      ? [{ href: '/admin', label: 'World controls', group: 'ADMINISTRATION', detail: 'Advance the game clock' }]
       : []),
   ];
   const current = items.find(item => item.href === pathname)?.label || 'Navigate';

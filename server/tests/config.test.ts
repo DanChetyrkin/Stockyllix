@@ -20,4 +20,14 @@ describe('runtime safety', () => {
       readConfig({ NODE_ENV: 'production', ADMIN_UIDS: 'admin', CORS_ORIGINS: 'http://example.test' }),
     ).toThrow(/https/);
   });
+
+  it('keeps owner and optional reviewer accounts separate', () => {
+    const config = readConfig({ ADMIN_UIDS: 'owner', REVIEWER_UIDS: ' reviewer-a, reviewer-b, ' });
+    expect([...config.adminUids]).toEqual(['owner']);
+    expect([...config.reviewerUids]).toEqual(['reviewer-a', 'reviewer-b']);
+    expect(() => readConfig({ ADMIN_UIDS: 'owner', REVIEWER_UIDS: ' owner ' })).toThrow(/different accounts/);
+    expect(() =>
+      readConfig({ NODE_ENV: 'production', REVIEWER_UIDS: 'reviewer', CORS_ORIGINS: 'https://example.test' }),
+    ).toThrow(/requires CORS_ORIGINS and ADMIN_UIDS/);
+  });
 });

@@ -62,6 +62,7 @@ const app = createApp({
   bankIsrael,
   verifyToken: firebase.verifyToken,
   adminUids: config.adminUids,
+  reviewerUids: config.reviewerUids,
   corsOrigins: config.corsOrigins,
 });
 const server = app.listen(config.PORT, config.HOST, () => {

@@ -10,7 +10,14 @@ This file separates what was checked locally, what was checked in the cloud, and
 | Live API | Server `68d7a59` (no server change since `5f4b2ff`), `/health` = 1.5.3 / market-list-v8 |
 | CI | All three jobs passed for `68d7a59` on `main` and `codex/render-free-deploy` |
 | GitHub Write access for the reviewer | Owner handover |
+| Reviewer-only test access | Local API regression passed. Client and API deployment, account configuration and hosted verification pending |
 | Physical Expo Go session | Android: the owner's 2:49 recording on November 5, 2026 (the demo video). iPhone: not verified |
+
+## Local reviewer access checks
+
+The API regression verifies that a reviewer can play in the shared league, and can reset and advance their own test game. Shared admin requests return 403 without writing shared state. A second reviewer gets a separate test game, and a private operator retains shared administration. The web export and 50 app tests passed. [Reviewer permission test](../server/tests/demo-controls.test.ts#L220)
+
+The separate Firebase Auth and Firestore emulator suite passed all three tests. It checks database transactions and direct-client access rules.
 
 ## Demo video (November 5, 2026)
 
@@ -101,9 +108,15 @@ These checks ran on the live services before the cleanup.
 
 The private snapshot `historical-8c9e717c12d59090` covers October 19–November 2, 2026, with 20 instruments and 21 sessions. All 420 replayed prices matched the raw download, and the BOI rates, the TASE closure on October 27 and the absence of corporate actions in the window were checked. Details are in [data sources](data-sources.md).
 
+## Local workload baseline
+
+An earlier serialized in-memory test processed a week with 1,000 players in 84.9 s across 1,068 clock steps. The scenario submitted 2,000 buy requests, of which 1,000 were accepted and 1,000 rejected before acceptance. The adapter counted 132,575 reads and 58,223 writes. This run predates the removal of per-player valuation documents, so the counts describe that version. Run `npm run test:load -- 1000 week` from `server` to test the scenario on current code. [Original verification record](https://github.com/DanChetyrkin/Stockyllix/blob/07d3863/docs/archive/verification-through-v1.3.md)
+
+A local rerun on November 7, 2026 passed the scenario's settlement and ranking checks. It took 6.6 s across 1,068 steps and counted 135,571 reads and 32,223 writes in the in-memory adapter, with 1,000 buys accepted and 1,000 rejected before acceptance. Treat these as observations from one local run. A timing comparison would need the same machine and test conditions for both versions.
+
 ## Not verified
 
-- Load at real scale. The 1,000-player local week is engine timing only. Spark quotas and a sleeping Render instance limit real capacity.
+- Sustained cloud load with concurrent players, actual billed database operations and time to finish due clock events under that load.
 - The data rights to show the previously downloaded Yahoo prices.
 - The Firebase console password policy and the sign-up form rules (8+ characters with a letter and a number).
 - A real iPhone session in Expo Go.
