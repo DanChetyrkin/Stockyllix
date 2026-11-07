@@ -12,6 +12,8 @@ Node / Express / TypeScript. It checks every Firebase ID token and runs every ga
 | `src/api/app.ts` | Routes, input validation (zod), authentication, admin checks, the test-realm header, rate limits and error format |
 | `src/data` | Shared document paths and the current-world lookup, the store interface, the Firestore adapter, the in-memory test store and the test-realm prefix |
 | `src/scripts` | Seeding, the local smoke test, the 1,000-player load test and the private data importers |
+| `src/server.ts`, `src/config.ts` | Startup wiring and environment checks. Production refuses emulator settings, a missing admin list and non-HTTPS origins |
+| `tests` | Vitest suites for the rules, the API, the clock and reported trading problems, plus the Firestore emulator suite |
 
 ## Commands
 
@@ -30,7 +32,7 @@ npx firebase emulators:exec --only auth,firestore --project demo-stockyllix --co
 | --- | --- |
 | `npm run dev` | Run the API with reload (needs `.env`, see the runbook) |
 | `npm run seed:local` / `npm run smoke:local` | Create emulator-only accounts, then place and execute one order over HTTP |
-| `npm run test:load -- 1000 week` | Time a 1,000-player week on the in-memory store |
+| `npm run test:load -- 1000 week` | Run 1,000 players through one simulated week on the in-memory store and count reads and writes (engine only, not cloud capacity). Without arguments it runs one market opening |
 | `npm run import:ecb` | Prepare the fixed ECB rates for the older simulated world (also part of the Render build) |
 | `npm run import:boi` | Stage the Bank of Israel history used by the historical dataset |
 | `npm run import:yahoo` | Build the private historical dataset from the private yfinance report, calendar and BOI rates |

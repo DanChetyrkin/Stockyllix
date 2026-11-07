@@ -1,20 +1,20 @@
 # Operations runbook
 
-How to run Stockyllix locally, deploy it, and recover it. Design decisions, test results and demo limits are in the [README](../README.md).
+How to run Stockyllix locally, deploy it, and recover it. The product and rule decisions are in the [README](../README.md). Test evidence is in [verification](verification.md).
 
 ## Production map
 
 | Part | Where |
 | --- | --- |
 | Web app | https://stockyllix.web.app (Firebase Hosting, static Expo export from `mobile/dist`) |
-| TradingView wrapper | https://stockyllix-panels.web.app (second Hosting site, files from `widgets/`; an iframe on the web and a WebView in the phone app) |
-| API | https://stockyllix-api.onrender.com/api (Render free plan, service `stockyllix-api`, root `server`) |
+| TradingView wrapper | https://stockyllix-panels.web.app/provider-widget.html (second Hosting site, files from `widgets/`; an iframe on the web and a WebView in the phone app) |
+| API | `https://stockyllix-api.onrender.com/api` (Render free plan, service `stockyllix-api`, root `server`) |
 | Health | https://stockyllix-api.onrender.com/health (version, release and deployed commit) |
 | Identity and data | Firebase project `stockyllix` on the Spark plan: Authentication and Firestore |
 
-- The browser signs in with Firebase Authentication and calls only the API. Firestore rules deny every direct client read and write. The API verifies the Firebase identity and enforces permissions before using the Admin SDK.
+- The browser signs in with Firebase Authentication and calls only the API. Firestore rules deny every direct client read and write. The API uses the Admin SDK and checks the user and the administrator list itself.
 - The shared league uses the private historical dataset `historical-8c9e717c12d59090` (October 19–November 2, 2026). Worlds keep the exact dataset they were created with. Never point an existing world at different prices.
-- The `X-Stockyllix-Test: true` header selects a permitted account's test realm, stored under `testRealms/<uid>/`. The realm keeps its own world, players and clock.
+- An administrator's test realm is selected with the `X-Stockyllix-Test: true` header and stored under `testRealms/<uid>/`. It never changes the shared world, its players or its clock.
 - Service-account keys, `.env` files, private datasets, the dataset seed, emulator exports and `node_modules` never go into Git, the client bundle, screenshots or logs. The public Firebase web config is not a secret.
 
 ## Local setup with emulators (Windows PowerShell)
@@ -55,7 +55,7 @@ For emulator mode, set `EXPO_PUBLIC_USE_EMULATORS=true`, `EXPO_PUBLIC_API_URL=ht
 
 ## Expo Go against the deployed game
 
-Install Expo Go with SDK 58 support on the phone. From `mobile`, run `npm ci` and copy `.env.example` to `.env.local` to use the hosted API. Back up any emulator settings in `.env.local` before replacing them. Run `npx expo start --go --clear` and scan the QR code on a phone on the same network. Add `--tunnel` if needed. For a browser walkthrough against the hosted API, open the live site.
+No emulator or local API is needed: `mobile/.env.example` already holds the live game's public settings. If `mobile/.env.local` holds emulator settings, first keep them in a file Expo does not load, such as `.env.local.emulators.backup`. Then, from `mobile`, copy `.env.example` to `.env.local`, run `npx expo start --go --clear` and scan the QR code from a phone on the same network (add `--tunnel` otherwise). The live API accepts phone requests without a browser origin; a local web dev server on `localhost` is not in `CORS_ORIGINS`, so use the live site for the browser. A browser check at phone width or an Android export does not replace a real Expo Go session.
 
 ## Server configuration
 
@@ -63,8 +63,7 @@ Install Expo Go with SDK 58 support on the phone. From `mobile`, run `npm ci` an
 | --- | --- |
 | `FIREBASE_PROJECT_ID` | `stockyllix` in production, `demo-stockyllix` with emulators |
 | `FIREBASE_SERVICE_ACCOUNT` | Render secret with the dedicated service-account JSON. Never a local file path |
-| `ADMIN_UIDS` | Comma-separated Firebase user IDs for private operators who can manage the shared league and their own test game |
-| `REVIEWER_UIDS` | Optional comma-separated Firebase user IDs that can manage only their own isolated test game. Configure separately from `ADMIN_UIDS` |
+| `ADMIN_UIDS` | Comma-separated Firebase user IDs allowed to use World controls. A hidden button is not authorization |
 | `CORS_ORIGINS` | Exact HTTPS origins, for example `https://stockyllix.web.app`, with no trailing slash |
 | `DATASET_SEED` | Private seed for the default simulated world. Never rotate it in a code release |
 | `HISTORICAL_DATASET_PATH` | `/etc/secrets/yahoo-world.json`, the Render secret file with the real historical snapshot |
@@ -72,15 +71,7 @@ Install Expo Go with SDK 58 support on the phone. From `mobile`, run `npm ci` an
 | `WORLD_CLOCK_AUTOSTART` | `true` (the default) starts a new world's clock at 1× |
 | `ALLOW_SIMULATED_FX` | Local use only: allows labelled simulated rates when the ECB file is missing |
 
-The server requires HTTPS `CORS_ORIGINS` and at least one admin UID in production. It refuses emulator settings in production and UIDs present in both access lists.
-
-### Reviewer access
-
-The reviewer role in this repository requires a client and API deployment and Firebase Auth configuration before use on the hosted demo. Reviewers can play as ordinary users in the shared league. The server allows their clock and reset actions only inside their own test realm.
-
-1. Keep at least one private operator account in `ADMIN_UIDS`. Remove the formerly public account from that list, rotate or disable its credentials and revoke its sessions.
-2. Create a separate Firebase Auth account for the reviewer, add its UID to `REVIEWER_UIDS` and share sign-in details privately.
-3. Verify shared administration with a private operator in the emulators. After deployment, verify the reviewer can open an isolated test game and run the demo. With the reviewer account, request `GET /api/admin/clock/targets` without the test header and expect 403. Check the shared world's ID and revision before and after the walkthrough.
+`readConfig` refuses to start in production without HTTPS `CORS_ORIGINS` and at least one admin ID, and refuses emulator settings in production.
 
 ## Deploying a release
 
@@ -93,10 +84,10 @@ Render: Blueprint `render.yaml`, free plan, auto-deploy off, manual deploys from
    npx firebase deploy --only hosting --config ../firebase.json --project stockyllix
    ```
 
-   The new web app also works with the previous API, so deploying it first leaves no broken window.
+   Keep each web release compatible with the API that is still live, so deploying it first leaves no broken window.
 3. **Then deploy the API.** Manually deploy the same commit on Render and check that `/health` shows the version and release from `server/src/api/app.ts` and that commit.
 4. In the browser, sign in, open the isolated test game and run the 3–5 minute walkthrough from the README. Check a phone-width window as well. Do not trade or move time in the shared league to test.
-5. Record any new result that changes the [test summary](../README.md#what-i-tested).
+5. Record what was actually checked in [verification](verification.md).
 
 Firestore rules and indexes are deployed separately, only when they change. A wrapper-only release can use `--only hosting:stockyllix-panels`.
 
@@ -106,9 +97,7 @@ Firestore rules and indexes are deployed separately, only when they change. A wr
 
 ### Historical dataset
 
-The shared league uses the fixed `historical-8c9e717c12d59090` snapshot from October 19 to November 2, 2026, with the October 16 close as baseline. The private snapshot has 21 market sessions and 420 opening and closing prices. Data preparation converts Tel Aviv agorot to shekels, checks the market calendar and rejects missing observations. The replay window excludes reported splits and dividends.
-
-From `server`, `npm run import:yahoo` rebuilds the snapshot from the existing private probe report, market calendar and Bank of Israel rates. Render uses the saved snapshot through `HISTORICAL_DATASET_PATH`. Keep the same dataset for existing games. [Probe inputs](../tools/README.md)
+The shared league runs on the private snapshot `historical-8c9e717c12d59090`, which Render reads from the secret file in `HISTORICAL_DATASET_PATH`. Deploy with that same file. `npm run import:yahoo` (from `server`) can rebuild it from the private probe report, the verified market calendar and the Bank of Israel history, but do not download the prices again: Yahoo requires permission for automated collection ([data sources](data-sources.md#data-rights)). New data means a new game, never new prices under an existing one.
 
 ## Clock operations and recovery
 
@@ -126,32 +115,30 @@ If synchronization does not finish, open **World controls → Advanced**:
 | `JOB_BUSY` / lease held | Another request is working on the job. Wait for the lease (60 s) and resume |
 | `DATA_INTEGRITY` or a missing price or rate | Keep the job. Restore the exact private input. Never use zero, a future rate or generated data in real history |
 | `DATASET_MISMATCH` | Restore the original dataset file or version for that world |
-| 401 / 403 | Check the sign-in, selected realm, the matching UID list and the exact origin |
+| 401 / 403 | Check the sign-in, environment mode, `ADMIN_UIDS` and the exact origin. Never turn off token checks |
 | Quota reached | Stop retrying and wait for the Spark daily reset |
 
 A player's event marker is saved together with its portfolio, so replaying an event after a crash is safe. Never edit the job cursor or remove the fence checks. Business rejections release their reservation; infrastructure errors leave the job resumable instead.
 
+## Monitoring
+
+- `/health` shows the version, release and deployed commit. Render's health check uses it.
+- Every API log line is JSON with a request ID, method, path, status, duration and user ID, never a token. Error responses return the same request ID, so a player's report leads to the log line.
+- A failed clock step logs `clock_sync_failed` and keeps its error code on the saved job, where World controls shows it.
+- Not yet in place: alerts. Nothing notifies anyone when the API is down or the clock falls behind. The first two to add are an uptime check on `/health` and an alert when a due event has not been processed within a few minutes.
+
 ## Capacity and limits
 
-- **Firebase Hosting.** Spark includes 10 GB of stored content and 10 GB of data transfer per month. The 13.5 MB demo video loads on play. About 700 full views would use most of that transfer if each is served in full, before other site traffic. [Hosting quotas](https://firebase.google.com/docs/hosting/usage-quotas-pricing)
-- **Cloud Firestore.** The free quota includes 1 GiB of stored data, 50,000 document reads per day and 20,000 writes per day. Clock updates and ranking consume database operations as the number of players grows. [Firestore quotas](https://firebase.google.com/docs/firestore/quotas#free_quota)
-- **Render.** The free API spins down after 15 minutes without incoming traffic. Render estimates about a minute to spin back up. Rate limits are per process, at 180 requests per minute per player with a separate bucket for clock steps. [Render free instances](https://render.com/docs/free#free-web-services)
-- **Clock processing.** For hosted load tests, measure event completion lag, p95 API latency and Firestore usage. A worker would let the clock process events without incoming traffic. [Demo limits](../README.md#limits-and-next-steps)
+- **Cloud Firestore (Spark).** 1 GiB of storage, 50,000 document reads and 20,000 writes per day ([quotas](https://firebase.google.com/docs/firestore/quotas#free_quota)). Clock processing and the league use more of them as players are added.
+- **Firebase Hosting (Spark).** 10 GB of storage and 10 GB of data transfer per month ([quotas](https://firebase.google.com/docs/hosting/usage-quotas-pricing)). The demo video on How to play is 13.5 MB and loads only when someone presses play, so about 700 full plays would use the whole month's transfer on their own.
+- **Render free.** One instance that spins down after 15 minutes without traffic and takes about a minute to wake ([Render](https://render.com/docs/free#spinning-down-on-idle)). Its disk is temporary. Rate limits are per process: 180 requests per minute per user, with a separate bucket for administrator clock steps.
+- **Load test.** `npm run test:load -- 1000 week` (from `server`) runs 1,000 players through one simulated week on the in-memory store: 1,068 clock steps, 135,571 document reads and 32,223 writes, in 17–25 s on a laptop. That is the engine's work, not cloud throughput, and it is more than Spark allows in a day ([record](verification.md#load-test-1000-players-for-one-simulated-week)).
 
-### Local workload benchmark
-
-Run `npm run test:load -- 1000 week` from `server`. The serialized in-memory scenario submits 2,000 buys for 1,000 players, accepts 1,000 and checks settlement and rankings after a simulated week.
-
-| Run | Time | Adapter reads | Adapter writes |
-| --- | ---: | ---: | ---: |
-| November 7, 2026 | 6.6 s | 135,571 | 32,223 |
-| Earlier run before removing per-player valuation writes | 84.9 s | 132,575 | 58,223 |
-
-Both runs took 1,068 steps. The adapter counters describe local work. Hosted capacity and billed operations require a cloud test.
+Latency: the Render service runs in Render's Oregon region and Firestore in Tel Aviv (`me-west1`). A clock step makes several sequential transactions, each crossing the ocean, so the live server processes about one event every 6 seconds for a single player (a jump to October 29 took about 4 minutes). A Render service in Frankfurt, the closest Render region, would cut each round trip several times. That means a new service URL, so update `EXPO_PUBLIC_API_URL`, `CORS_ORIGINS` and the secrets together.
 
 ## Handover checklist
 
 - GitHub **Write** access for the reviewer account, as the assignment requires.
-- Provision the reviewer's isolated access and share sign-in details privately. Remove the reviewer role or disable the review account after the review.
+- The reviewer's administrator login is in the README on purpose. Change that password after the review, because the repository is public.
 - The Firebase password policy in the console should match the sign-up form: 8+ characters with a letter and a number.
 - A real iPhone session in Expo Go. Android was recorded on a phone; see the demo video.

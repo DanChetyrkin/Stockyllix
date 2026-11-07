@@ -8,7 +8,7 @@ import { useGame } from '@/context/GameContext';
 
 export default function HelpScreen() {
   const ui = useThemedStyles();
-  const { canUseTestRealm } = useGame();
+  const { isAdmin } = useGame();
   return (
     <AppShell>
       <PageTitle title="How to play" subtitle="Your account, orders, game clock and weekly league." />
@@ -134,10 +134,10 @@ export default function HelpScreen() {
           insufficient-cash request is rejected before it becomes an accepted order.
         </Copy>
         <GuideLink href="/orders">Follow your order →</GuideLink>
-        {canUseTestRealm && <GuideLink href="/admin">Open world controls →</GuideLink>}
+        {isAdmin && <GuideLink href="/admin">Open world controls →</GuideLink>}
       </GuideCard>
-      {canUseTestRealm && (
-        <GuideCard title="World controls">
+      {isAdmin && (
+        <GuideCard title="Administrator clock controls">
           <Copy>
             World controls identifies the Shared league game or Isolated test game. Choose Open isolated test game
             before experimenting with time or trades; its balances and clock are separate from other players. Return to
