@@ -1,6 +1,6 @@
 # Operations runbook
 
-How to run Stockyllix locally, deploy it, and recover it. The product and rule decisions are in the [README](../README.md). Test evidence is in [verification](verification.md).
+How to run Stockyllix locally, deploy it, and recover it. The product decisions, test evidence and known limits are in the [README](../README.md).
 
 ## Production map
 
@@ -87,7 +87,7 @@ Render: Blueprint `render.yaml`, free plan, auto-deploy off, manual deploys from
    Keep each web release compatible with the API that is still live, so deploying it first leaves no broken window.
 3. **Then deploy the API.** Manually deploy the same commit on Render and check that `/health` shows the version and release from `server/src/api/app.ts` and that commit.
 4. In the browser, sign in, open the isolated test game and run the 3–5 minute walkthrough from the README. Check a phone-width window as well. Do not trade or move time in the shared league to test.
-5. Record what was actually checked in [verification](verification.md).
+5. If the release changes a measured number or a known limit, update the README.
 
 Firestore rules and indexes are deployed separately, only when they change. A wrapper-only release can use `--only hosting:stockyllix-panels`.
 
@@ -132,7 +132,7 @@ A player's event marker is saved together with its portfolio, so replaying an ev
 - **Cloud Firestore (Spark).** 1 GiB of storage, 50,000 document reads and 20,000 writes per day ([quotas](https://firebase.google.com/docs/firestore/quotas#free_quota)). Clock processing and the league use more of them as players are added.
 - **Firebase Hosting (Spark).** 10 GB of storage and 10 GB of data transfer per month ([quotas](https://firebase.google.com/docs/hosting/usage-quotas-pricing)). The demo video on How to play is 13.5 MB and loads only when someone presses play, so about 700 full plays would use the whole month's transfer on their own.
 - **Render free.** One instance that spins down after 15 minutes without traffic and takes about a minute to wake ([Render](https://render.com/docs/free#spinning-down-on-idle)). Its disk is temporary. Rate limits are per process: 180 requests per minute per user, with a separate bucket for administrator clock steps.
-- **Load test.** `npm run test:load -- 1000 week` (from `server`) runs 1,000 players through one simulated week on the in-memory store: 1,068 clock steps, 135,571 document reads and 32,223 writes, in 17–25 s on a laptop. That is the engine's work, not cloud throughput, and it is more than Spark allows in a day ([record](verification.md#load-test-1000-players-for-one-simulated-week)).
+- **Load test.** `npm run test:load -- 1000 week` (from `server`) runs 1,000 players through one simulated week on the in-memory store: 1,068 clock steps, 135,571 document reads and 32,223 writes, in 17–25 s on a laptop. The counts are the same on every run; the time depends on the machine. That is the engine's work, not cloud throughput, and it is more than Spark allows in a day.
 
 Latency: the Render service runs in Render's Oregon region and Firestore in Tel Aviv (`me-west1`). A clock step makes several sequential transactions, each crossing the ocean, so the live server processes about one event every 6 seconds for a single player (a jump to October 29 took about 4 minutes). A Render service in Frankfurt, the closest Render region, would cut each round trip several times. That means a new service URL, so update `EXPO_PUBLIC_API_URL`, `CORS_ORIGINS` and the secrets together.
 

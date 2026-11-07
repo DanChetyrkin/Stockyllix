@@ -11,7 +11,7 @@ A weekly portfolio league: each player gets ₪1,000,000 in virtual cash, trades
 > - Email: `admin@stockyllix.com`
 > - Password: `Watermelon2001@Mango!`
 >
-> Please start with **Menu → World controls → Open isolated test game**, so the shared league stays as it is for other players. If anything doesn't work as expected, I'd be happy to help. Thank you for your time!
+> If anything doesn't work as expected, I'd be happy to help. Thank you for your time!
 
 ## Try it in 3–5 minutes
 
@@ -22,12 +22,11 @@ A weekly portfolio league: each player gets ₪1,000,000 in virtual cash, trades
 The API runs on a free server that sleeps when idle, so the first page load can take up to a minute. Moving the game clock takes from about 30 seconds to a few minutes; World controls shows the progress.
 
 1. Open the link and sign in as the administrator. A new player can also register; every player starts with ₪1,000,000 once per game.
-2. Open **Menu → World controls → Open isolated test game**. Everything below now happens in your own test game. Other players and the shared league are not affected.
+2. Open **Menu → World controls → Open isolated test game**, a separate copy of the game for this account. If the button says **Return to shared league**, you are already in it.
 3. Choose **Start a new game → Real historical prices**, type `NEW GAME` and choose **Create new test game**. You get a fresh portfolio with ₪1,000,000.
 4. Open **Demo trading → AMZN → Buy**, enter `50000`, choose **Review** and **Confirm & send order**. The order is **pending**. Portfolio shows ₪950,000 available, ₪50,000 reserved, and ₪1,000,000 total cash and total value.
 5. Open **World controls → Advance to market event**. The first jump reaches the Tel Aviv opening; choose it once more to reach the US opening, where the AMZN order executes. **Orders** now shows **Executed**, the units, the dollar price and the USD/ILS rate. Portfolio shows ₪950,000 cash, ₪0 reserved and about ₪50,000 of AMZN.
 6. Optional: sell ₪10,000 of AMZN and advance again, open **The league**, and answer the daily question on **News**.
-7. Choose **Return to shared league** when you finish.
 
 ## Known limits
 
@@ -36,7 +35,12 @@ The API runs on a free server that sleeps when idle, so the first page load can 
 - **The reviewer login is public.** It is an administrator account, so anyone who reads this repository can also move the shared league's clock or start a new shared game. I accepted that for the review and will change the password afterwards. A real product would give reviewers a role limited to their own test game.
 - **Prices are a replay.** The league replays two real weeks (October 19–November 2, 2026). Anyone can look those prices up, the league ends when the data ends, and only daily opens and closes exist, so a drop between them is not seen. Trading at live prices was not possible for free ([why](#what-i-left-out-and-why)).
 - **Free quotas.** Firestore's free plan allows 50,000 reads and 20,000 writes a day. One simulated week for 1,000 players used about 136,000 reads and 32,000 writes in my load test, so thousands of players would need the paid plan ([details](#ready-for-real-users)).
-- **Not measured yet:** load in the cloud, the daily question's effect on real players, and a session on a real iPhone.
+- **Not verified yet:**
+  - Load in the cloud with many players at once.
+  - Whether the daily question really brings players back.
+  - A session on a real iPhone. Android was recorded on a phone (the video above).
+  - The right to show the downloaded Yahoo prices in a public app.
+  - That the Firebase console's password policy matches the sign-up form (8+ characters with a letter and a number).
 
 ## What I built and why
 
@@ -86,7 +90,7 @@ I replayed real history instead of generating prices or following a live feed. R
 - **Simulated prices: separate test games only.** An administrator can create a 28-day game with generated prices and FX from any start date, for example March 2027, inside their isolated test realm. It is labelled "Simulated" everywhere and can never replace the shared league's data.
 - **TradingView: market display only.** **Current market** and **News** embed TradingView widgets. These may be delayed and are never used to price an order.
 
-An older simulated world based on ECB rates is still loaded, so games created with it stay readable. Sources, checks, data rights and the providers I considered are in [docs/data-sources.md](docs/data-sources.md).
+An older simulated world based on ECB rates is still loaded, so games created with it stay readable. Where each price comes from, and the data providers I checked, are in [docs/data-sources.md](docs/data-sources.md).
 
 ## The game clock and how to advance it
 
@@ -149,10 +153,10 @@ The design starts from what must never go wrong with money and time. For each ri
 | --- | --- | --- | --- |
 | Two orders spend the same cash, or pass the 20% limit together | Save the order and its reservation in one transaction. Pending buys count toward the 20% limit | With ₪100,000 available, one of two parallel ₪75,000 buys was accepted and ₪25,000 remained ([test](server/tests/trade-regression.test.ts#L80)). Two concurrent transactions in the Firestore emulator, each buying ₪150,000 of AAPL: one accepted ([emulator test](server/tests/firestore.integration.test.ts#L40)) | Checked in these cases, not under cloud load |
 | A network retry buys twice | Each order carries a request key that the app saves before sending. The same key returns the same order; the same key with other details is refused | A retried ₪50,000 AMZN order returned the same order and charged nothing more ([test](server/tests/trade-regression.test.ts#L42)) | Covers retries of one request, not a second order the player sends on purpose |
-| The server stops right after an order fills | Save the fill and the player's processed-event marker in one transaction. The clock job keeps a saved cursor, and a lease with a fence number so a stale worker cannot overwrite newer work | After an injected failure following a ₪50,000 fill, recovery left one executed order, ₪950,000 cash and nothing reserved ([test](server/tests/trade-regression.test.ts#L122)). A real Render restart kept a test game's state ([record](docs/verification.md#failure-and-recovery-checks)) | No background worker: recovery starts with the next request |
+| The server stops right after an order fills | Save the fill and the player's processed-event marker in one transaction. The clock job keeps a saved cursor, and a lease with a fence number so a stale worker cannot overwrite newer work | After an injected failure following a ₪50,000 fill, recovery left one executed order, ₪950,000 cash and nothing reserved ([test](server/tests/trade-regression.test.ts#L122)). A server recreated in the middle of a clock job finished it without charging twice ([test](server/tests/world-clock.test.ts#L59)), and a stale worker is fenced off ([test](server/tests/game.test.ts#L407)) | No background worker: recovery starts with the next request |
 | An order uses a price or rate from the future | Reveal prices only up to the game time. A Bank of Israel rate becomes usable at 00:00 the next day | Price history stops at the game time ([test](server/tests/market-insights.test.ts#L33)), and the rate rule is tested ([test](server/tests/historical-import.test.ts#L56)) | The dates are real, so the prices can be looked up |
-| A price is missing or changes under open positions | Refuse incomplete data instead of guessing. A game keeps the exact dataset it was created with | A missing market day fails the import ([test](server/tests/historical-import.test.ts#L74)). All 420 replayed prices matched the raw download ([data checks](docs/verification.md#data-checks)) | New data means a new game |
-| A clock jump must update every portfolio | Process 25 portfolios per step, at most 8 seconds per request, and save progress. Trading waits until every reached event is applied | 1,000 players over one simulated week: 1,068 steps, 135,571 reads and 32,223 writes, with balances and rankings checked ([load test](docs/verification.md#load-test-1000-players-for-one-simulated-week)) | In memory only. Live, an event takes about 6 seconds even for one player |
+| A price is missing or changes under open positions | Refuse incomplete data instead of guessing. A game keeps the exact dataset it was created with | A missing market day fails the import ([test](server/tests/historical-import.test.ts#L74)), and so do wrong units and unhandled dividends or splits ([test](server/tests/yahoo-replay.test.ts#L98)) | New data means a new game |
+| A clock jump must update every portfolio | Process 25 portfolios per step, at most 8 seconds per request, and save progress. Trading waits until every reached event is applied | 1,000 players over one simulated week: 1,068 steps, 135,571 reads and 32,223 writes, with balances and rankings checked ([load test](server/src/scripts/load-test.ts)) | In memory only. Live, an event takes about 6 seconds even for one player |
 | Someone bypasses the app | Firestore rules deny all client access. The API verifies the ID token on every request and the admin list for clock actions | A signed-in user reading Firestore directly gets 403 ([emulator test](server/tests/firestore.integration.test.ts#L69)). Forged cash, prices and admin calls are refused ([API test](server/tests/api.test.ts#L43)) | The review login is a public administrator account |
 
 ## Ready for real users
@@ -192,7 +196,7 @@ Isolated test games for administrators, with the real history or a simulated 28-
 | [`mobile/`](mobile/README.md) | The Expo app for the web and phones: screens (`src/app`), shared components, the API client with retry-safe request keys, and Node tests for the helpers |
 | [`server/`](server/README.md) | The Express API: pure game rules (`src/domain`), the game and clock services (`src/services`), sessions and datasets (`src/world`), routes and authentication (`src/api`), the Firestore and in-memory stores (`src/data`), tests and the data importers |
 | [`tools/`](tools/README.md) | The one-time Python probe that downloaded the historical prices. The game never runs it |
-| [`docs/`](docs/) | The [runbook](docs/runbook.md) (setup, deployment, recovery, capacity), [data sources](docs/data-sources.md) (how the world was built, data rights) and the [verification record](docs/verification.md) (what was tested where, and what is still open) |
+| [`docs/`](docs/) | The [runbook](docs/runbook.md) (setup, deployment, recovery, capacity) and [data sources](docs/data-sources.md) (where each price comes from, and the providers I checked) |
 | `widgets/` | The TradingView panel page, served from a second Hosting site |
 | `.github/workflows/` | CI: the server, app and Firestore emulator jobs |
 
@@ -213,7 +217,7 @@ npx expo start
 
 On Windows, use `copy .env.example .env.local`. Scan the QR code with the iPhone Camera app, or from inside Expo Go on Android. The phone and the computer must be on the same Wi-Fi; otherwise run `npx expo start --tunnel`. A simulator also works: press `i` for the iOS Simulator (macOS) or `a` for an Android emulator. On a phone, Current market and News show the same TradingView panels inside the app, and their links open in the phone's browser.
 
-**Checks.** Java 21 is needed only for the Firebase emulator tests.
+**Checks.** The server has 197 tests, plus 3 that run only against the Firebase emulators (Java 21). The app has 50 unit checks.
 
 ```bash
 cd server && npm ci && npm run typecheck && npm run lint && npm test
