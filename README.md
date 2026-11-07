@@ -160,12 +160,5 @@ cd server && npm ci && npm run typecheck && npm run lint && npm test
 cd mobile && npm ci && npm run typecheck && npm run lint && npm test
 ```
 
-The full local setup (emulators, seed accounts and the Expo dev server), deployment and recovery steps are in [docs/runbook.md](docs/runbook.md).
-
-## More documents
-
-- [docs/runbook.md](docs/runbook.md): local setup, deployment, configuration and recovery
-- [docs/data-sources.md](docs/data-sources.md): how the price world was built, and data rights
-- [docs/verification.md](docs/verification.md): what was tested, where, and what is still open
-- [docs/learning.md](docs/learning.md): how to walk through the code, with interview questions
+See the [runbook](docs/runbook.md) for full setup and deployment, and the [verification record](docs/verification.md) for test results and open items.
 - [server/README.md](server/README.md), [mobile/README.md](mobile/README.md), [tools/README.md](tools/README.md): what each folder contains
