@@ -16,7 +16,7 @@ The app labels the source on every trading screen. A game keeps the dataset it w
 
 - **Instruments:** 10 TASE listings (LUMI, POLI, MZTF, DSCT, BEZQ, AZRG, ESLT, ICL, TEVA, NICE) and 10 US listings (AAPL, MSFT, AMZN, GOOGL, NVDA, META, JPM, JNJ, KO, SPY).
 - **Period:** October 19–November 2, 2026, with the October 16 close as the baseline. That is two full competition weeks plus one extra day for executions: 21 sessions and 420 opening and closing prices.
-- **Prices:** unadjusted daily opens and closes, downloaded once with the yfinance library. TASE quotes in agorot are divided by 100. Each open and close is replayed at the assignment's market hours; there is no intraday path.
+- **Prices:** daily opens and closes, downloaded once with the yfinance library without dividend adjustment. Yahoo may already adjust its history for splits, but the window has none. TASE quotes in agorot are divided by 100. Each open and close is replayed at the assignment's market hours; there is no intraday path.
 - **Calendar:** every TASE listing skipped October 27, a confirmed TASE closure. A missing price stops the import instead of being guessed.
 - **Dividends and splits:** the wider October download had dividends for ESLT.TA and JPM. The chosen window has no reported dividends or splits, which is why it starts on October 19.
 - **USD/ILS:** Bank of Israel representative rates. A rate for one day becomes usable at 00:00 Israel time on the next day, so no order can use a rate before it was published. An order on Friday in New York therefore uses Thursday's rate.
