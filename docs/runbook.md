@@ -1,6 +1,6 @@
 # Operations runbook
 
-How to run Stockyllix locally, deploy it, and recover it. The product and rule decisions are in the [README](../README.md). Test evidence is in [verification](verification.md).
+How to run Stockyllix locally, deploy it, and recover it. Design decisions, test results and demo limits are in the [README](../README.md).
 
 ## Production map
 
@@ -55,7 +55,7 @@ For emulator mode, set `EXPO_PUBLIC_USE_EMULATORS=true`, `EXPO_PUBLIC_API_URL=ht
 
 ## Expo Go against the deployed game
 
-No emulator or local API is needed: `mobile/.env.example` already holds the live game's public settings. If `mobile/.env.local` holds emulator settings, first keep them in a file Expo does not load, such as `.env.local.emulators.backup`. Then, from `mobile`, copy `.env.example` to `.env.local`, run `npx expo start --go --clear` and scan the QR code from a phone on the same network (add `--tunnel` otherwise). The live API accepts phone requests without a browser origin; a local web dev server on `localhost` is not in `CORS_ORIGINS`, so use the live site for the browser. A browser check at phone width or an Android export does not replace a real Expo Go session.
+Install Expo Go with SDK 58 support on the phone. From `mobile`, run `npm ci` and copy `.env.example` to `.env.local` to use the hosted API. Back up any emulator settings in `.env.local` before replacing them. Run `npx expo start --go --clear` and scan the QR code on a phone on the same network. Add `--tunnel` if needed. For a browser walkthrough against the hosted API, open the live site.
 
 ## Server configuration
 
@@ -96,13 +96,19 @@ Render: Blueprint `render.yaml`, free plan, auto-deploy off, manual deploys from
    The new web app also works with the previous API, so deploying it first leaves no broken window.
 3. **Then deploy the API.** Manually deploy the same commit on Render and check that `/health` shows the version and release from `server/src/api/app.ts` and that commit.
 4. In the browser, sign in, open the isolated test game and run the 3–5 minute walkthrough from the README. Check a phone-width window as well. Do not trade or move time in the shared league to test.
-5. Record what was actually checked in [verification](verification.md).
+5. Record any new result that changes the [test summary](../README.md#what-i-tested).
 
 Firestore rules and indexes are deployed separately, only when they change. A wrapper-only release can use `--only hosting:stockyllix-panels`.
 
 ### ECB build step
 
 `npm run import:ecb` keeps the older ECB-based simulated world readable; the shared league uses its own Bank of Israel rates. The step first validates an existing local rate file (22 fixed observations, pinned hash). If there is none, it restores the same rows from the private Firestore document `referenceData/ecb-2026-10-02_2026-11-02-v1` with the server's credentials (8-second limit). Only if that also fails does it try the official ECB CSV twice and the XML once, 12 seconds each. Changed or invalid rates fail the build instead of being replaced. `npm run import:ecb -- --refresh` rechecks the same official rows on purpose.
+
+### Historical dataset
+
+The shared league uses the fixed `historical-8c9e717c12d59090` snapshot from October 19 to November 2, 2026, with the October 16 close as baseline. The private snapshot has 21 market sessions and 420 opening and closing prices. Data preparation converts Tel Aviv agorot to shekels, checks the market calendar and rejects missing observations. The replay window excludes reported splits and dividends.
+
+From `server`, `npm run import:yahoo` rebuilds the snapshot from the existing private probe report, market calendar and Bank of Israel rates. Render uses the saved snapshot through `HISTORICAL_DATASET_PATH`. Keep the same dataset for existing games. [Probe inputs](../tools/README.md)
 
 ## Clock operations and recovery
 
@@ -130,8 +136,18 @@ A player's event marker is saved together with its portfolio, so replaying an ev
 - **Firebase Hosting.** Spark includes 10 GB of stored content and 10 GB of data transfer per month. The 13.5 MB demo video loads on play. About 700 full views would use most of that transfer if each is served in full, before other site traffic. [Hosting quotas](https://firebase.google.com/docs/hosting/usage-quotas-pricing)
 - **Cloud Firestore.** The free quota includes 1 GiB of stored data, 50,000 document reads per day and 20,000 writes per day. Clock updates and ranking consume database operations as the number of players grows. [Firestore quotas](https://firebase.google.com/docs/firestore/quotas#free_quota)
 - **Render.** The free API spins down after 15 minutes without incoming traffic. Render estimates about a minute to spin back up. Rate limits are per process, at 180 requests per minute per player with a separate bucket for clock steps. [Render free instances](https://render.com/docs/free#free-web-services)
-- **Local workload baseline.** The earlier in-memory 1,000-player week took 84.9 s and counted 132,575 reads and 58,223 writes in the serialized adapter. Run `npm run test:load -- 1000 week` from `server` to exercise the scenario on current code. The counters describe the local workload and cannot be mapped directly to billed operations or concurrent hosted users. [Verification details](verification.md#local-workload-baseline)
-- **Live latency.** The API in Oregon makes several sequential database calls to Firestore in Tel Aviv (`me-west1`) during each clock step. A live demo jump to October 29 took 245 s. Test a closer API region and fewer database calls before increasing capacity. In a cloud test, measure time from each event becoming due to completion, p95 API latency and actual Firestore usage. Add a worker when clock processing needs to progress without incoming traffic. [Live checks](verification.md#market-list-fix-and-price-watch-removal-release-153-november-5-2026)
+- **Clock processing.** For hosted load tests, measure event completion lag, p95 API latency and Firestore usage. A worker would let the clock process events without incoming traffic. [Demo limits](../README.md#limits-and-next-steps)
+
+### Local workload benchmark
+
+Run `npm run test:load -- 1000 week` from `server`. The serialized in-memory scenario submits 2,000 buys for 1,000 players, accepts 1,000 and checks settlement and rankings after a simulated week.
+
+| Run | Time | Adapter reads | Adapter writes |
+| --- | ---: | ---: | ---: |
+| November 7, 2026 | 6.6 s | 135,571 | 32,223 |
+| Earlier run before removing per-player valuation writes | 84.9 s | 132,575 | 58,223 |
+
+Both runs took 1,068 steps. The adapter counters describe local work. Hosted capacity and billed operations require a cloud test.
 
 ## Handover checklist
 

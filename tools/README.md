@@ -8,9 +8,9 @@ It reads the TypeScript instrument catalogue, downloads daily OHLC with yfinance
 
 On November 4, 2026 it returned 420 valid daily bars: 20 per TASE listing (in agorot, divided by 100) and 22 per US listing. Every TASE listing skipped October 27 (a confirmed holiday). The October download included dividends for ESLT.TA and JPM, so the replay uses October 19–November 2 instead. `npm run import:yahoo` in `server` then turns the private report into the dataset.
 
-## Do not rerun it to deploy or test
+## Deployment input
 
-Yahoo's [Terms of Service](https://legal.yahoo.com/us/en/yahoo/terms/otos/index.html) (section 2, item 9) require prior permission for automated collection. No permission is claimed. The yfinance open-source licence covers its code, not the data. Details are in [data sources](../docs/data-sources.md).
+Use the existing snapshot for deployment and the simulated dataset for local tests. [Historical dataset setup](../docs/runbook.md#historical-dataset)
 
 ```bash
 python -m pip install -r requirements-yfinance.txt

@@ -161,4 +161,4 @@ cd mobile && npm ci && npm run typecheck && npm run lint && npm test
 ```
 
 See the [runbook](docs/runbook.md) for full setup and deployment, and the [verification record](docs/verification.md) for test results and open items.
-- [server/README.md](server/README.md), [mobile/README.md](mobile/README.md), [tools/README.md](tools/README.md): what each folder contains
+[server/README.md](server/README.md), [mobile/README.md](mobile/README.md), [tools/README.md](tools/README.md): what each folder contains

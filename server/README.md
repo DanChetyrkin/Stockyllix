@@ -30,7 +30,7 @@ npx firebase emulators:exec --only auth,firestore --project demo-stockyllix --co
 | --- | --- |
 | `npm run dev` | Run the API with reload (needs `.env`, see the runbook) |
 | `npm run seed:local` / `npm run smoke:local` | Create emulator-only accounts, then place and execute one order over HTTP |
-| `npm run test:load` | Time a 1,000-player week on the in-memory store (engine only, not cloud capacity) |
+| `npm run test:load -- 1000 week` | Time a 1,000-player week on the in-memory store |
 | `npm run import:ecb` | Prepare the fixed ECB rates for the older simulated world (also part of the Render build) |
 | `npm run import:boi` | Stage the Bank of Israel history used by the historical dataset |
 | `npm run import:yahoo` | Build the private historical dataset from the private yfinance report, calendar and BOI rates |
