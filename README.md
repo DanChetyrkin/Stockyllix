@@ -37,10 +37,8 @@ The API runs on a free server that sleeps when idle, so the first page load can 
 - **Free quotas.** Firestore's free plan allows 50,000 reads and 20,000 writes a day. One simulated week for 1,000 players used about 136,000 reads and 32,000 writes in my load test, so thousands of players would need the paid plan ([details](#ready-for-real-users)).
 - **Not verified yet:**
   - Load in the cloud with many players at once.
-  - Whether the daily question really brings players back.
   - A session on a real iPhone. Android was recorded on a phone (the video above).
-  - The right to show the downloaded Yahoo prices in a public app.
-  - That the Firebase console's password policy matches the sign-up form (8+ characters with a letter and a number).
+  - That the Firebase console's password policy matches the sign-up form code (I did 8+ characters with a letter and a number).
 
 ## What I built and why
 
