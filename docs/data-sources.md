@@ -31,7 +31,14 @@ Yahoo does not allow automated downloads without permission, so the download is 
 
 ## Test games with simulated prices
 
-An administrator can create a test game from any start date (for example March 1, 2027). The server generates 28 calendar days of sessions in the Israel and New York time zones, prices for the same 20 instruments, and simulated USD/ILS rates. The generator input is saved privately with the test game, so a restart rebuilds exactly the same prices. These games exist only in the administrator's isolated test realm, are labelled "Simulated", and never replace the shared league's data.
+The real data covers only October 19–November 2, 2026. To test other dates, such as the March daylight-saving changes or four full weeks, an administrator starts a test game with **Start a new game → Simulated test prices** and picks any start date (the default is March 1, 2027). The **Choose game date and time** calendar in World controls only moves time inside the current game, so other dates always mean a new game.
+
+- **Period:** 28 calendar days from the chosen date. Every weekday is a trading day at the assignment's hours, in the real time zones with daylight saving. There are no holidays.
+- **Prices:** they start from fixed illustrative values (Apple at $243, for example), not real quotes. Each day, every stock moves by a small gap between days (up to ±0.6%), a move of its whole market (±1.2%), a move of its sector (±0.6%) and a move of its own (±1.6%, or ±0.3% for SPY).
+- **USD/ILS:** starts at 3.65 and moves up to ±0.4% each weekday. Like the real rate, each day's value becomes usable at 00:00 Israel time on the next day.
+- **Repeatable:** the moves come from a random seed saved with the test game, so a server restart rebuilds exactly the same prices.
+
+These games exist only in the administrator's isolated test realm, are labelled "Simulated", and never replace the shared league's data. Because nobody can look these prices up, the same generator could also run a competition without the replay's hindsight problem, at the cost of realism.
 
 The first version of the game used a similar simulated world for October 2026 with real ECB rates (`npm run import:ecb`). That world is still loaded so old games stay readable. Without the ECB file, the server refuses to start unless `ALLOW_SIMULATED_FX=true` is set, and then it labels the rates as simulated.
 

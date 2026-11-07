@@ -75,7 +75,7 @@ No emulator or local API is needed: `mobile/.env.example` already holds the live
 
 ## Deploying a release
 
-Render: Blueprint `render.yaml`, free plan, auto-deploy off, manual deploys from branch `codex/render-free-deploy`. Build: `npm ci --include=dev && npm run import:ecb && npm run build && npm prune --omit=dev`. Start: `npm start`.
+Render: Blueprint `render.yaml`, free plan, auto-deploy off, so every API release is a manual deploy. Build: `npm ci --include=dev && npm run import:ecb && npm run build && npm prune --omit=dev`. Start: `npm start`.
 
 1. Check the exact commit: local typecheck, lint, tests and the emulator suite, then all three CI jobs on that commit. Review staged files for secrets and private data.
 2. **Deploy Hosting first.** From `mobile`, with the ignored `.env.production.local` (real Firebase web config, the HTTPS Render `/api` URL, emulators off), run `npm run build:web` and `npm run check:release`. Then from `server`:
