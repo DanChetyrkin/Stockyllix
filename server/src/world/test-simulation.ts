@@ -28,7 +28,7 @@ export function validateSimulationDate(date: string) {
 export function createTestSimulation(startDate: string, seed: string) {
   validateSimulationDate(startDate);
   if (!/^[a-f0-9]{64}$/.test(seed)) throw new Error('A private test simulation seed is required');
-  const generated = createDataset(seed, undefined, { startDate, days: 28 });
+  const generated = createDataset(seed, { startDate, days: 28 });
   const digest = createHash('sha256').update(JSON.stringify(generated)).digest('hex').slice(0, 24);
   const dataset = { ...generated, id: `test-sim-v1-${startDate}-${digest}` };
   const descriptor: TestSimulationDescriptor = {

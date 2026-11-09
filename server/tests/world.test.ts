@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { DateTime } from 'luxon';
 import {
   buildSession,
   createDataset,
@@ -10,27 +9,9 @@ import {
   snapshotAt,
   validateDataset,
   validateFxRows,
-  type FxRow,
 } from '../src/world/index.js';
-import { ECB_ATTRIBUTION, parseEcbCsv, parseEcbXml } from '../src/world/ecb.js';
 
 const dataset = createDataset('private-test-seed');
-
-function ecbFixtures(): FxRow[] {
-  const rows: FxRow[] = [];
-  let date = DateTime.fromISO('2026-10-02', { zone: 'Asia/Jerusalem' });
-  while (date.toISODate()! <= '2026-11-02') {
-    if (date.weekday <= 5)
-      rows.push({
-        date: date.toISODate()!,
-        rate: date.toISODate() === '2026-10-05' ? '3.71' : '3.65',
-        availableAt: date.plus({ days: 1 }).startOf('day').toUTC().toISO({ suppressMilliseconds: true })!,
-        source: 'ecb',
-      });
-    date = date.plus({ days: 1 });
-  }
-  return rows;
-}
 
 describe('assignment clock boundaries', () => {
   it('uses each market timezone across the different DST transition dates', () => {
@@ -143,23 +124,6 @@ describe('private deterministic market world', () => {
     expect(() => snapshotAt(dataset, '2026-11-03T00:00:00Z')).toThrow('outside');
   });
 
-  it('never uses the current day ECB observation before its conservative availability', () => {
-    const realFx = createDataset('real-fx-test', ecbFixtures());
-    expect(realFx.sourceDescription).toContain('real historical ECB');
-    expect(snapshotAt(realFx, '2026-10-05T20:59:59Z').fx).toBe('3.65');
-    expect(snapshotAt(realFx, '2026-10-05T21:00:00Z')).toMatchObject({ fx: '3.71', fxAsOf: '2026-10-05' });
-    expect(() =>
-      createDataset(
-        'x',
-        ecbFixtures().filter(row => row.date >= '2026-10-05'),
-      ),
-    ).toThrow('before world start');
-    expect(() => createDataset('x', ecbFixtures().slice(0, 1))).toThrow('seven');
-    const earlyRate = ecbFixtures();
-    earlyRate[0]!.availableAt = '2026-10-02T00:00:00+03:00';
-    expect(() => createDataset('x', earlyRate)).toThrow('next-day policy');
-  });
-
   it('rejects missing data, duplicate events, invalid precision strings, and bad session boundaries', () => {
     const missingPrice = structuredClone(dataset);
     delete missingPrice.events[0]!.snapshot.prices.AAPL;
@@ -188,45 +152,8 @@ describe('private deterministic market world', () => {
     );
     expect(() => validateDataset(missingSession)).toThrow();
     expect(() =>
-      validateFxRows([{ date: '2026-10-02', rate: 'NaN', availableAt: '2026-10-03T00:00:00Z', source: 'ecb' }]),
+      validateFxRows([{ date: '2026-10-02', rate: 'NaN', availableAt: '2026-10-03T00:00:00Z', source: 'boi' }]),
     ).toThrow('Invalid FX');
     expect(() => getWeekId('2026-10-05T12:00:00')).toThrow('timezone');
-  });
-});
-
-describe('ECB normalization', () => {
-  const xml = `<?xml version="1.0"?><gesmes:Envelope xmlns="http://www.ecb.int/vocabulary/2002-08-01/eurofxref"><Cube>
-    <Cube time='2026-10-02'><Cube currency='USD' rate='1.10'/><Cube currency='ILS' rate='4.07'/></Cube>
-    <Cube time='2026-10-05'><Cube currency='USD' rate='1.12'/><Cube currency='ILS' rate='4.20'/></Cube>
-  </Cube></gesmes:Envelope>`;
-
-  it('computes the USD/ILS cross rate, retains the source date, and delays availability', () => {
-    expect(parseEcbXml(xml)).toEqual([
-      { date: '2026-10-02', rate: '3.7000000000', availableAt: '2026-10-02T21:00:00Z', source: 'ecb' },
-      { date: '2026-10-05', rate: '3.7500000000', availableAt: '2026-10-05T21:00:00Z', source: 'ecb' },
-    ]);
-    expect(ECB_ATTRIBUTION).toContain('calculated');
-  });
-
-  it('refuses a malformed document or missing currency instead of inventing a value', () => {
-    expect(() => parseEcbXml('<html>unavailable</html>')).toThrow('Unexpected ECB');
-    expect(() => parseEcbXml(xml.replace("currency='ILS' rate='4.07'", "currency='GBP' rate='4.07'"))).toThrow(
-      'lacks valid USD',
-    );
-    expect(() => parseEcbXml(xml, '2026-10-01')).toThrow('baseline');
-    expect(() => parseEcbXml(xml.replace("currency='USD' rate='1.10'", "currency='USD' rate='0'"))).toThrow(
-      'lacks valid USD',
-    );
-  });
-
-  it('reads stable SDMX CSV regardless of row order and quoted metadata', () => {
-    const csv =
-      'KEY,FREQ,CURRENCY,CURRENCY_DENOM,EXR_TYPE,EXR_SUFFIX,TIME_PERIOD,OBS_VALUE,TITLE\r\n' +
-      'EXR.D.USD.EUR.SP00.A,D,USD,EUR,SP00,A,2026-10-02,1.10,"US dollar, reference"\r\n' +
-      'EXR.D.ILS.EUR.SP00.A,D,ILS,EUR,SP00,A,2026-10-02,4.07,"Shekel ""reference"""\r\n';
-    expect(parseEcbCsv(csv)[0]).toMatchObject({ date: '2026-10-02', rate: '3.7000000000', source: 'ecb' });
-    expect(() => parseEcbCsv(csv.replace(',4.07,', ',0,'))).toThrow('Invalid ECB rate');
-    expect(() => parseEcbCsv(csv.split('\r\n').slice(0, 2).join('\r\n'))).toThrow('lacks valid USD');
-    expect(() => parseEcbCsv(csv + csv.split('\r\n')[1]!)).toThrow('Duplicate ECB');
   });
 });

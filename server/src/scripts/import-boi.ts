@@ -6,16 +6,9 @@ import { fetchBoiRows } from '../world/boi.js';
 
 async function main(): Promise<void> {
   const result = await fetchBoiRows();
-  // keep the active replay file unchanged unless its own configuration is changed deliberately.
   const output = resolve(
     process.env.BOI_FX_DATA_PATH ?? fileURLToPath(new URL('../../data/boi-fx.json', import.meta.url)),
   );
-  const activeReplay = resolve(
-    process.env.FX_DATA_PATH ?? fileURLToPath(new URL('../../data/fx.json', import.meta.url)),
-  );
-  if (process.platform === 'win32' ? output.toLowerCase() === activeReplay.toLowerCase() : output === activeReplay) {
-    throw new Error('BOI_FX_DATA_PATH must differ from the active FX_DATA_PATH');
-  }
   await mkdir(dirname(output), { recursive: true });
   const temporary = `${output}.${process.pid}.tmp`;
   await writeFile(temporary, `${JSON.stringify(result, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });

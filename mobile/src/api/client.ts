@@ -4,7 +4,6 @@ import { authErrorMessage } from '@/auth/validation';
 import { ApiError, requestDeadlineMs, requestJson, type RequestOptions } from './http';
 import { usesTestRealm } from './realm';
 
-export { apiBaseUrl } from '@/config/api-config';
 export { ApiError } from './http';
 
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {

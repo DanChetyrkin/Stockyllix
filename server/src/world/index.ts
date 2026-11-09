@@ -8,12 +8,12 @@ export interface FxRow {
   date: string;
   rate: string;
   availableAt: string;
-  source: 'ecb' | 'boi' | 'simulated';
+  source: 'boi' | 'simulated';
 }
 
 export const WORLD_ZONE = 'Asia/Jerusalem';
-export const DATA_START = '2026-10-05T00:00:00';
-export const DATA_LAST_DATE = '2026-11-02';
+const DATA_START = '2026-10-05T00:00:00';
+const DATA_LAST_DATE = '2026-11-02';
 
 function parseInstant(value: string): DateTime {
   const instant = DateTime.fromISO(value, { setZone: true });
@@ -126,7 +126,7 @@ export function validateFxRows(rows: FxRow[]): FxRow[] {
       typeof row.rate !== 'string' ||
       !/^\d+(\.\d+)?$/.test(row.rate) ||
       !new Decimal(row.rate).gt(0) ||
-      !['ecb', 'boi', 'simulated'].includes(row.source)
+      !['boi', 'simulated'].includes(row.source)
     )
       throw new Error('Invalid FX observation');
     const available = parseInstant(row.availableAt);
@@ -134,7 +134,7 @@ export function validateFxRows(rows: FxRow[]): FxRow[] {
     if (available.toMillis() < observationDay.toMillis()) {
       throw new Error('FX observation is available before its observation date');
     }
-    if (['ecb', 'boi'].includes(row.source) && available.toMillis() < observationDay.plus({ days: 1 }).toMillis()) {
+    if (row.source === 'boi' && available.toMillis() < observationDay.plus({ days: 1 }).toMillis()) {
       throw new Error('Reference FX availability must follow the conservative next-day policy');
     }
     if (dates.has(row.date)) throw new Error(`Duplicate FX date: ${row.date}`);
@@ -171,11 +171,7 @@ function compareEvents(a: Pick<WorldEvent, 'at' | 'kind' | 'id'>, b: Pick<WorldE
   return Date.parse(a.at) - Date.parse(b.at) || EVENT_ORDER[a.kind] - EVENT_ORDER[b.kind] || a.id.localeCompare(b.id);
 }
 
-export function createDataset(
-  seed: string,
-  suppliedFxRows?: FxRow[],
-  testRange?: { startDate: string; days: 28 },
-): Dataset {
+export function createDataset(seed: string, testRange?: { startDate: string; days: 28 }): Dataset {
   if (!seed.trim()) throw new Error('A private dataset seed is required');
   const start = DateTime.fromISO(testRange?.startDate ?? DATA_START, { zone: WORLD_ZONE });
   const lastDate = testRange
@@ -186,8 +182,7 @@ export function createDataset(
     ? utc(start.plus({ days: testRange.days }).minus({ milliseconds: 1 }))
     : buildSession(DATA_LAST_DATE, 'US')!.closesAt;
   const rows = validateFxRows(
-    suppliedFxRows ??
-      (testRange ? simulatedFx(seed, start.minus({ days: 3 }).toISODate()!, lastDate) : simulatedFx(seed)),
+    testRange ? simulatedFx(seed, start.minus({ days: 3 }).toISODate()!, lastDate) : simulatedFx(seed),
   );
   const initialFx = rows.filter(row => Date.parse(row.availableAt) <= Date.parse(startsAt)).at(-1);
   if (!initialFx) throw new Error('FX data needs a rate available before world start');
@@ -270,11 +265,6 @@ export function createDataset(
       snapshot,
     };
   });
-  const fxSource = rows.every(row => row.source === 'boi')
-    ? 'real historical Bank of Israel representative USD/ILS rates; available from the following Israel calendar day'
-    : rows.every(row => row.source === 'ecb')
-      ? 'real historical ECB reference FX; available from the following Israel calendar day'
-      : 'simulated FX, not market exchange rates';
   const contentHash = createHash('sha256')
     .update(JSON.stringify({ initialSnapshot, events }))
     .digest('hex')
@@ -286,7 +276,7 @@ export function createDataset(
     source: 'simulated',
     sourceDescription: testRange
       ? `Isolated test simulation from ${testRange.startDate}: all stock prices and USD/ILS rates are simulated, including the starting values. Assignment weekday hours; no actual exchange-holiday or corporate-action claims.`
-      : `Real instrument names; simulated stock prices (including the October 2 baseline), ${fxSource}. Assignment weekday hours; no exchange-holiday claims.`,
+      : `Real instrument names; simulated stock prices (including the October 2 baseline), simulated FX, not market exchange rates. Assignment weekday hours; no exchange-holiday claims.`,
     instruments: instruments.map(instrument => ({ ...instrument })),
     sessions,
     initialSnapshot,

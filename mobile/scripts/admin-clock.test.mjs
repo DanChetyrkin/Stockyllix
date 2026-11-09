@@ -36,15 +36,13 @@ test('restored requests retain the original world, action, target and idempotenc
     targetIsrael: { date: '2027-03-01', time: '10:00' },
   };
   assert.deepEqual(parseClockRequest(JSON.stringify(request)), request);
-  const legacy = { key: request.key, worldId: request.worldId, action: 'set', target: '2026-10-19T13:30:00Z' };
-  assert.deepEqual(parseClockRequest(JSON.stringify(legacy)), legacy);
   assert.equal(parseClockRequest(null), null);
   for (const value of [
     '{',
     'null',
     '{}',
     JSON.stringify({ ...request, key: 'bad' }),
-    JSON.stringify({ ...request, target: legacy.target }),
+    JSON.stringify({ ...request, targetIsrael: undefined }),
     JSON.stringify({ ...request, action: 'next' }),
   ])
     assert.throws(() => parseClockRequest(value));

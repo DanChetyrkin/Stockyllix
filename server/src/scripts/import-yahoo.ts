@@ -150,12 +150,10 @@ async function main() {
   const dataset = prepareYahooDataset(report, fx, calendar, process.env.YAHOO_FROM_DATE, process.env.YAHOO_TO_DATE);
   const output = resolve(process.env.YAHOO_OUTPUT_PATH || './data/yahoo-world.json');
   const normalized = (path: string) => (process.platform === 'win32' ? resolve(path).toLowerCase() : resolve(path));
-  if (
-    [process.env.DATASET_PATH, process.env.HISTORICAL_DATASET_PATH].some(
-      path => path && normalized(path) === normalized(output),
-    )
-  )
-    throw new Error('Choose a staging file separate from the configured active or available datasets');
+  // never overwrite the snapshot the server is serving.
+  const active = process.env.HISTORICAL_DATASET_PATH;
+  if (active && normalized(active) === normalized(output))
+    throw new Error('Choose a staging file separate from HISTORICAL_DATASET_PATH');
   await mkdir(dirname(output), { recursive: true });
   const temporary = `${output}.${process.pid}.tmp`;
   await writeFile(temporary, `${JSON.stringify(dataset)}\n`, { encoding: 'utf8', mode: 0o600 });

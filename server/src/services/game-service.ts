@@ -675,11 +675,7 @@ export class GameService {
       if (existingWorld) {
         if (existing?.simulationInput)
           throw new GameError('IDEMPOTENCY_CONFLICT', 'This request already created a simulated test world.', 409);
-        if (
-          existing?.request
-            ? existing.request.worldId !== request.worldId || existing.request.datasetId !== request.datasetId
-            : Boolean(datasetId && datasetId !== existingWorld.datasetId)
-        ) {
+        if (existing?.request?.worldId !== request.worldId || existing?.request?.datasetId !== request.datasetId) {
           throw new GameError(
             'IDEMPOTENCY_CONFLICT',
             'This reset request key was already used for another world or dataset.',

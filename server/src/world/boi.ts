@@ -1,13 +1,43 @@
 import { Decimal } from 'decimal.js';
 import { DateTime } from 'luxon';
-import { csvRows } from './ecb.js';
 import { readResponseText } from './http.js';
 import { validateFxRows, WORLD_ZONE, type FxRow } from './index.js';
 
 export const BOI_LATEST_URL = 'https://www.boi.org.il/PublicApi/GetExchangeRate?key=USD';
-export const BOI_HISTORY_URL =
+const BOI_HISTORY_URL =
   'https://edge.boi.gov.il/FusionEdgeServer/sdmx/v2/data/dataflow/BOI.STATISTICS/EXR/1.0/RER_USD_ILS';
-export const BOI_ATTRIBUTION = 'Source: Bank of Israel, daily representative USD/ILS exchange rates (RER_USD_ILS).';
+const BOI_ATTRIBUTION = 'Source: Bank of Israel, daily representative USD/ILS exchange rates (RER_USD_ILS).';
+
+// a small csv reader for the quoted fields in the official bank of israel file.
+function csvRows(csv: string): string[][] {
+  const result: string[][] = [];
+  let row: string[] = [];
+  let value = '';
+  let quoted = false;
+  for (let index = 0; index < csv.length; index++) {
+    const character = csv[index]!;
+    if (character === '"') {
+      if (quoted && csv[index + 1] === '"') {
+        value += '"';
+        index++;
+      } else quoted = !quoted;
+    } else if (character === ',' && !quoted) {
+      row.push(value);
+      value = '';
+    } else if (character === '\n' && !quoted) {
+      row.push(value.replace(/\r$/, ''));
+      if (row.some(item => item.trim())) result.push(row);
+      row = [];
+      value = '';
+    } else value += character;
+  }
+  if (quoted) throw new Error('Unclosed quoted CSV field');
+  if (row.length || value) {
+    row.push(value.replace(/\r$/, ''));
+    result.push(row);
+  }
+  return result;
+}
 
 interface DownloadOptions {
   fetcher?: typeof fetch;
@@ -24,7 +54,7 @@ export interface BoiLatestRate {
   kind: 'representative';
 }
 
-export interface BoiFxFile {
+interface BoiFxFile {
   source: 'boi';
   sourceUrl: string;
   attribution: string;

@@ -1,7 +1,7 @@
 import { GameError } from '../domain/errors.js';
 import { fetchBoiLatest, type BoiLatestRate } from '../world/boi.js';
 
-export interface BankIsraelView extends BoiLatestRate {
+interface BankIsraelView extends BoiLatestRate {
   fetchedAt: string;
   stale: boolean;
   notice?: string;

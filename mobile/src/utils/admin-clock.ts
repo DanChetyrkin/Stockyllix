@@ -5,7 +5,6 @@ export interface IsraelDateTime {
 }
 export interface ClockRequest {
   action: ClockAction;
-  target?: string;
   targetIsrael?: IsraelDateTime;
   key: string;
   worldId: string;
@@ -63,16 +62,8 @@ export function parseClockRequest(value: string | null): ClockRequest | null {
     !Object.prototype.hasOwnProperty.call(clockActionLabels, input.action)
   )
     throw new Error('Invalid clock request.');
-  if (input.action === 'set') {
-    const local = input.targetIsrael as IsraelDateTime | undefined;
-    const iso = input.target;
-    if (
-      Boolean(local) === Boolean(iso) ||
-      (local && !validIsraelDateTime(local)) ||
-      (iso && (typeof iso !== 'string' || !Number.isFinite(Date.parse(iso)) || !/(Z|[+-]\d{2}:\d{2})$/i.test(iso)))
-    )
-      throw new Error('Invalid saved clock target.');
-  } else if (input.target !== undefined || input.targetIsrael !== undefined)
-    throw new Error('Unexpected clock target.');
+  const target = input.targetIsrael as IsraelDateTime | undefined;
+  if (input.action === 'set' ? !target || !validIsraelDateTime(target) : target !== undefined)
+    throw new Error('Invalid saved clock target.');
   return input as unknown as ClockRequest;
 }

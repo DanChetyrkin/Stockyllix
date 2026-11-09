@@ -141,7 +141,7 @@ export function executeOrder(
   return { portfolio: next, order };
 }
 
-export function assertPortfolioInvariants(portfolio: Portfolio): void {
+function assertPortfolioInvariants(portfolio: Portfolio): void {
   if (
     !Number.isSafeInteger(portfolio.cashAgorot) ||
     portfolio.cashAgorot < 0 ||

@@ -7,7 +7,7 @@ export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-export function emailError(email: string): string | undefined {
+function emailError(email: string): string | undefined {
   const normalized = normalizeEmail(email);
   if (!normalized) return 'Enter your email address.';
   if (normalized.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized))

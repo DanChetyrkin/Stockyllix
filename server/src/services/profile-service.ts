@@ -3,7 +3,7 @@ import type { DocumentStore } from '../data/store.js';
 import { GameError } from '../domain/errors.js';
 import type { Portfolio } from '../domain/model.js';
 
-export interface PlayerProfile {
+interface PlayerProfile {
   displayName: string;
   photoDataUrl: string | null;
 }

@@ -11,7 +11,7 @@ export interface DailyBar {
 
 const priority: Record<EventKind, number> = { WEEK_END: 0, WEEK_START: 1, FX: 2, MARKET_OPEN: 3, MARKET_CLOSE: 4 };
 type Draft = Omit<WorldEvent, 'snapshot'> & { prices?: Record<string, string>; fx?: FxRow };
-export interface HistoricalOptions {
+interface HistoricalOptions {
   sourceDescription?: string;
   closedDates?: Partial<Record<Market, string[]>>;
 }

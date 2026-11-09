@@ -27,7 +27,7 @@ npm ci
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-In `server/.env`, keep the emulator hosts, set `ADMIN_UIDS=demo-admin` and choose a private `DATASET_SEED`. The default simulated world needs the ECB rate file: run `npm run import:ecb` (it downloads or restores the fixed historical rates). Without network access, set `ALLOW_SIMULATED_FX=true` for a world with clearly labelled simulated rates.
+In `server/.env`, keep the emulator hosts, set `ADMIN_UIDS=demo-admin` and choose a private `DATASET_SEED`. Without `HISTORICAL_DATASET_PATH`, the server builds a simulated world from that seed, with labelled simulated prices and rates.
 
 ```powershell
 npx firebase emulators:start --only auth,firestore --project demo-stockyllix --config ../firebase.json
@@ -65,17 +65,15 @@ No emulator or local API is needed: `mobile/.env.example` already holds the live
 | `FIREBASE_SERVICE_ACCOUNT` | Render secret with the dedicated service-account JSON. Never a local file path |
 | `ADMIN_UIDS` | Comma-separated Firebase user IDs allowed to use World controls. A hidden button is not authorization |
 | `CORS_ORIGINS` | Exact HTTPS origins, for example `https://stockyllix.web.app`, with no trailing slash |
-| `DATASET_SEED` | Private seed for the default simulated world. Never rotate it in a code release |
-| `HISTORICAL_DATASET_PATH` | `/etc/secrets/yahoo-world.json`, the Render secret file with the real historical snapshot |
-| `DATASET_PATH` / `FX_DATA_PATH` | Optional private files. Keep existing values unchanged |
+| `DATASET_SEED` | Local only: the seed for the simulated world used when `HISTORICAL_DATASET_PATH` is not set |
+| `HISTORICAL_DATASET_PATH` | `/etc/secrets/yahoo-world.json`, the Render secret file with the real historical snapshot. Production refuses to start without it |
 | `WORLD_CLOCK_AUTOSTART` | `true` (the default) starts a new world's clock at 1× |
-| `ALLOW_SIMULATED_FX` | Local use only: allows labelled simulated rates when the ECB file is missing |
 
 `readConfig` refuses to start in production without HTTPS `CORS_ORIGINS` and at least one admin ID, and refuses emulator settings in production.
 
 ## Deploying a release
 
-Render: Blueprint `render.yaml`, free plan, auto-deploy off, so every API release is a manual deploy. Build: `npm ci --include=dev && npm run import:ecb && npm run build && npm prune --omit=dev`. Start: `npm start`.
+Render: Blueprint `render.yaml`, free plan, auto-deploy off, so every API release is a manual deploy. Build: `npm ci --include=dev && npm run build && npm prune --omit=dev`. Start: `npm start`.
 
 1. Check the exact commit: local typecheck, lint, tests and the emulator suite, then all three CI jobs on that commit. Review staged files for secrets and private data.
 2. **Deploy Hosting first.** From `mobile`, with the ignored `.env.production.local` (real Firebase web config, the HTTPS Render `/api` URL, emulators off), run `npm run build:web` and `npm run check:release`. Then from `server`:
@@ -90,10 +88,6 @@ Render: Blueprint `render.yaml`, free plan, auto-deploy off, so every API releas
 5. If the release changes a measured number or a known limit, update the README.
 
 Firestore rules and indexes are deployed separately, only when they change. A wrapper-only release can use `--only hosting:stockyllix-panels`.
-
-### ECB build step
-
-`npm run import:ecb` keeps the older ECB-based simulated world readable; the shared league uses its own Bank of Israel rates. The step first validates an existing local rate file (22 fixed observations, pinned hash). If there is none, it restores the same rows from the private Firestore document `referenceData/ecb-2026-10-02_2026-11-02-v1` with the server's credentials (8-second limit). Only if that also fails does it try the official ECB CSV twice and the XML once, 12 seconds each. Changed or invalid rates fail the build instead of being replaced. `npm run import:ecb -- --refresh` rechecks the same official rows on purpose.
 
 ### Historical dataset
 

@@ -90,7 +90,7 @@ I replayed real history instead of generating prices or following a live feed. R
 - **Simulated prices: separate test games only.** An administrator can create a 28-day game with generated prices and FX from any start date, for example March 2027, inside their isolated test realm. It exists to test dates the real data does not cover, such as the March daylight-saving changes. Prices start from fixed illustrative values and move by small random daily steps, so they are not real quotes. It is labelled "Simulated" everywhere and can never replace the shared league's data.
 - **TradingView: market display only.** **Current market** and **News** embed TradingView widgets. These may be delayed and are never used to price an order.
 
-An older simulated world based on ECB rates is still loaded, so games created with it stay readable. Where each price comes from, and the data providers I checked, are in [docs/data-sources.md](docs/data-sources.md).
+Where each price comes from, and the data providers I checked, are in [docs/data-sources.md](docs/data-sources.md).
 
 ## The game clock and how to advance it
 

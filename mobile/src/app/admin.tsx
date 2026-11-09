@@ -287,7 +287,6 @@ export default function AdminScreen() {
         body: {
           worldId: request.worldId,
           action: request.action,
-          ...(request.target ? { target: request.target } : {}),
           ...(request.targetIsrael ? { targetIsrael: request.targetIsrael } : {}),
         },
       });
@@ -742,11 +741,7 @@ export default function AdminScreen() {
                       <>
                         <Copy>
                           {clockActionLabels[saved.action]}
-                          {saved.targetIsrael
-                            ? ` · ${saved.targetIsrael.date} ${saved.targetIsrael.time} Israel`
-                            : saved.target
-                              ? ` · ${dateTime(saved.target)}`
-                              : ''}
+                          {saved.targetIsrael ? ` · ${saved.targetIsrael.date} ${saved.targetIsrael.time} Israel` : ''}
                         </Copy>
                         <Copy muted>{savedRequestText(savedState)}</Copy>
                         <View style={[ui.row, { flexWrap: 'wrap' }]}>

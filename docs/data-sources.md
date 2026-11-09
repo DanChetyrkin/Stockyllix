@@ -27,7 +27,7 @@ The Python script that downloaded the prices is described in [tools/README.md](.
 
 ## Data rights
 
-Yahoo does not allow automated downloads without permission, so the download is not repeated and the game never calls Yahoo. Whether the saved prices may be shown in a public app is not verified; a real product would use licensed data. Bank of Israel and ECB rates are public reference data.
+Yahoo does not allow automated downloads without permission, so the download is not repeated and the game never calls Yahoo. Whether the saved prices may be shown in a public app is not verified; a real product would use licensed data. Bank of Israel rates are public reference data.
 
 ## Test games with simulated prices
 
@@ -39,8 +39,6 @@ The real data covers only October 19–November 2, 2026. To test other dates, su
 - **Repeatable:** the moves come from a random seed saved with the test game, so a server restart rebuilds exactly the same prices.
 
 These games exist only in the administrator's isolated test realm, are labelled "Simulated", and never replace the shared league's data. Because nobody can look these prices up, the same generator could also run a competition without the replay's hindsight problem, at the cost of realism.
-
-The first version of the game used a similar simulated world for October 2026 with real ECB rates (`npm run import:ecb`). That world is still loaded so old games stay readable. Without the ECB file, the server refuses to start unless `ALLOW_SIMULATED_FX=true` is set, and then it labels the rates as simulated.
 
 ## Current market and news
 

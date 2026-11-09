@@ -1,4 +1,4 @@
-export interface SavedOrderRequest {
+interface SavedOrderRequest {
   key: string;
   input: { worldId: string; instrumentId: string; side: 'buy' | 'sell'; amountILS: string };
 }

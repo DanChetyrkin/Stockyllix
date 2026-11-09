@@ -14,9 +14,9 @@ test('normalizes email without changing passwords or rejecting plus addressing',
   assert.equal(firstValidationError(signInErrors('Student+League@Example.COM', ' leading spaces ')), undefined);
 });
 
-test('sign-in keeps existing local and legacy accounts usable', () => {
+test('sign-in does not apply the registration password rules', () => {
   assert.equal(firstValidationError(signInErrors('admin@example.test', 'stockyllix-local-demo')), undefined);
-  assert.equal(firstValidationError(signInErrors('old@example.test', 'short')), undefined);
+  assert.equal(firstValidationError(signInErrors('player@example.test', 'short')), undefined);
   assert.match(signInErrors('missing-domain', 'password').email, /valid email/);
   assert.match(signInErrors('person@example.test', '').password, /Enter your password/);
 });
