@@ -25,10 +25,6 @@ The app labels the source on every trading screen. A game keeps the dataset it w
 
 The Python script that downloaded the prices is described in [tools/README.md](../tools/README.md). `npm run import:yahoo` (from `server`) turns its report, the market calendar and the Bank of Israel history into the dataset file.
 
-## Data rights
-
-Yahoo does not allow automated downloads without permission, so the download is not repeated and the game never calls Yahoo. Whether the saved prices may be shown in a public app is not verified; a real product would use licensed data. Bank of Israel rates are public reference data.
-
 ## Test games with simulated prices
 
 The real data covers only October 19–November 2, 2026. To test other dates, such as the March daylight-saving changes or four full weeks, an administrator starts a test game with **Start a new game → Simulated test prices** and picks any start date (the default is March 1, 2027). The **Choose game date and time** calendar in World controls only moves time inside the current game, so other dates always mean a new game.
