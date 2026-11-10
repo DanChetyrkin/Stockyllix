@@ -44,8 +44,6 @@ The status panel also shows the latest Bank of Israel USD/ILS rate (`GET /api/re
 
 ## Sources considered for live or current data
 
-Earlier versions had server-side feeds for live Yahoo quotes and Alpha Vantage news. I removed both: Yahoo needs permission and throttled Render's requests, and the free Alpha Vantage key returned "Premium required" for news.
-
 | Source | What the free plan offers | The problem |
 | --- | --- | --- |
 | Twelve Data | US daily history | Tel Aviv data is paid, and showing data publicly needs extra rights |
