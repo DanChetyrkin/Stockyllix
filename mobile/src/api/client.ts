@@ -1,7 +1,7 @@
 import { auth } from '@/config/firebase';
 import { apiBaseUrl, apiConfigurationError, apiConfigured } from '@/config/api-config';
 import { authErrorMessage } from '@/auth/validation';
-import { ApiError, requestDeadlineMs, requestJson, type RequestOptions } from './http';
+import { ApiError, requestJson, type RequestOptions } from './http';
 import { usesTestRealm } from './realm';
 
 export { ApiError } from './http';
@@ -11,12 +11,10 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     throw new ApiError('CONFIGURATION_REQUIRED', apiConfigurationError || 'Configure the API before continuing.', 0);
   const user = auth?.currentUser;
   if (!user) throw new ApiError('AUTH_REQUIRED', 'Please sign in to continue.', 401);
-  return requestJson<T>(
-    `${apiBaseUrl}${path}`,
-    () => user.getIdToken(),
-    { ...options, testRealm: usesTestRealm(user.uid) },
-    requestDeadlineMs(apiBaseUrl, process.env.EXPO_PUBLIC_USE_EMULATORS === 'true'),
-  );
+  return requestJson<T>(`${apiBaseUrl}${path}`, () => user.getIdToken(), {
+    ...options,
+    testRealm: usesTestRealm(user.uid),
+  });
 }
 
 export function errorMessage(error: unknown): string {

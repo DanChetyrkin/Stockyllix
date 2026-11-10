@@ -20,21 +20,6 @@ export interface RequestOptions {
   testRealm?: boolean;
 }
 
-export function requestDeadlineMs(baseUrl: string, useEmulators: boolean): number {
-  if (!useEmulators) return 75_000;
-  try {
-    const host = new URL(baseUrl).hostname;
-    const local =
-      ['localhost', '127.0.0.1', '[::1]', '::1'].includes(host) ||
-      /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
-      /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
-      /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(host);
-    return local ? 15_000 : 75_000;
-  } catch {
-    return 75_000;
-  }
-}
-
 function abortable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
   return new Promise((resolve, reject) => {
     const aborted = () => {

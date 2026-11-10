@@ -166,8 +166,8 @@ export function createApp(options: AppOptions) {
   app.get('/health', (_request, response) =>
     response.json({
       status: 'ok',
-      version: '1.5.4',
-      release: 'boi-only-v9',
+      version: '1.5.5',
+      release: 'minimal-v10',
       commit: /^[a-f0-9]{40}$/i.test(process.env.RENDER_GIT_COMMIT ?? '') ? process.env.RENDER_GIT_COMMIT : null,
     }),
   );

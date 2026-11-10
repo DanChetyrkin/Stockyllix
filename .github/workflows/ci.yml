@@ -36,9 +36,9 @@ jobs:
           cache: npm
           cache-dependency-path: mobile/package-lock.json
       - run: npm ci
-      - run: npx tsc --noEmit
+      - run: npm run typecheck
       - run: npm run lint
-      - run: node --test scripts/*.test.mjs
+      - run: npm test
       - run: npx expo export --platform web
         env:
           EXPO_PUBLIC_API_URL: https://api.example.test/api

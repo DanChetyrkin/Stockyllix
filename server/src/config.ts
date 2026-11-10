@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -7,17 +6,14 @@ const schema = z.object({
   HOST: z.string().default('127.0.0.1'),
   FIREBASE_PROJECT_ID: z.string().default('stockyllix'),
   ADMIN_UIDS: z.string().default(''),
-  CORS_ORIGINS: z.string().default('http://localhost:8081,http://127.0.0.1:8081'),
+  CORS_ORIGINS: z.string().default(''),
   FIREBASE_SERVICE_ACCOUNT: z.string().optional(),
-  WORLD_CLOCK_AUTOSTART: z.enum(['true', 'false']).default('true'),
 });
 
 export function readConfig(environment: NodeJS.ProcessEnv = process.env) {
   const value = schema.parse(environment);
-  if (Boolean(environment.FIRESTORE_EMULATOR_HOST) !== Boolean(environment.FIREBASE_AUTH_EMULATOR_HOST)) {
-    throw new Error('configure both auth and firestore emulators, or neither');
-  }
   if (value.NODE_ENV === 'production') {
+    // the firebase admin sdk follows these variables, so production must never see them.
     if (environment.FIRESTORE_EMULATOR_HOST || environment.FIREBASE_AUTH_EMULATOR_HOST) {
       throw new Error('emulator settings are forbidden in production');
     }

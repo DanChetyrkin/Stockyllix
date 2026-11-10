@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { RequestCoordinator, resourceView } from '../src/hooks/request-state.ts';
-import { ApiError, requestDeadlineMs, requestJson } from '../src/api/http.ts';
+import { ApiError, requestJson } from '../src/api/http.ts';
 
 function deferred() {
   let resolve;
@@ -223,27 +223,18 @@ test('external cancellation is distinct from timeout and can abort a pending aut
   assert.equal(calls, 0);
 });
 
-test('a stalled auth token is bounded by the local deadline while public production keeps its cold-start budget', async t => {
-  assert.equal(requestDeadlineMs('http://localhost:3000/api', true), 15_000);
-  assert.equal(requestDeadlineMs('http://192.168.1.20:3000/api', true), 15_000);
-  assert.equal(requestDeadlineMs('http://[::1]:3000/api', true), 15_000);
-  assert.equal(requestDeadlineMs('http://localhost:3000/api', false), 75_000);
-  assert.equal(requestDeadlineMs('https://stockyllix.onrender.com/api', true), 75_000);
-  assert.equal(requestDeadlineMs('https://stockyllix.onrender.com/api', false), 75_000);
+test('a stalled auth token is bounded by the request deadline', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   let fetched = false;
   t.mock.method(globalThis, 'fetch', async () => {
     fetched = true;
     return new Response('{}');
   });
-  const pending = requestJson(
-    'http://localhost:3000/api/world',
-    () => new Promise(() => {}),
-    {},
-    requestDeadlineMs('http://localhost:3000/api', true),
+  const rejected = assert.rejects(
+    requestJson('https://api.example/world', () => new Promise(() => {})),
+    { code: 'TIMEOUT' },
   );
-  const rejected = assert.rejects(pending, { code: 'TIMEOUT' });
-  t.mock.timers.tick(15_000);
+  t.mock.timers.tick(75_000);
   await rejected;
   assert.equal(fetched, false);
 });

@@ -96,7 +96,7 @@ Where each price comes from, and the data providers I checked, are in [docs/data
 - Render's free plan sleeps, so there is no background worker. Each API request lets the server process reached events in small, saved steps. Trading pauses with a clear message until every reached event has been applied to all portfolios.
 - **To advance:** sign in as an administrator and open **World controls**. You can **Pause / Resume**, **Advance to market event** (the next opening or closing; an order executes when its own scheduled event is reached), or pick a date and time in Israel time and choose **Apply time and pause**. Every jump goes forward only, stays inside the price period, and processes every event in between, in order, once.
 - **Market hours in Israel time:** Tel Aviv opens at 10:00 and closes at 17:30 (13:50 on Fridays). The US opens at 16:30 and closes at 23:00, except October 26–30, when Israel has already left daylight saving time and the US has not, so the US trades 15:30–22:00. **Advance to market event** stops at every opening and closing of both markets, so reaching a US order can take more than one jump.
-- **Permission:** the API allows these actions only for Firebase user IDs listed in its `ADMIN_UIDS` setting. The app hides World controls from other players, but the server is what enforces it. For this review, use the administrator account above. To give someone else access, add their Firebase user ID to `ADMIN_UIDS` on Render; in a local setup, add your own ID in `server/.env` ([runbook](docs/runbook.md#server-configuration)).
+- **Permission:** the API allows these actions only for Firebase user IDs listed in its `ADMIN_UIDS` setting. The app hides World controls from other players, but the server is what enforces it. For this review, use the administrator account above. To give someone else access, add their Firebase user ID to `ADMIN_UIDS` on Render ([runbook](docs/runbook.md#server-configuration)).
 - Administrators can also open an isolated test realm, so experiments never touch the shared league.
 - A game cannot move backwards and does not loop at the end of its data. To start again, create a new game. Old games and their results stay saved.
 
@@ -172,7 +172,7 @@ Where it breaks first:
 
 What I'd change, in order: run the API next to Firestore (Cloud Run in Tel Aviv on a paid plan, or at least Render's Frankfurt region); process portfolios in parallel with a bounded pool, which stays safe because each portfolio has its own processed-event marker; move clock work to a scheduled background worker and keep request-driven catch-up as a fallback; move to paid plans; and load-test a market-opening burst in the cloud before launch.
 
-**Other developers ship every day.** CI runs on every pull request and every push to `main`: server typecheck, lint, tests and build; app typecheck, lint, unit checks and a web export; and the Firebase Auth and Firestore emulator tests ([workflow](.github/workflows/ci.yml)). The money rules are pure functions with unit tests, and problems found in manual runs became regression tests ([trade regressions](server/tests/trade-regression.test.ts)). Render auto-deploy is off. A release goes out by hand in a fixed order: Hosting first, with the web app kept compatible with the previous API, then the API, and `/health` shows the deployed commit. A game keeps the exact dataset it was created with, so a code release cannot change prices under open positions. Still missing: a staging project, deploys from CI and automatic rollback.
+**Other developers ship every day.** CI runs on every pull request and every push to `main`: server typecheck, lint, tests and build; app typecheck, lint, unit checks and a web export; and the Firebase Auth and Firestore emulator tests ([workflow](.github/workflows/ci.yml)). The money rules are pure functions with unit tests, and problems found in manual runs became regression tests ([trade regressions](server/tests/trade-regression.test.ts)). Render auto-deploy is off. A release goes out by hand in a fixed order: Hosting first, with the web app kept compatible with the previous API, then the API, and `/health` shows the deployed commit. A game keeps the exact dataset it was created with, so a code release cannot change prices under open positions. Still missing: a staging project and a local copy of the API (today a change is checked by the tests and then in the isolated test game), deploys from CI and automatic rollback.
 
 **I'm on vacation.** Nothing depends on a timer, a browser tab or the server's disk. After a crash or a Render restart, the next request continues the saved clock job, and a stuck lease expires after 60 seconds. A failed step is saved on the job with its error code and shown in **World controls**, and **Advanced** offers **Resume synchronization**. Logs carry a request ID, status and duration without tokens, and every error response includes the request ID that appears in the logs. The [runbook](docs/runbook.md) maps each symptom to an action. Still missing: alerting. Nobody is notified if the API is down or the clock falls behind. I'd add an uptime check on `/health` and an alert when a due event is not processed within a few minutes.
 
@@ -195,7 +195,7 @@ Isolated test games for administrators, with the real history or a simulated 28-
 | [`mobile/`](mobile/README.md) | The Expo app for the web and phones: screens (`src/app`), shared components, the API client with retry-safe request keys, and Node tests for the helpers |
 | [`server/`](server/README.md) | The Express API: pure game rules (`src/domain`), the game and clock services (`src/services`), sessions and datasets (`src/world`), routes and authentication (`src/api`), the Firestore and in-memory stores (`src/data`), tests and the data importers |
 | [`tools/`](tools/README.md) | The one-time Python probe that downloaded the historical prices. The game never runs it |
-| [`docs/`](docs/) | The [runbook](docs/runbook.md) (setup, deployment, recovery, capacity) and [data sources](docs/data-sources.md) (where each price comes from, and the providers I checked) |
+| [`docs/`](docs/) | The [runbook](docs/runbook.md) (configuration, deployment, recovery, capacity) and [data sources](docs/data-sources.md) (where each price comes from, and the providers I checked) |
 | `widgets/` | The TradingView panel page, served from a second Hosting site |
 | `.github/workflows/` | CI: the server, app and Firestore emulator jobs |
 
@@ -214,9 +214,9 @@ cp .env.example .env.local
 npx expo start
 ```
 
-On Windows, use `copy .env.example .env.local`. Scan the QR code with the iPhone Camera app, or from inside Expo Go on Android. The phone and the computer must be on the same Wi-Fi; otherwise run `npx expo start --tunnel`. A simulator also works: press `i` for the iOS Simulator (macOS) or `a` for an Android emulator. On a phone, Current market and News show the same TradingView panels inside the app, and their links open in the phone's browser.
+On Windows, use `copy .env.example .env.local`. Scan the QR code with the iPhone Camera app, or from inside Expo Go on Android. The phone and the computer must be on the same Wi-Fi; otherwise run `npx expo start --tunnel`. A simulator also works: press `i` for the iOS Simulator (macOS) or `a` for an Android emulator. On a phone, Current market and News show the same TradingView panels inside the app, and their links open in the phone's browser. In a browser, use the live site: the live API does not accept requests from a local web server.
 
-**Checks.** The server has 197 tests, plus 3 that run only against the Firebase emulators (Java 21). The app has 50 unit checks.
+**Checks.** The server has 182 tests, plus 3 that run only against the Firebase emulators in CI (they need Java 21). The app has 49 unit checks.
 
 ```bash
 cd server && npm ci && npm run typecheck && npm run lint && npm test
@@ -226,4 +226,4 @@ cd server && npm ci && npm run typecheck && npm run lint && npm test
 cd mobile && npm ci && npm run typecheck && npm run lint && npm test
 ```
 
-The emulator tests and the 1,000-player load test are in [server/README.md](server/README.md#commands). The full local setup (emulators, seed accounts and the Expo dev server), deployment and recovery steps are in [docs/runbook.md](docs/runbook.md).
+The API itself runs only on Render, because it needs the private price snapshot and the Firebase service account; the tests above cover its rules without them. The emulator tests and the 1,000-player load test are in [server/README.md](server/README.md#commands). Deployment and recovery are in [docs/runbook.md](docs/runbook.md).

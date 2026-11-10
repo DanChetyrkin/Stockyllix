@@ -15,7 +15,7 @@ test('normalizes email without changing passwords or rejecting plus addressing',
 });
 
 test('sign-in does not apply the registration password rules', () => {
-  assert.equal(firstValidationError(signInErrors('admin@example.test', 'stockyllix-local-demo')), undefined);
+  assert.equal(firstValidationError(signInErrors('admin@example.test', 'letters-only-password')), undefined);
   assert.equal(firstValidationError(signInErrors('player@example.test', 'short')), undefined);
   assert.match(signInErrors('missing-domain', 'password').email, /valid email/);
   assert.match(signInErrors('person@example.test', '').password, /Enter your password/);

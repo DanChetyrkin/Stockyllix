@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 
-function configuration(apiUrl, emulators = 'false') {
+function configuration(apiUrl) {
   const result = spawnSync(
     process.execPath,
     [
@@ -12,7 +12,7 @@ function configuration(apiUrl, emulators = 'false') {
     ],
     {
       cwd: new URL('..', import.meta.url),
-      env: { ...process.env, EXPO_PUBLIC_API_URL: apiUrl, EXPO_PUBLIC_USE_EMULATORS: emulators },
+      env: { ...process.env, EXPO_PUBLIC_API_URL: apiUrl },
       encoding: 'utf8',
     },
   );
@@ -20,7 +20,7 @@ function configuration(apiUrl, emulators = 'false') {
   return JSON.parse(result.stdout);
 }
 
-test('a missing production api cannot fall back to localhost', () => {
+test('a missing api address is a configuration error', () => {
   const config = configuration('');
   assert.equal(config.apiConfigured, false);
   assert.equal(config.apiBaseUrl, '');
@@ -33,13 +33,6 @@ test('real authentication requires an explicit https api', () => {
   const config = configuration('https://stockyllix.example/api/');
   assert.equal(config.apiConfigured, true);
   assert.equal(config.apiBaseUrl, 'https://stockyllix.example/api');
-});
-
-test('local http is limited to explicitly enabled emulators', () => {
-  assert.equal(configuration('', 'true').apiBaseUrl, 'http://localhost:3000/api');
-  assert.equal(configuration('http://127.0.0.1:3000/api', 'true').apiConfigured, true);
-  assert.equal(configuration('http://192.168.1.10:3000/api', 'true').apiConfigured, true);
-  assert.equal(configuration('http://example.com/api', 'true').apiConfigured, false);
 });
 
 test('api configuration rejects ambiguous or malformed urls', () => {

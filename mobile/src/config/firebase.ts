@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { connectAuthEmulator, getAuth, getReactNativePersistence, initializeAuth } from 'firebase/auth';
-import { authEmulatorUrl, firebaseApp } from './firebase-config';
+import { getAuth, getReactNativePersistence, initializeAuth } from 'firebase/auth';
+import { firebaseApp } from './firebase-config';
 
 export { firebaseConfigured } from './firebase-config';
 
@@ -16,6 +16,3 @@ function createAuth() {
 }
 
 export const auth = createAuth();
-if (auth && authEmulatorUrl && !auth.emulatorConfig) {
-  connectAuthEmulator(auth, authEmulatorUrl, { disableWarnings: false });
-}

@@ -43,13 +43,8 @@ describe('dataset loading', () => {
     await expect(loadDatasetRegistry()).rejects.toThrow();
   });
 
-  it('runs a seeded simulation locally, but never in production', async () => {
+  it('refuses to start without the snapshot file', async () => {
     vi.stubEnv('HISTORICAL_DATASET_PATH', '');
-    vi.stubEnv('NODE_ENV', 'development');
-    vi.stubEnv('DATASET_SEED', 'loader-local-seed');
-    const local = await loadDatasetRegistry();
-    expect(local.get(local.defaultId)).toEqual(createDataset('loader-local-seed'));
-    vi.stubEnv('NODE_ENV', 'production');
-    await expect(loadDatasetRegistry()).rejects.toThrow(/Production needs HISTORICAL_DATASET_PATH/);
+    await expect(loadDatasetRegistry()).rejects.toThrow(/Set HISTORICAL_DATASET_PATH/);
   });
 });

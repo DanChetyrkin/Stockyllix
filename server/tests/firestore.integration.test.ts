@@ -38,7 +38,7 @@ describe.skipIf(!enabled)('real firestore emulator', () => {
   }, 30_000);
 
   it('prevents two actual database transactions from overcommitting one instrument', async () => {
-    // isolate this run from a developer's active local demo world.
+    // isolate this run from other runs on the same emulator.
     const prefix = `integrationRuns/${randomUUID()}/`;
     const isolated: DocumentStore = {
       get: path => store!.get(prefix + path),

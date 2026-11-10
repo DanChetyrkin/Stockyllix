@@ -11,9 +11,6 @@ describe('runtime safety', () => {
       }),
     ).toThrow(/emulator/);
   });
-  it('requires both emulators to prevent accidental cloud calls', () => {
-    expect(() => readConfig({ FIRESTORE_EMULATOR_HOST: '127.0.0.1:8080' })).toThrow(/both/);
-  });
   it('requires production admin and origins configuration', () => {
     expect(() => readConfig({ NODE_ENV: 'production' })).toThrow(/requires/);
     expect(() =>

@@ -22,7 +22,7 @@ function gameServices(store: DocumentStore, registry: DatasetRegistry = datasets
   const game = new GameService(store, registry);
   return {
     game,
-    clock: new WorldClockService(store, game, registry, { autostart: config.WORLD_CLOCK_AUTOSTART === 'true' }),
+    clock: new WorldClockService(store, game, registry),
     insights: new MarketInsightsService(store, registry),
     quiz: new DailyQuizService(store, {
       // the question follows the game's israel calendar day, not the last price event.
