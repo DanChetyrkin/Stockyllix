@@ -87,10 +87,3 @@ A player's event marker is saved together with its portfolio, so replaying an ev
 - **Load test.** `npm run test:load -- 1000 week` (from `server`) runs 1,000 players through one simulated week on the in-memory store: 1,068 clock steps, 135,571 document reads and 32,223 writes, in 17–25 s on a laptop. The counts are the same on every run; the time depends on the machine. That is the engine's work, not cloud throughput, and it is more than Spark allows in a day.
 
 Latency: the Render service runs in Render's Oregon region and Firestore in Tel Aviv (`me-west1`). A clock step makes several sequential transactions, each crossing the ocean, so the live server processes about one event every 6 seconds for a single player (a jump to October 29 took about 4 minutes). A Render service in Frankfurt, the closest Render region, would cut each round trip several times. That means a new service URL, so update `EXPO_PUBLIC_API_URL`, `CORS_ORIGINS` and the secrets together.
-
-## Handover checklist
-
-- GitHub **Write** access for the reviewer account, as the assignment requires.
-- The reviewer's administrator login is in the README on purpose. Change that password after the review, because the repository is public.
-- The Firebase password policy in the console should match the sign-up form: 8+ characters with a letter and a number.
-- A real iPhone session in Expo Go. Android was recorded on a phone; see the demo video.
